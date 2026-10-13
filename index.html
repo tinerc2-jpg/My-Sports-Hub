@@ -420,7 +420,7 @@ async function resolveTSDB(team,al){
     let j;try{j=await getJSON(TSDB+"/searchteams.php?t="+encodeURIComponent(q));ok=true;}catch(e){lastErr=e;continue;}
     const t=(j.teams||[]).filter(x=>x.strSport===team.sport)
       .find(x=>nameMatch(al,[x.strTeam,x.strTeamShort].concat(String(x.strTeamAlternate||"").split(",")))>0);
-    if(t)return{p:"tsdb",id:String(t.idTeam)};
+    if(t)return{p:"tsdb",id:String(t.idTeam),league:t.idLeague?String(t.idLeague):null};
   }
   if(!ok)throw lastErr||new Error("offline");
   return null;
@@ -534,14 +534,30 @@ function tsdbEvent(e,id){
   const d=new Date(ts),ms=home?e.intHomeScore:e.intAwayScore,os=home?e.intAwayScore:e.intHomeScore;
   return{d,opponent:(home?e.strAwayTeam:e.strHomeTeam)+(home?" (H)":" (A)"),ms,os,tv:e.strTVStation||""};
 }
+// Seasons run Aug–Jun and are named like "2026-2027".
+function tsdbSeason(d){const y=d.getFullYear();return d.getMonth()>=6?y+"-"+(y+1):(y-1)+"-"+y;}
+async function tsdbStanding(src){
+  let league=src.league;
+  if(!league){
+    const j=await getJSON(TSDB+"/lookupteam.php?id="+src.id).catch(()=>null);
+    const t=j&&(j.teams||[])[0];league=t&&t.idLeague?String(t.idLeague):null;
+  }
+  if(!league)return null;
+  const j=await getJSON(TSDB+"/lookuptable.php?l="+league+"&s="+tsdbSeason(new Date())).catch(()=>null);
+  const me=((j&&j.table)||[]).find(r=>String(r.idTeam)===src.id);
+  if(!me||me.intRank==null)return null;
+  return{rank:+me.intRank,points:me.intPoints!=null?+me.intPoints:null,wins:me.intWin!=null?+me.intWin:null,
+    draws:me.intDraw!=null?+me.intDraw:null,losses:me.intLoss!=null?+me.intLoss:null};
+}
 async function fetchTSDB(src){
-  const [last,next]=await Promise.all([getJSON(TSDB+"/eventslast.php?id="+src.id).catch(()=>null),getJSON(TSDB+"/eventsnext.php?id="+src.id).catch(()=>null)]);
+  const [last,next,standing]=await Promise.all([getJSON(TSDB+"/eventslast.php?id="+src.id).catch(()=>null),getJSON(TSDB+"/eventsnext.php?id="+src.id).catch(()=>null),tsdbStanding(src).catch(()=>null)]);
   if(!last&&!next)throw new Error("offline");
   const done=((last&&last.results)||[]).map(e=>tsdbEvent(e,src.id)).filter(e=>e.ms!=null&&e.ms!==""&&e.os!=null&&e.os!=="").sort((a,b)=>b.d-a.d);
   const up=((next&&next.events)||[]).map(e=>tsdbEvent(e,src.id)).filter(e=>e.d.getTime()>Date.now()-3*3600e3).sort((a,b)=>a.d-b.d)[0];
   return{source:"TheSportsDB",
     recentResults:done.slice(0,5).map(e=>({opponent:e.opponent,score:e.ms+"–"+e.os,result:+e.ms>+e.os?"W":+e.ms<+e.os?"L":"D",date:fmtShort(e.d)})),
-    nextGame:up?{opponent:up.opponent,date:fmtDay(up.d),time:fmtTime(up.d),tv:up.tv||"–",ts:up.d.getTime()}:next?OFF_SEASON:null};
+    nextGame:up?{opponent:up.opponent,date:fmtDay(up.d),time:fmtTime(up.d),tv:up.tv||"–",ts:up.d.getTime()}:next?OFF_SEASON:null,
+    standing};
 }
 
 // Returns {source, recentResults?, nextGame?, liveGame?, standing?} or null when no live source covers the team.
@@ -581,6 +597,8 @@ function mergeLive(team,e){
   if(d.recentResults&&d.recentResults.length){out.recentResults=d.recentResults;out._liveFields.results=true;}
   if(d.nextGame){const g={...d.nextGame};if(g.ts){const x=new Date(g.ts);g.date=fmtDay(x);g.time=fmtTime(x);}out.nextGame=g;}
   if(d.standing){out._liveFields.standing=true;const s={...team.standing};Object.keys(d.standing).forEach(k=>{if(d.standing[k]!=null)s[k]=d.standing[k];});out.standing=s;}
+  // Live source but no table: blank it rather than show last season's numbers.
+  else{out._liveFields.standing="none";out.standing={rank:null,points:null,wins:null,draws:null,losses:null};}
   return out;
 }
 
@@ -1088,7 +1106,7 @@ function App(){
       ),
       h(LiveStatus,{entry:live[baseTeam.name],busy:!!busy[baseTeam.name],sport:team.sport,onRefresh:()=>refreshTeam(baseTeam,true)}),
       team.liveGame&&h(LiveGame,{team}),
-      h("div",{style:{marginBottom:12}},h(Lbl,{c:"📊 Ranking / Standing"+(lf.standing?"":SAVED)}),h(StandingDisplay,{team})),
+      h("div",{style:{marginBottom:12}},h(Lbl,{c:"📊 Ranking / Standing"+(lf.standing===true?"":lf.standing==="none"?" \xB7 not available yet":SAVED)}),h(StandingDisplay,{team})),
       team.nextGame&&h("div",{style:{marginBottom:12}},h(Lbl,{c:"📺 Next On TV"}),h(NextGame,{team})),
       team.recentResults&&team.recentResults.length>0&&h("div",{style:{marginBottom:12}},
         h(Lbl,{c:"🏆 Recent Results"+(lf.results?"":SAVED)}),
