@@ -176,7 +176,7 @@ function xmlText(s){
     .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'")
     .replace(/&#(\d+);/g,(m,n)=>String.fromCharCode(+n)).replace(/&amp;/g,"&").trim();
 }
-const NEWS_V=3; // bump when the news logic changes so older snapshot news isn't reused
+const NEWS_V=4; // bump when the news logic changes so older snapshot news isn't reused
 // Danish sports feeds, filtered per team by name in the headline (loaded once per run).
 const DK_FEEDS=[
   {name:"DR Sporten",url:"https://www.dr.dk/nyheder/service/feeds/sporten"},
@@ -219,8 +219,9 @@ async function teamNews(team){
     console.log(`    news DK: ${items.length} headlines naming ${team.shortName} (Bing ${bing.length})`);
   }
   if(items.length<3){ // English coverage (use the English sport word: "Vingegaard cykling" finds nothing there)
-    const g=await rssTry("Google en-GB",googleUrl(`${who} ${w[1]}`));
-    console.log(`    news (Google en-GB): ${g.length} items for ${who} ${w[1]}`);
+    // Headline must name the team too: Google also returns results/fixture pages listing other matches.
+    const all=await rssTry("Google en-GB",googleUrl(`${who} ${w[1]}`)),g=all.filter(i=>mentions(team,i.title));
+    console.log(`    news (Google en-GB): ${g.length}/${all.length} items name the team for ${who} ${w[1]}`);
     items.push(...g);
   }
   const seenT=new Set();
