@@ -180,26 +180,35 @@ async function teamNews(team){
   const p=prev[team.name]&&prev[team.name].data,now=Date.now();
   if(p&&p.news&&p.news.length&&now-(p.newsTs||0)<NEWS_TTL)return{news:p.news,ts:p.newsTs};
   const dk=team.country==="🇩🇰",w=SPORT_WORDS[team.sport]||["",""];
-  const names=[...new Set([team.name,team.shortName])].map(n=>`"${n}"`);
-  const q=`${names.length>1?"("+names.join(" OR ")+")":names[0]} ${dk?w[0]:w[1]}`.trim();
-  const loc=dk?"hl=da&gl=DK&ceid=DK:da":"hl=en-GB&gl=GB&ceid=GB:en";
-  try{
-    const r=await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q+" when:30d")}&${loc}`);
-    if(!r.ok)throw new Error("HTTP "+r.status);
-    const xml=await r.text(),seenT=new Set();
-    const news=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(m=>{
-      const it=m[1],tag=t=>xmlText((it.match(new RegExp(`<${t}[^>]*>([\\s\\S]*?)</${t}>`))||[])[1]);
-      const src=tag("source");let title=tag("title");
-      if(src&&title.endsWith(" - "+src))title=title.slice(0,-(src.length+3));
-      return{title,url:tag("link"),ts:Date.parse(tag("pubDate"))||null,src};
-    }).filter(n=>n.title&&n.ts&&!seenT.has(n.title.toLowerCase())&&seenT.add(n.title.toLowerCase()))
-      .sort((a,b)=>b.ts-a.ts).slice(0,5);
-    console.log(`    news: ${news.length} items for ${q}`);
-    return news.length?{news,ts:now}:(p&&p.news?{news:p.news,ts:p.newsTs}:null);
-  }catch(e){
-    console.log("    news:",e.message);
-    return p&&p.news?{news:p.news,ts:p.newsTs}:null;
+  const names=[...new Set([team.name,team.shortName])].filter(n=>!/\./.test(n)).map(n=>`"${n}"`); // skip "N. Hojgaard"-style short names
+  const who=names.length>1?"("+names.join(" OR ")+")":names[0];
+  // Google News has no Danish edition (a DK query returns nothing), so Danish teams use Bing News da-DK first.
+  const tries=dk
+    ?[{name:"Bing da-DK",q:`${who} ${w[0]}`,url:q=>`https://www.bing.com/news/search?format=rss&mkt=da-DK&setlang=da&q=${encodeURIComponent(q)}`},
+      {name:"Google en-GB",q:`${who} ${w[0]}`,url:q=>`https://news.google.com/rss/search?hl=en-GB&gl=GB&ceid=GB:en&q=${encodeURIComponent(q+" when:30d")}`}]
+    :[{name:"Google en-GB",q:`${who} ${w[1]}`,url:q=>`https://news.google.com/rss/search?hl=en-GB&gl=GB&ceid=GB:en&q=${encodeURIComponent(q+" when:30d")}`}];
+  for(const t of tries){
+    try{
+      const r=await fetch(t.url(t.q),{headers:{"Accept":"application/rss+xml, application/xml, text/xml"}});
+      if(!r.ok)throw new Error("HTTP "+r.status);
+      const news=parseRss(await r.text());
+      console.log(`    news (${t.name}): ${news.length} items for ${t.q}`);
+      if(news.length)return{news,ts:now};
+    }catch(e){console.log(`    news (${t.name}):`,e.message);}
   }
+  return p&&p.news?{news:p.news,ts:p.newsTs}:null;
+}
+// RSS from Google News (<source>) or Bing News (<News:Source>, links wrapped in a bing.com redirect).
+function parseRss(xml){
+  const seenT=new Set(),monthAgo=Date.now()-30*864e5;
+  return [...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(m=>{
+    const it=m[1],tag=t=>xmlText((it.match(new RegExp(`<${t}[^>]*>([\\s\\S]*?)</${t}>`,"i"))||[])[1]);
+    const src=tag("source")||tag("News:Source");let title=tag("title"),url=tag("link");
+    if(src&&title.endsWith(" - "+src))title=title.slice(0,-(src.length+3));
+    if(/bing\.com/.test(url)){try{const u=new URL(url).searchParams.get("url");if(u)url=u;}catch(e){}}
+    return{title,url,ts:Date.parse(tag("pubDate"))||null,src};
+  }).filter(n=>n.title&&n.ts&&n.ts>monthAgo&&!seenT.has(n.title.toLowerCase())&&seenT.add(n.title.toLowerCase()))
+    .sort((a,b)=>b.ts-a.ts).slice(0,5);
 }
 
 const teams={},seen=new Set();let ok=0,failed=0;
