@@ -356,11 +356,16 @@ const _inflight={};
 
 function lsGet(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
-async function getJSON(url){
+async function fetchJSON(url){
   const ctl=typeof AbortController!=="undefined"?new AbortController():null;
   const t=ctl&&setTimeout(()=>ctl.abort(),10000);
   try{const r=await fetch(url,ctl?{signal:ctl.signal}:{});if(!r.ok)throw new Error("HTTP "+r.status);return await r.json();}
+  catch(e){throw new Error(e.name==="AbortError"?"timeout":e.message==="Failed to fetch"||e.name==="TypeError"?"blocked":e.message);}
   finally{if(t)clearTimeout(t);}
+}
+async function getJSON(url){
+  try{return await fetchJSON(url);}
+  catch(e){throw new Error(new URL(url).host+" "+e.message);}
 }
 function norm(s){return String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase()
   .replace(/[^a-z0-9 ]/g," ").replace(/\b(fc|cf|afc|ssc|sc|ac|club|de|the|handbold|handball)\b/g," ").replace(/\s+/g," ").trim();}
@@ -380,6 +385,7 @@ function fmtDay(d){return d.toLocaleDateString("en-GB",{weekday:"short",day:"num
 function fmtShort(d){return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"});}
 function fmtTime(d){return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});}
 function timeAgo(ts){const m=Math.round((Date.now()-ts)/60000);if(m<1)return "just now";if(m<60)return m+" min ago";const hr=Math.round(m/60);return hr<24?hr+"h ago":Math.round(hr/24)+"d ago";}
+const SAVED=" \xB7 saved May 2026";
 const OFF_SEASON={opponent:"No upcoming fixtures - off-season",date:"Off-season",time:"–",tv:"–"};
 
 // ── source resolution (which API + id belongs to a favourite) ──
@@ -394,14 +400,14 @@ async function espnTeams(sp,lg){
   return teams;
 }
 async function resolveTSDB(team,al){
-  let ok=false;
+  let ok=false,lastErr=null;
   for(const q of [...new Set([team.shortName,team.name])]){
-    let j;try{j=await getJSON(TSDB+"/searchteams.php?t="+encodeURIComponent(q));ok=true;}catch(e){continue;}
+    let j;try{j=await getJSON(TSDB+"/searchteams.php?t="+encodeURIComponent(q));ok=true;}catch(e){lastErr=e;continue;}
     const t=(j.teams||[]).filter(x=>x.strSport===team.sport)
       .find(x=>nameMatch(al,[x.strTeam,x.strTeamShort].concat(String(x.strTeamAlternate||"").split(",")))>0);
     if(t)return{p:"tsdb",id:String(t.idTeam)};
   }
-  if(!ok)throw new Error("offline");
+  if(!ok)throw lastErr||new Error("offline");
   return null;
 }
 async function resolveSource(team){
@@ -412,13 +418,13 @@ async function resolveSource(team){
   else if(team.sport==="Handball")src=await resolveTSDB(team,al);
   else if(ESPN_SPORT_LEAGUES[team.sport]){
     const cands=ESPN_LEAGUES[team.league]?[ESPN_LEAGUES[team.league]]:ESPN_SPORT_LEAGUES[team.sport];
-    let best=null,ok=false;
+    let best=null,ok=false,lastErr=null;
     for(const [sp,lg] of cands){
-      let list;try{list=await espnTeams(sp,lg);ok=true;}catch(e){continue;}
+      let list;try{list=await espnTeams(sp,lg);ok=true;}catch(e){lastErr=e;continue;}
       for(const t of list){const sc=nameMatch(al,t.names);if(sc&&(!best||sc>best.sc))best={sc,src:{p:"espn",sp,lg,id:t.id}};}
       if(best&&best.sc===2)break;
     }
-    if(!ok)throw new Error("offline");
+    if(!ok)throw lastErr||new Error("offline");
     src=best&&best.src;
   }
   all[team.name]={ts:Date.now(),src};lsSet("msh-src",all);
@@ -543,10 +549,10 @@ function liveIsStale(e,selected){
 }
 function mergeLive(team,e){
   const d=e&&e.data;if(!d)return team;
-  const out={...team,_live:d.source,liveGame:d.liveGame||null};
-  if(d.recentResults&&d.recentResults.length)out.recentResults=d.recentResults;
+  const out={...team,_live:d.source,liveGame:d.liveGame||null,_liveFields:{}};
+  if(d.recentResults&&d.recentResults.length){out.recentResults=d.recentResults;out._liveFields.results=true;}
   if(d.nextGame)out.nextGame=d.nextGame;
-  if(d.standing){const s={...team.standing};Object.keys(d.standing).forEach(k=>{if(d.standing[k]!=null)s[k]=d.standing[k];});out.standing=s;}
+  if(d.standing){out._liveFields.standing=true;const s={...team.standing};Object.keys(d.standing).forEach(k=>{if(d.standing[k]!=null)s[k]=d.standing[k];});out.standing=s;}
   return out;
 }
 
@@ -796,7 +802,7 @@ function LiveStatus({entry,busy,sport,onRefresh}){
   const d=entry&&entry.data;
   let txt,col="rgba(255,255,255,0.4)";
   if(busy)txt="Updating results…";
-  else if(entry&&entry.errTs&&(!entry.ts||entry.errTs>entry.ts))txt=d?"Couldn't update (offline?) \xB7 showing results from "+timeAgo(entry.ts):"Couldn't reach live results \xB7 showing saved data",col="#fbbf24";
+  else if(entry&&entry.errTs&&(!entry.ts||entry.errTs>entry.ts))txt=(d?"Couldn't update \xB7 showing results from "+timeAgo(entry.ts):"Couldn't reach live results \xB7 showing saved data")+(entry.err?" ("+entry.err+")":""),col="#fbbf24";
   else if(d)txt="Auto-updating \xB7 "+d.source+" \xB7 updated "+timeAgo(entry.ts),col="#a3e635";
   else if(entry)txt="Auto-update not available for "+sport+" yet \xB7 showing saved data";
   else txt="Checking for live results…";
@@ -943,7 +949,7 @@ function App(){
       const data=await fetchTeamLive(t);
       saveLive(t.name,{ts:Date.now(),data});
     }catch(e){
-      saveLive(t.name,{...(cur||{}),errTs:Date.now()});
+      saveLive(t.name,{...(cur||{}),errTs:Date.now(),err:String(e&&e.message||e)});
     }finally{
       delete _inflight[t.name];setBusy(b=>({...b,[t.name]:false}));
     }
@@ -967,6 +973,7 @@ function App(){
     return()=>{stopped=true;clearInterval(iv);document.removeEventListener("visibilitychange",wake);window.removeEventListener("online",wake);};
   },[]);
   useEffect(()=>{refreshTeam(baseTeam);},[selected,teams.length]);
+  const lf=team._liveFields||{};
   const liveNames={};teams.forEach(t=>{const e=live[t.name];if(e&&e.data&&e.data.liveGame)liveNames[t.name]=true;});
 
   function handleSelect(id){setSelected(id);persist(teams,id);}
@@ -1050,14 +1057,14 @@ function App(){
       ),
       h(LiveStatus,{entry:live[baseTeam.name],busy:!!busy[baseTeam.name],sport:team.sport,onRefresh:()=>refreshTeam(baseTeam,true)}),
       team.liveGame&&h(LiveGame,{team}),
-      h("div",{style:{marginBottom:12}},h(Lbl,{c:"📊 Ranking / Standing"}),h(StandingDisplay,{team})),
+      h("div",{style:{marginBottom:12}},h(Lbl,{c:"📊 Ranking / Standing"+(lf.standing?"":SAVED)}),h(StandingDisplay,{team})),
       team.nextGame&&h("div",{style:{marginBottom:12}},h(Lbl,{c:"📺 Next On TV"}),h(NextGame,{team})),
       team.recentResults&&team.recentResults.length>0&&h("div",{style:{marginBottom:12}},
-        h(Lbl,{c:"🏆 Recent Results"}),
+        h(Lbl,{c:"🏆 Recent Results"+(lf.results?"":SAVED)}),
         h("div",{style:{display:"flex",flexDirection:"column",gap:6}},team.recentResults.map((r,i)=>h(ResultPill,{key:i,r})))
       ),
       team.news&&team.news.length>0&&h("div",{style:{marginBottom:12}},
-        h(Lbl,{c:"📰 Latest News"}),
+        h(Lbl,{c:"📰 Latest News"+SAVED}),
         h("div",{style:{background:"rgba(255,255,255,0.03)",borderRadius:12,padding:"4px 12px"}},
           team.news.map((n,i)=>h(NewsItem,{key:i,n,color:team.color}))
         )
