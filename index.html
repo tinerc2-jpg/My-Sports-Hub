@@ -660,10 +660,18 @@ function espnTennisMatches(j){
   return out;
 }
 const athleteName=x=>(x&&(x.athlete&&(x.athlete.displayName||x.athlete.fullName)||x.team&&x.team.displayName||x.displayName))||"";
+// League calendars come as [{label,startDate}], [{entries:[{label,startDate}]}] or plain date strings.
 function nextCalendar(j,now){
   const cal=(((j&&j.leagues)||[])[0]||{}).calendar||[];
-  const n=cal.map(e=>typeof e==="object"?e:null).filter(e=>e&&e.startDate&&Date.parse(e.startDate)>now).sort((a,b)=>Date.parse(a.startDate)-Date.parse(b.startDate))[0];
-  return n?{label:n.label||n.value||"",ts:Date.parse(n.startDate)}:null;
+  const flat=[];
+  cal.forEach(e=>{
+    if(typeof e==="string")flat.push({label:"",startDate:e});
+    else if(e&&Array.isArray(e.entries))e.entries.forEach(x=>flat.push({label:x.label||x.value||x.detail||"",startDate:x.startDate||x.date}));
+    else if(e)flat.push({label:e.label||e.value||e.name||"",startDate:e.startDate||e.date});
+  });
+  if(cal.length&&!flat.some(e=>e.label))liveLog("calendar sample: "+JSON.stringify(cal[0]).slice(0,160));
+  const n=flat.filter(e=>e.startDate&&Date.parse(e.startDate)>now).sort((a,b)=>Date.parse(a.startDate)-Date.parse(b.startDate))[0];
+  return n?{label:n.label,ts:Date.parse(n.startDate)}:null;
 }
 async function fetchTennis(team,src){
   const al=teamAliases(team),now=Date.now(),base=ESPN+"/site/v2/sports/tennis/"+src.tour;
@@ -690,7 +698,12 @@ async function fetchTennis(team,src){
   const done=mine.filter(m=>m.completed).sort((a,b)=>b.d-a.d);
   const live=mine.find(m=>m.state==="in");
   const next=mine.filter(m=>m.state==="pre"&&m.d.getTime()>now-3*3600e3).sort((a,b)=>a.d-b.d)[0];
-  const cal=nextCalendar(sb,now);
+  let cal=nextCalendar(sb,now);
+  if(!cal){ // no calendar: use the next tournament listed on the scoreboard, if any
+    const fut=(sb.events||[]).filter(ev=>Date.parse(ev.date)>now).sort((a,b)=>Date.parse(a.date)-Date.parse(b.date))[0];
+    if(fut)cal={label:fut.name||fut.shortName,ts:Date.parse(fut.date)};
+    else liveLog("tennis calendar: none · league keys "+Object.keys((((sb.leagues)||[])[0])||{}).join(","));
+  }
   return{source:"ESPN",
     recentResults:done.slice(0,5).map(m=>({opponent:m.opponent,score:m.score,result:m.result,date:fmtShort(m.d),ts:m.d.getTime()})),
     nextGame:next?{opponent:next.opponent,date:fmtDay(next.d),time:fmtTime(next.d),tv:"–",ts:next.d.getTime()}:NO_MATCH(cal?"Next on tour: "+cal.label+" · "+fmtShort(new Date(cal.ts)):null),
@@ -734,7 +747,7 @@ async function fetchGolf(team,src){
       out.liveGame={opponent:ev.name,score:line||"–",detail:st.shortDetail||st.detail||"In progress"};
     else{const s=new Date(ev.date||c.date);out.nextGame={opponent:ev.name,date:fmtDay(s),time:fmtTime(s),tv:"–",ts:s.getTime()};}
   }
-  if(!out.nextGame)out.nextGame=cal?{opponent:"Next tour event: "+cal.label,date:fmtDay(new Date(cal.ts)),time:"–",tv:"–",ts:cal.ts}:NO_MATCH(null);
+  if(!out.nextGame)out.nextGame=cal?{opponent:"Next tour event"+(cal.label?": "+cal.label:""),date:fmtDay(new Date(cal.ts)),time:"–",tv:"–",ts:cal.ts}:NO_MATCH(null);
   return out;
 }
 
