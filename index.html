@@ -353,6 +353,9 @@ const ESPN_SPORT_LEAGUES={
   Basketball:[["basketball","nba"]],"Ice Hockey":[["hockey","nhl"]],"Am. Football":[["football","nfl"]],Baseball:[["baseball","mlb"]],
 };
 const _inflight={};
+// Diagnostics: printed by scripts/update-live.mjs in the GitHub Actions log.
+const _liveLog=[];
+function liveLog(m){_liveLog.push(m);if(_liveLog.length>200)_liveLog.shift();}
 
 function lsGet(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
@@ -542,19 +545,97 @@ async function tsdbStanding(src){
     const j=await getJSON(TSDB+"/lookupteam.php?id="+src.id).catch(()=>null);
     const t=j&&(j.teams||[])[0];league=t&&t.idLeague?String(t.idLeague):null;
   }
-  if(!league)return null;
-  const j=await getJSON(TSDB+"/lookuptable.php?l="+league+"&s="+tsdbSeason(new Date())).catch(()=>null);
-  const me=((j&&j.table)||[]).find(r=>String(r.idTeam)===src.id);
+  if(!league){liveLog("tsdb table: no league id for team "+src.id);return null;}
+  const season=tsdbSeason(new Date());
+  const j=await getJSON(TSDB+"/lookuptable.php?l="+league+"&s="+season).catch(e=>{liveLog("tsdb table: "+e.message);return null;});
+  const rows=(j&&j.table)||[];
+  const me=rows.find(r=>String(r.idTeam)===src.id);
+  liveLog("tsdb table league "+league+" "+season+": "+rows.length+" rows, team "+(me?"found":"missing")+(j&&!rows.length?" · "+JSON.stringify(j).slice(0,120):""));
   if(!me||me.intRank==null)return null;
   return{rank:+me.intRank,points:me.intPoints!=null?+me.intPoints:null,wins:me.intWin!=null?+me.intWin:null,
     draws:me.intDraw!=null?+me.intDraw:null,losses:me.intLoss!=null?+me.intLoss:null};
 }
-async function fetchTSDB(src){
-  const [last,next,standing]=await Promise.all([getJSON(TSDB+"/eventslast.php?id="+src.id).catch(()=>null),getJSON(TSDB+"/eventsnext.php?id="+src.id).catch(()=>null),tsdbStanding(src).catch(()=>null)]);
+
+// ── Wikipedia league tables (volunteer-maintained, usually updated within a day) ──
+// Finds the "<season> <league>" article, reads its {{#invoke:Sports table}} wikitext and
+// takes the team's row. Used when the sports APIs have no table (e.g. Danish handball).
+const WIKI="https://en.wikipedia.org/w/api.php?format=json&formatversion=2&origin=*&";
+function wikiSeason(d){const y=d.getMonth()>=6?d.getFullYear():d.getFullYear()-1;return y+"–"+String((y+1)%100).padStart(2,"0");}
+function wikiSplit(s){ // split on top-level "|" (not inside [[…]] or {{…}})
+  const out=[];let depth=0,cur="";
+  for(let i=0;i<s.length;i++){
+    const two=s.substr(i,2);
+    if(two==="[["||two==="{{"){depth++;cur+=two;i++;continue;}
+    if((two==="]]"||two==="}}")&&depth>0){depth--;cur+=two;i++;continue;}
+    if(s[i]==="|"&&depth===0){out.push(cur);cur="";continue;}
+    cur+=s[i];
+  }
+  out.push(cur);return out;
+}
+function wikiTables(wt){
+  wt=wt.replace(/<!--[\s\S]*?-->/g,"");
+  const out=[];let i=0;
+  while((i=wt.indexOf("{{#invoke:Sports table",i))>=0){
+    let depth=0,j=i;
+    for(;j<wt.length;j++){
+      if(wt.startsWith("{{",j)){depth++;j++;}
+      else if(wt.startsWith("}}",j)){depth--;j++;if(depth===0)break;}
+    }
+    const p={};
+    wikiSplit(wt.slice(i+2,j-1)).slice(1).forEach(kv=>{const k=kv.indexOf("=");if(k>0)p[kv.slice(0,k).trim()]=kv.slice(k+1).trim();});
+    out.push(p);i=j;
+  }
+  return out;
+}
+// "[[GOG Håndbold|GOG]]" → ["GOG Håndbold","GOG"], plus any plain text
+function wikiNames(s){
+  s=String(s||"");const out=[];
+  s.replace(/\[\[([^\]|]*)\|?([^\]]*)\]\]/g,(m,a,b)=>{out.push(a);if(b)out.push(b);return "";});
+  const plain=s.replace(/\[\[[^\]]*\]\]|<[^>]+>|\{\{[^}]*\}\}|'''?/g," ").trim();
+  if(plain)out.push(plain);
+  return out;
+}
+function wikiRow(p,al){
+  let order=(p.team_order||"").split(",").map(s=>s.trim()).filter(Boolean);
+  if(!order.length)order=Object.keys(p).filter(k=>/^team\d+$/.test(k)).sort((a,b)=>a.slice(4)-b.slice(4)).map(k=>p[k]);
+  const names=c=>[c].concat(wikiNames(p["name_"+c]));
+  const code=order.find(c=>nameMatch(al,names(c))===2)||order.find(c=>nameMatch(al,names(c))>0);
+  if(!code||p["win_"+code]==null)return null;
+  const n=k=>{const v=parseInt(p[k+"_"+code],10);return isNaN(v)?0:v;};
+  const wp=p.win_points!=null?+p.win_points:3,dp=p.draw_points!=null?+p.draw_points:1;
+  return{rank:order.indexOf(code)+1,wins:n("win"),draws:n("draw"),losses:n("loss"),
+    points:n("win")*wp+n("draw")*dp+n("adjust_points")};
+}
+async function wikiStanding(team){
+  const al=teamAliases(team),season=wikiSeason(new Date());
+  const ck="msh-wiki-"+norm(team.league)+"-"+season,c=lsGet(ck);
+  let title=c&&Date.now()-c.ts<864e5?c.title:null;
+  if(!title){
+    const s=await getJSON(WIKI+"action=query&list=search&srlimit=8&srsearch="+encodeURIComponent(season+" "+team.league));
+    const hit=((s.query&&s.query.search)||[]).find(r=>r.title.includes(season)&&nameMatch([norm(team.league)],[r.title.replace(season,"")])>0)
+      ||((s.query&&s.query.search)||[]).find(r=>r.title.includes(season));
+    if(!hit){liveLog("wiki: no article for "+season+" "+team.league);return null;}
+    title=hit.title;lsSet(ck,{ts:Date.now(),title});
+  }
+  const page=async t=>{const j=await getJSON(WIKI+"action=parse&prop=wikitext&redirects=1&page="+encodeURIComponent(t));return (j.parse&&j.parse.wikitext)||"";};
+  let wt=await page(title),tables=wikiTables(wt);
+  if(!tables.length){ // table often lives in a transcluded template, e.g. {{2026–27 Håndboldligaen table}}
+    const m=wt.match(/\{\{\s*((?:Template:)?[^{}|\n]*[Tt]able[^{}|\n]*)\}\}/);
+    if(m){wt=await page(/^Template:/.test(m[1])?m[1]:"Template:"+m[1].trim());tables=wikiTables(wt);}
+  }
+  for(const p of tables){const r=wikiRow(p,al);if(r){liveLog("wiki: "+title+" → #"+r.rank+" "+r.points+" pts");return r;}}
+  liveLog("wiki: "+title+" — "+tables.length+" tables, team not found");
+  return null;
+}
+
+async function fetchTSDB(src,team){
+  const standingP=tsdbStanding(src).catch(()=>null).then(s=>s?{s,from:""}:wikiStanding(team).then(w=>w?{s:w,from:" + Wikipedia"}:null).catch(e=>{liveLog("wiki: "+e.message);return null;}));
+  const [last,next,st]=await Promise.all([getJSON(TSDB+"/eventslast.php?id="+src.id).catch(()=>null),getJSON(TSDB+"/eventsnext.php?id="+src.id).catch(()=>null),standingP]);
+  const standing=st&&st.s;
   if(!last&&!next)throw new Error("offline");
   const done=((last&&last.results)||[]).map(e=>tsdbEvent(e,src.id)).filter(e=>e.ms!=null&&e.ms!==""&&e.os!=null&&e.os!=="").sort((a,b)=>b.d-a.d);
   const up=((next&&next.events)||[]).map(e=>tsdbEvent(e,src.id)).filter(e=>e.d.getTime()>Date.now()-3*3600e3).sort((a,b)=>a.d-b.d)[0];
-  return{source:"TheSportsDB",
+  return{source:"TheSportsDB"+(st?st.from:""),
     recentResults:done.slice(0,5).map(e=>({opponent:e.opponent,score:e.ms+"–"+e.os,result:+e.ms>+e.os?"W":+e.ms<+e.os?"L":"D",date:fmtShort(e.d)})),
     nextGame:up?{opponent:up.opponent,date:fmtDay(up.d),time:fmtTime(up.d),tv:up.tv||"–",ts:up.d.getTime()}:next?OFF_SEASON:null,
     standing};
@@ -566,7 +647,7 @@ async function fetchTeamLive(team){
   if(!src)return null;
   if(src.p==="espn")return fetchEspn(src);
   if(src.p==="f1")return fetchF1(team);
-  if(src.p==="tsdb")return fetchTSDB(src);
+  if(src.p==="tsdb")return fetchTSDB(src,team);
   return null;
 }
 // ── end live data fetchers (scripts/update-live.mjs runs everything above in GitHub Actions)

@@ -12,18 +12,28 @@ const adds=html.split("\n").filter(l=>/^add\(\[/.test(l)).join("\n");
 
 const mem={};
 globalThis.localStorage={getItem:k=>k in mem?mem[k]:null,setItem:(k,v)=>{mem[k]=String(v);}};
+// Wikimedia asks API clients to identify themselves.
+const UA="MySportsHub/1.0 (+https://github.com/tinerc2-jpg/My-Sports-Hub)";
+const rawFetch=globalThis.fetch;
+globalThis.fetch=(url,opts={})=>rawFetch(url,{...opts,headers:{"User-Agent":UA,...(opts.headers||{})}});
 const api=new Function(`const DB={};function add(keys,d){keys.forEach(k=>DB[k.toLowerCase()]=d);}
 ${adds}
 ${html.slice(start,end)}
-return {DB,fetchTeamLive};`)();
+return {DB,fetchTeamLive,_liveLog};`)();
 
 const teams={},seen=new Set();let ok=0,failed=0;
 for(const t of Object.values(api.DB)){
   if(seen.has(t.name))continue;seen.add(t.name);
+  api._liveLog.length=0;
   try{
     const data=await api.fetchTeamLive(t);
-    if(data){teams[t.name]={ts:Date.now(),data};ok++;}
+    if(data){
+      teams[t.name]={ts:Date.now(),data};ok++;
+      const s=data.standing;
+      console.log("✓",t.name,"·",data.source,"·",s&&s.rank?"#"+s.rank+(s.points!=null?" "+s.points+" pts":""):"no table");
+    }
   }catch(e){failed++;console.error("✗",t.name,"-",e.message);}
+  api._liveLog.forEach(m=>console.log("   ",m));
 }
 mkdirSync("out",{recursive:true});
 writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams}));
