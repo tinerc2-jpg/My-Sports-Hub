@@ -19,7 +19,7 @@ globalThis.fetch=(url,opts={})=>rawFetch(url,{...opts,headers:{"User-Agent":UA,.
 const api=new Function(`const DB={};function add(keys,d){keys.forEach(k=>DB[k.toLowerCase()]=d);}
 ${adds}
 ${html.slice(start,end)}
-return {DB,fetchTeamLive,_liveLog,teamAliases,nameMatch};`)();
+return {DB,fetchTeamLive,_liveLog,teamAliases,nameMatch,norm};`)();
 
 // Previous snapshot: lets us reuse API-Sports standings so we stay within the free quota.
 let prev={};
@@ -76,6 +76,95 @@ async function hbStanding(team){
   }catch(e){console.log("    API-Sports:",e.message);return{standing:null,triedTs:now};}
 }
 
+// ── Danish men's handball table from public web pages (no free API covers the current season) ──
+// Tried in order; each page is loaded at most once per run and shared by all teams.
+// A row is only used if it adds up: wins+draws+losses = played and points = 2·wins + draws.
+const TV2_LEAGUE="Håndboldligaen";
+const TABLE_PAGES=[
+  {name:"Top Håndbold",url:"https://tophaandbold.dk/stillinger/herreligaen"}, // the league's own site
+  {name:"TV 2",url:"https://sport.tv2.dk/haandbold/herreligaen"},
+  {name:"GOG",url:"https://www.gog.dk/"},
+];
+const _pages={};
+function tv2Load(page){
+  if(_pages[page.url])return _pages[page.url];
+  return _pages[page.url]=(async()=>{
+    const r=await fetch(page.url,{headers:{"Accept":"text/html","Accept-Language":"da-DK,da;q=0.9"}});
+    const html=await r.text();
+    // Text from the rendered HTML plus any JSON-ish strings in scripts (e.g. Next.js __next_f payloads).
+    const scripts=[...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/g)].map(m=>m[1]);
+    const decoded=scripts.map(s=>s.replace(/\\u([0-9a-f]{4})/gi,(m,h)=>String.fromCharCode(parseInt(h,16))).replace(/\\"/g,'"').replace(/\\n/g," "));
+    const strip=s=>s.replace(/<[^>]+>/g," ").replace(/&nbsp;|&#160;/g," ").replace(/&amp;/g,"&").replace(/[",:{}\[\]]/g," ");
+    const text=strip(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g," "))+" "+decoded.map(strip).join(" ");
+    const json=[];
+    scripts.forEach(s=>{const t=s.trim();if(/^[\[{]/.test(t)){try{json.push(JSON.parse(t));}catch(e){}}});
+    const hints=[...new Set((html.match(/https?:\/\/[^"'\s]*(?:stand|tabel|stilling|table)[^"'\s]*/gi)||[]))].slice(0,8);
+    console.log(`    ${page.name}: HTTP ${r.status}, ${html.length} bytes, ${scripts.length} scripts, ${json.length} JSON blocks`+(hints.length?", table-ish URLs: "+hints.join(" "):""));
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    return{text,tokens:text.split(/\s+/).filter(Boolean),json};
+  })();
+}
+function hbValid(r){return r&&[r.played,r.wins,r.draws,r.losses,r.points].every(n=>Number.isInteger(n)&&n>=0)&&r.wins+r.draws+r.losses===r.played&&r.points===2*r.wins+r.draws;}
+// Structured: any object in embedded JSON with a matching team name and W/D/L/points-like keys.
+function tv2FromJson(json,al){
+  const pick=(o,re)=>{const k=Object.keys(o).find(k=>re.test(k));const v=k!=null?o[k]:null;return v&&typeof v==="object"&&"total" in v?+v.total:v!=null&&v!==""?+v:null;};
+  let found=null;
+  const walk=o=>{
+    if(found||!o||typeof o!=="object")return;
+    if(Array.isArray(o)){o.forEach(walk);return;}
+    const names=Object.values(o).filter(v=>typeof v==="string").concat(Object.values(o).filter(v=>v&&typeof v==="object"&&!Array.isArray(v)).flatMap(v=>Object.values(v).filter(x=>typeof x==="string")));
+    if(names.length&&api.nameMatch(al,names)===2){
+      const r={rank:pick(o,/^(position|rank|placement|place|pos|placering)$/i),played:pick(o,/^(played|matches|games|kampe|gamesPlayed)$/i),
+        wins:pick(o,/^(wins?|won|vundne|vundet)$/i),draws:pick(o,/^(draws?|drawn|ties|uafgjort)$/i),losses:pick(o,/^(loss(es)?|lost|tabte|tabt)$/i),points:pick(o,/^(points|pts|point)$/i)};
+      if(hbValid(r)&&r.rank>0){found=r;return;}
+    }
+    Object.values(o).forEach(walk);
+  };
+  walk(json);
+  return found;
+}
+// Text: "<rank> <team…> <played> <W> <D> <L> [goals] [diff] <points>" as rendered in the table.
+function tv2FromTokens(tokens,al){
+  const num=t=>/^[+-]?\d+\.?$/.test(t)?parseInt(t,10):null;
+  const seen=[];
+  for(let i=0;i<tokens.length;i++){
+    const one=api.norm(tokens[i]),two=api.norm(tokens[i]+" "+(tokens[i+1]||""));
+    if(!(al.includes(one)||al.includes(two)))continue;
+    if(seen.length<3)seen.push(tokens.slice(Math.max(0,i-3),i+14).join(" "));
+    let rank=null;for(let k=i-1;k>=Math.max(0,i-3);k--){const n=num(tokens[k]);if(n!=null&&n>0&&n<=20){rank=n;break;}}
+    let j=i+1;while(j<tokens.length&&j<i+4&&num(tokens[j])==null)j++;
+    const nums=[];
+    for(;j<tokens.length&&nums.length<10;j++){
+      const t=tokens[j];
+      if(/^\d+[-–:]\d+$/.test(t))continue; // goals for–against
+      const n=num(t);if(n==null)break;nums.push(n);
+    }
+    if(nums.length<5)continue;
+    const [played,wins,draws,losses]=nums;
+    const points=nums.slice(4).find(p=>p===2*wins+draws);
+    const r={rank,played,wins,draws,losses,points};
+    if(rank&&hbValid(r))return{r,seen};
+  }
+  return{r:null,seen};
+}
+// Returns {standing, from} from the first page with a valid row, or null.
+async function tv2Standing(team){
+  const al=api.teamAliases(team);
+  for(const page of TABLE_PAGES){
+    try{
+      const p=await tv2Load(page);
+      let r=null,how="JSON";
+      for(const j of p.json){r=tv2FromJson(j,al);if(r)break;}
+      if(!r){const t=tv2FromTokens(p.tokens,al);r=t.r;how="text";
+        if(!r)console.log(`    ${page.name}: no valid row for ${team.shortName}`+(t.seen.length?" · seen: "+t.seen.map(s=>"«"+s+"»").join(" "):" · name not on page"));}
+      if(!r)continue;
+      console.log(`    ${page.name} (${how}): #${r.rank} ${r.played} played ${r.wins}-${r.draws}-${r.losses} ${r.points} pts`);
+      return{standing:{rank:r.rank,points:r.points,wins:r.wins,draws:r.draws,losses:r.losses},from:page.name};
+    }catch(e){console.log(`    ${page.name}:`,e.message);}
+  }
+  return null;
+}
+
 const teams={},seen=new Set();let ok=0,failed=0;
 for(const t of Object.values(api.DB)){
   if(seen.has(t.name))continue;seen.add(t.name);
@@ -93,6 +182,10 @@ for(const t of Object.values(api.DB)){
             data.source=data.source.replace(" + Wikipedia","")+" + API-Sports";
           }
         }
+      }
+      if(!data.standing&&t.league===TV2_LEAGUE){
+        const s=await tv2Standing(t);
+        if(s){data.standing=s.standing;data.standingFrom=s.from;data.standingTs=Date.now();data.source=data.source.replace(" + Wikipedia","")+" + "+s.from;}
       }
     }
     if(data){
