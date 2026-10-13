@@ -674,7 +674,10 @@ function liveIsStale(e,selected){
 }
 function mergeLive(team,e){
   const d=e&&e.data;if(!d)return team;
+  const hasNews=d.news&&d.news.length;
+  if(d.newsOnly)return hasNews?{...team,news:d.news,_liveFields:{news:true}}:team; // no results source, but news from the snapshot
   const out={...team,_live:d.source,liveGame:d.liveGame||null,_liveFields:{}};
+  if(hasNews){out.news=d.news;out._liveFields.news=true;}
   if(d.recentResults&&d.recentResults.length){out.recentResults=d.recentResults;out._liveFields.results=true;}
   if(d.nextGame){const g={...d.nextGame};if(g.ts){const x=new Date(g.ts);g.date=fmtDay(x);g.time=fmtTime(x);}out.nextGame=g;}
   if(d.standing){out._liveFields.standing=true;const s={...team.standing};Object.keys(d.standing).forEach(k=>{if(d.standing[k]!=null)s[k]=d.standing[k];});out.standing=s;}
@@ -827,10 +830,12 @@ function ResultPill({r}){
 
 function NewsItem({n,color}){
   return h("div",{style:{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,0.06)"}},
-    n.hot&&h("span",{style:{background:color,color:"#fff",fontSize:"0.5rem",fontWeight:700,padding:"2px 5px",borderRadius:4,flexShrink:0,marginTop:2,fontFamily:"Inter,sans-serif"}},"HOT"),
+    (n.ts?Date.now()-n.ts<864e5:n.hot)&&h("span",{style:{background:color,color:"#fff",fontSize:"0.5rem",fontWeight:700,padding:"2px 5px",borderRadius:4,flexShrink:0,marginTop:2,fontFamily:"Inter,sans-serif"}},"HOT"),
     h("div",{style:{flex:1}},
-      h("div",{style:{fontSize:"0.78rem",color:"#e2e8f0",lineHeight:1.4,fontFamily:"Inter,sans-serif"}},n.title),
-      h("div",{style:{fontSize:"0.58rem",opacity:0.4,marginTop:2,fontFamily:"Inter,sans-serif"}},n.time)
+      n.url
+        ?h("a",{href:n.url,target:"_blank",rel:"noopener noreferrer",style:{display:"block",fontSize:"0.78rem",color:"#e2e8f0",lineHeight:1.4,fontFamily:"Inter,sans-serif",textDecoration:"none"}},n.title+" ↗")
+        :h("div",{style:{fontSize:"0.78rem",color:"#e2e8f0",lineHeight:1.4,fontFamily:"Inter,sans-serif"}},n.title),
+      h("div",{style:{fontSize:"0.58rem",opacity:0.4,marginTop:2,fontFamily:"Inter,sans-serif"}},(n.ts?timeAgo(n.ts):n.time)+(n.src?" \xB7 "+n.src:""))
     )
   );
 }
@@ -930,6 +935,7 @@ function LiveStatus({entry,busy,sport,onRefresh}){
   let txt,col="rgba(255,255,255,0.4)";
   if(busy)txt="Updating results…";
   else if(entry&&entry.errTs&&(!entry.ts||entry.errTs>entry.ts))txt=(d?"Couldn't update \xB7 showing results from "+timeAgo(entry.ts):"Couldn't reach live results \xB7 showing saved data")+(entry.err?" ("+entry.err+")":""),col="#fbbf24";
+  else if(d&&d.newsOnly)txt="News auto-updating \xB7 results for "+sport+" not available yet";
   else if(d)txt="Auto-updating \xB7 "+d.source+" \xB7 updated "+timeAgo(entry.ts),col="#a3e635";
   else if(entry)txt="Auto-update not available for "+sport+" yet \xB7 showing saved data";
   else txt="Checking for live results…";
@@ -1074,9 +1080,14 @@ function App(){
     _inflight[t.name]=true;setBusy(b=>({...b,[t.name]:true}));
     try{
       let data=await fetchTeamLive(t);
-      if(data&&!data.standing){ // e.g. handball: table only available server-side (API-Sports in the snapshot)
-        const snap=await getSnapshot().catch(()=>null),s=snap&&snap[t.name];
-        if(s&&s.data&&s.data.standing)data={...data,standing:s.data.standing,source:data.source+" + "+(s.data.standingFrom||"table")+" via GitHub"};
+      // Some things only exist in the GitHub snapshot (handball table, news): merge them in.
+      if(!data||!data.standing||!data.news){
+        const snap=await getSnapshot().catch(()=>null),s=snap&&snap[t.name]&&snap[t.name].data;
+        if(s&&!data&&s.newsOnly)data=s;
+        else if(s&&data){
+          if(!data.standing&&s.standing)data={...data,standing:s.standing,source:data.source+" + "+(s.standingFrom||"table")+" via GitHub"};
+          if(!data.news&&s.news)data={...data,news:s.news};
+        }
       }
       saveLive(t.name,{ts:Date.now(),data});
     }catch(e){
@@ -1198,7 +1209,7 @@ function App(){
         h("div",{style:{display:"flex",flexDirection:"column",gap:6}},team.recentResults.map((r,i)=>h(ResultPill,{key:i,r})))
       ),
       team.news&&team.news.length>0&&h("div",{style:{marginBottom:12}},
-        h(Lbl,{c:"📰 Latest News"+SAVED}),
+        h(Lbl,{c:"📰 Latest News"+(lf.news?"":SAVED)}),
         h("div",{style:{background:"rgba(255,255,255,0.03)",borderRadius:12,padding:"4px 12px"}},
           team.news.map((n,i)=>h(NewsItem,{key:i,n,color:team.color}))
         )

@@ -165,6 +165,43 @@ async function tv2Standing(team){
   return null;
 }
 
+// ── News: Google News RSS search per team (no key). Danish teams get Danish news. ──
+// Refreshed at most hourly per team; otherwise the previous snapshot's news is reused.
+const NEWS_TTL=60*60*1000;
+const SPORT_WORDS={Football:["fodbold","football"],Handball:["håndbold","handball"],Tennis:["tennis","tennis"],Basketball:["basketball","NBA"],
+  Golf:["golf","golf"],Cycling:["cykling","cycling"],"Formula 1":["Formel 1","F1"],"Ice Hockey":["ishockey","NHL"],"Am. Football":["NFL","NFL"],
+  Rugby:["rugby","rugby"],Baseball:["baseball","MLB"],Volleyball:["volleyball","volleyball"]};
+function xmlText(s){
+  return String(s||"").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,"$1").replace(/<[^>]+>/g,"")
+    .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'")
+    .replace(/&#(\d+);/g,(m,n)=>String.fromCharCode(+n)).replace(/&amp;/g,"&").trim();
+}
+async function teamNews(team){
+  const p=prev[team.name]&&prev[team.name].data,now=Date.now();
+  if(p&&p.news&&p.news.length&&now-(p.newsTs||0)<NEWS_TTL)return{news:p.news,ts:p.newsTs};
+  const dk=team.country==="🇩🇰",w=SPORT_WORDS[team.sport]||["",""];
+  const names=[...new Set([team.name,team.shortName])].map(n=>`"${n}"`);
+  const q=`${names.length>1?"("+names.join(" OR ")+")":names[0]} ${dk?w[0]:w[1]}`.trim();
+  const loc=dk?"hl=da&gl=DK&ceid=DK:da":"hl=en-GB&gl=GB&ceid=GB:en";
+  try{
+    const r=await fetch(`https://news.google.com/rss/search?q=${encodeURIComponent(q+" when:30d")}&${loc}`);
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    const xml=await r.text(),seenT=new Set();
+    const news=[...xml.matchAll(/<item>([\s\S]*?)<\/item>/g)].map(m=>{
+      const it=m[1],tag=t=>xmlText((it.match(new RegExp(`<${t}[^>]*>([\\s\\S]*?)</${t}>`))||[])[1]);
+      const src=tag("source");let title=tag("title");
+      if(src&&title.endsWith(" - "+src))title=title.slice(0,-(src.length+3));
+      return{title,url:tag("link"),ts:Date.parse(tag("pubDate"))||null,src};
+    }).filter(n=>n.title&&n.ts&&!seenT.has(n.title.toLowerCase())&&seenT.add(n.title.toLowerCase()))
+      .sort((a,b)=>b.ts-a.ts).slice(0,5);
+    console.log(`    news: ${news.length} items for ${q}`);
+    return news.length?{news,ts:now}:(p&&p.news?{news:p.news,ts:p.newsTs}:null);
+  }catch(e){
+    console.log("    news:",e.message);
+    return p&&p.news?{news:p.news,ts:p.newsTs}:null;
+  }
+}
+
 const teams={},seen=new Set();let ok=0,failed=0;
 for(const t of Object.values(api.DB)){
   if(seen.has(t.name))continue;seen.add(t.name);
@@ -188,10 +225,15 @@ for(const t of Object.values(api.DB)){
         if(s){data.standing=s.standing;data.standingFrom=s.from;data.standingTs=Date.now();data.source=data.source.replace(" + Wikipedia","")+" + "+s.from;}
       }
     }
+    const nw=await teamNews(t);
     if(data){
+      if(nw){data.news=nw.news;data.newsTs=nw.ts;}
       teams[t.name]={ts:Date.now(),data};ok++;
       const s=data.standing;
       console.log("✓",t.name,"·",data.source,"·",s&&s.rank?"#"+s.rank+(s.points!=null?" "+s.points+" pts":""):"no table");
+    }else if(nw){
+      teams[t.name]={ts:Date.now(),data:{newsOnly:true,source:"Google News",news:nw.news,newsTs:nw.ts}};
+      console.log("·",t.name,"· news only");
     }
   }catch(e){failed++;console.error("✗",t.name,"-",e.message);}
   api._liveLog.forEach(m=>console.log("   ",m));
