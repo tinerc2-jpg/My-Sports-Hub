@@ -385,7 +385,7 @@ async function getJSON(url){
     throw new Error(host+" "+e.message+", proxies failed");
   }
 }
-function norm(s){return String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase()
+function norm(s){return String(s||"").replace(/[øØ]/g,"o").replace(/[æÆ]/g,"ae").replace(/ß/g,"ss").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase()
   .replace(/[^a-z0-9 ]/g," ").replace(/\b(fc|cf|afc|ssc|sc|ac|club|de|the|handbold|handball)\b/g," ").replace(/\s+/g," ").trim();}
 function teamAliases(t){
   const out=new Set([t.name,t.shortName]);
@@ -433,6 +433,8 @@ async function resolveSource(team){
   if(hit&&Date.now()-hit.ts<7*864e5)return hit.src;
   const al=teamAliases(team);let src=null;
   if(team.sport==="Formula 1")src={p:"f1"};
+  else if(team.sport==="Tennis")src={p:"tennis",tour:/wta/i.test(team.league)?"wta":"atp"};
+  else if(team.sport==="Golf")src={p:"golf",tours:GOLF_TOURS[team.league]||["pga"]};
   else if(team.sport==="Handball")src=await resolveTSDB(team,al);
   else if(ESPN_SPORT_LEAGUES[team.sport]){
     const cands=ESPN_LEAGUES[team.league]?[ESPN_LEAGUES[team.league]]:ESPN_SPORT_LEAGUES[team.sport];
@@ -641,6 +643,101 @@ async function fetchTSDB(src,team){
     standing};
 }
 
+// ── Tennis (ESPN): this week's singles matches + ATP/WTA ranking ──
+// The scoreboard only covers current tournaments; older results are kept by the Actions
+// script, which merges each run's results into the previous snapshot's.
+const NO_MATCH=label=>({opponent:"No upcoming match found",offTitle:"No match scheduled",date:label||"Check the tour schedule",time:"–",tv:"–"});
+function espnTennisMatches(j){
+  const out=[];
+  ((j&&j.events)||[]).forEach(ev=>{
+    const groups=ev.groupings&&ev.groupings.length?ev.groupings:[{competitions:ev.competitions||[]}];
+    groups.forEach(g=>{
+      const slug=g.grouping?(g.grouping.slug||g.grouping.displayName||""):"";
+      if(/double|mixed|qualif/i.test(slug))return;
+      (g.competitions||[]).forEach(c=>out.push({ev,c}));
+    });
+  });
+  return out;
+}
+const athleteName=x=>(x&&(x.athlete&&(x.athlete.displayName||x.athlete.fullName)||x.team&&x.team.displayName||x.displayName))||"";
+function nextCalendar(j,now){
+  const cal=(((j&&j.leagues)||[])[0]||{}).calendar||[];
+  const n=cal.map(e=>typeof e==="object"?e:null).filter(e=>e&&e.startDate&&Date.parse(e.startDate)>now).sort((a,b)=>Date.parse(a.startDate)-Date.parse(b.startDate))[0];
+  return n?{label:n.label||n.value||"",ts:Date.parse(n.startDate)}:null;
+}
+async function fetchTennis(team,src){
+  const al=teamAliases(team),now=Date.now(),base=ESPN+"/site/v2/sports/tennis/"+src.tour;
+  const [sb,rk]=await Promise.all([getJSON(base+"/scoreboard"),getJSON(base+"/rankings").catch(e=>{liveLog("tennis rankings: "+e.message);return null;})]);
+  const all=espnTennisMatches(sb);
+  const isMe=x=>nameMatch(al,[athleteName(x)])===2;
+  const mine=all.filter(({c})=>(c.competitors||[]).some(isMe)).map(({ev,c})=>{
+    const me=c.competitors.find(isMe),op=c.competitors.find(x=>x!==me);
+    const st=((c.status||{}).type)||{};
+    const sets=(me.linescores||[]).map((l,i)=>l.value+"-"+((((op||{}).linescores||[])[i]||{}).value??"")).join(" ");
+    const round=c.round&&(c.round.displayName||c.round.description)||"";
+    const d=new Date(c.date||c.startDate||ev.date);
+    return{d,state:st.state||"pre",completed:!!st.completed,detail:st.shortDetail||st.detail||"",
+      opponent:(op?athleteName(op):"TBD")+" ("+[ev.shortName||ev.name,round].filter(Boolean).join(", ")+")",
+      score:sets,result:me.winner===true?"W":op&&op.winner===true?"L":"D"};
+  });
+  liveLog(`tennis ${src.tour}: ${(sb.events||[]).length} events, ${all.length} singles matches, ${mine.length} for ${team.shortName}`);
+  // Ranking: rankings[0].ranks[] {current, points, athlete}
+  let standing=null;
+  const ranks=(((rk&&rk.rankings)||[])[0]||{}).ranks||[];
+  const r=ranks.find(x=>nameMatch(al,[athleteName(x)])===2);
+  if(r)standing={rank:+(r.current??r.rank),points:r.points!=null?+r.points:null};
+  liveLog(`tennis rankings: ${ranks.length} rows, ${r?"#"+standing.rank:"player not found"}`+(rk&&!ranks.length?" · keys "+Object.keys(rk).join(","):""));
+  const done=mine.filter(m=>m.completed).sort((a,b)=>b.d-a.d);
+  const live=mine.find(m=>m.state==="in");
+  const next=mine.filter(m=>m.state==="pre"&&m.d.getTime()>now-3*3600e3).sort((a,b)=>a.d-b.d)[0];
+  const cal=nextCalendar(sb,now);
+  return{source:"ESPN",
+    recentResults:done.slice(0,5).map(m=>({opponent:m.opponent,score:m.score,result:m.result,date:fmtShort(m.d),ts:m.d.getTime()})),
+    nextGame:next?{opponent:next.opponent,date:fmtDay(next.d),time:fmtTime(next.d),tv:"–",ts:next.d.getTime()}:NO_MATCH(cal?"Next on tour: "+cal.label+" · "+fmtShort(new Date(cal.ts)):null),
+    liveGame:live?{opponent:live.opponent,score:live.score||"–",detail:live.detail||"Live"}:null,
+    standing};
+}
+
+// ── Golf (ESPN): this week's tournament on the player's tour(s) ──
+const GOLF_TOURS={"PGA Tour":["pga"],"DP World Tour":["eur"],"PGA Tour / DP World Tour":["pga","eur"],"LET / LPGA Tour":["lpga"]};
+const toPar=s=>{s=String(s==null?"":s).trim();if(/^e(ven)?$/i.test(s))return 0;const n=parseInt(s.replace("+",""),10);return isNaN(n)?null:n;};
+async function fetchGolf(team,src){
+  const al=teamAliases(team),now=Date.now();
+  let hit=null,cal=null,sawEvent=false;
+  for(const tour of src.tours){
+    const j=await getJSON(ESPN+"/site/v2/sports/golf/"+tour+"/scoreboard").catch(e=>{liveLog("golf "+tour+": "+e.message);return null;});
+    if(!j)continue;
+    const c0=nextCalendar(j,now);if(c0&&(!cal||c0.ts<cal.ts))cal=c0;
+    for(const ev of j.events||[]){
+      sawEvent=true;
+      const c=(ev.competitions||[])[0];if(!c)continue;
+      const cs=c.competitors||[];
+      const me=cs.find(x=>nameMatch(al,[athleteName(x)])===2);
+      liveLog(`golf ${tour}: ${ev.name} · ${cs.length} players · ${me?"in field":"not in field"}`);
+      if(me&&!hit)hit={ev,c,cs,me};
+    }
+  }
+  if(!sawEvent&&!cal)throw new Error("no golf data");
+  const out={source:"ESPN"};
+  if(hit){
+    const {ev,c,cs,me}=hit,st=((c.status||ev.status||{}).type)||{};
+    const sc=espnScore(me.score),p=toPar(sc);
+    let pos=me.status&&me.status.position&&me.status.position.displayName;
+    if(!pos&&p!=null){const better=cs.filter(x=>{const q=toPar(espnScore(x.score));return q!=null&&q<p;}).length;
+      const tie=cs.filter(x=>toPar(espnScore(x.score))===p).length>1;pos=(tie?"T":"")+(better+1);}
+    const rank=parseInt(String(pos||"").replace(/\D/g,""),10);
+    const line=[pos,sc].filter(Boolean).join(" · ");
+    const d=new Date(ev.endDate||c.endDate||ev.date);
+    if(st.completed||st.state==="post")
+      out.recentResults=[{opponent:ev.name,score:sc||"–",label:pos||null,result:rank===1?"W":rank<=10?"D":"L",date:fmtShort(d),ts:d.getTime()}];
+    else if(st.state==="in")
+      out.liveGame={opponent:ev.name,score:line||"–",detail:st.shortDetail||st.detail||"In progress"};
+    else{const s=new Date(ev.date||c.date);out.nextGame={opponent:ev.name,date:fmtDay(s),time:fmtTime(s),tv:"–",ts:s.getTime()};}
+  }
+  if(!out.nextGame)out.nextGame=cal?{opponent:"Next tour event: "+cal.label,date:fmtDay(new Date(cal.ts)),time:"–",tv:"–",ts:cal.ts}:NO_MATCH(null);
+  return out;
+}
+
 // Returns {source, recentResults?, nextGame?, liveGame?, standing?} or null when no live source covers the team.
 async function fetchTeamLive(team){
   const src=await resolveSource(team);
@@ -648,6 +745,8 @@ async function fetchTeamLive(team){
   if(src.p==="espn")return fetchEspn(src);
   if(src.p==="f1")return fetchF1(team);
   if(src.p==="tsdb")return fetchTSDB(src,team);
+  if(src.p==="tennis")return fetchTennis(team,src);
+  if(src.p==="golf")return fetchGolf(team,src);
   return null;
 }
 // ── end live data fetchers (scripts/update-live.mjs runs everything above in GitHub Actions)
@@ -679,7 +778,7 @@ function mergeLive(team,e){
   const out={...team,_live:d.source,liveGame:d.liveGame||null,_liveFields:{}};
   if(hasNews){out.news=d.news;out._liveFields.news=true;}
   if(d.recentResults&&d.recentResults.length){out.recentResults=d.recentResults;out._liveFields.results=true;}
-  if(d.nextGame){const g={...d.nextGame};if(g.ts){const x=new Date(g.ts);g.date=fmtDay(x);g.time=fmtTime(x);}out.nextGame=g;}
+  if(d.nextGame){const g={...d.nextGame};if(g.ts){const x=new Date(g.ts);g.date=fmtDay(x);if(g.time!=="–")g.time=fmtTime(x);}out.nextGame=g;}
   if(d.standing){out._liveFields.standing=true;const s={...team.standing};Object.keys(d.standing).forEach(k=>{if(d.standing[k]!=null)s[k]=d.standing[k];});out.standing=s;}
   // Live source but no table: blank it rather than show last season's numbers.
   else{out._liveFields.standing="none";out.standing={rank:null,points:null,wins:null,draws:null,losses:null};}
@@ -819,7 +918,7 @@ function StatBox({label,value,sub}){
 }
 
 function ResultPill({r}){
-  const c=RC[r.result]||"#888",l=RL[r.result]||r.result;
+  const c=RC[r.result]||"#888",l=r.label||RL[r.result]||r.result; // golf rows carry their finishing position, e.g. "T2"
   return h("div",{style:{display:"flex",alignItems:"center",gap:10,background:"rgba(255,255,255,0.04)",borderRadius:10,padding:"9px 12px",borderLeft:"3px solid "+c}},
     h("div",{style:{fontSize:"0.58rem",fontWeight:700,color:c,fontFamily:"Inter,sans-serif",minWidth:28}},l),
     h("div",{style:{flex:1,fontSize:"0.78rem",color:"#e2e8f0",fontFamily:"Inter,sans-serif"}},r.opponent),
@@ -896,8 +995,8 @@ function NextGame({team}){
 
   if(isOff) return h("div",{style:{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:14,padding:14,display:"flex",alignItems:"center",justifyContent:"space-between"}},
     h("div",null,
-      h("div",{style:{fontSize:"0.55rem",letterSpacing:"2px",opacity:0.4,fontFamily:"Inter,sans-serif",textTransform:"uppercase",marginBottom:4}},"Off Season"),
-      h("div",{style:{fontSize:"0.88rem",fontWeight:600,color:"rgba(255,255,255,0.5)",fontFamily:"Barlow Condensed,sans-serif"}},"Season complete"),
+      h("div",{style:{fontSize:"0.55rem",letterSpacing:"2px",opacity:0.4,fontFamily:"Inter,sans-serif",textTransform:"uppercase",marginBottom:4}},g.offTitle?"Schedule":"Off Season"),
+      h("div",{style:{fontSize:"0.88rem",fontWeight:600,color:"rgba(255,255,255,0.5)",fontFamily:"Barlow Condensed,sans-serif"}},g.offTitle||"Season complete"),
       h("div",{style:{fontSize:"0.65rem",color:"rgba(255,255,255,0.3)",marginTop:3,fontFamily:"Inter,sans-serif"}},g.date&&g.date!=="-"?g.date:"Check back next season")
     ),
     h("a",{href:getLiveUrl(),target:"_blank",rel:"noopener noreferrer",style:{fontSize:"0.62rem",color:"rgba(255,255,255,0.35)",fontFamily:"Inter,sans-serif",textDecoration:"none",border:"1px solid rgba(255,255,255,0.1)",borderRadius:5,padding:"3px 8px",whiteSpace:"nowrap"}},getLiveLabel())

@@ -243,6 +243,35 @@ function parseRss(xml){
     .sort((a,b)=>b.ts-a.ts);
 }
 
+// ── Official World Golf Ranking (the public JSON behind owgr.com; men only) ──
+// Loaded once per run. The response shape isn't documented, so we look for any object
+// naming the player with a rank-like field, and log the top-level keys if that fails.
+let _owgr=null;
+function owgrLoad(){
+  return _owgr||(_owgr=fetch("https://apiweb.owgr.com/api/owgr/rankings/getRankings?regionId=0&pageSize=1000&pageNumber=1&countryId=0&sortString=Rank+ASC",{headers:{"Accept":"application/json"}})
+    .then(async r=>{if(!r.ok)throw new Error("HTTP "+r.status);const j=await r.json();console.log("    OWGR: top-level keys "+Object.keys(j).join(","));return j;})
+    .catch(e=>{console.log("    OWGR:",e.message);return null;}));
+}
+async function owgrStanding(team){
+  const j=await owgrLoad();if(!j)return null;
+  const al=api.teamAliases(team);let hit=null;
+  const walk=o=>{
+    if(hit||!o||typeof o!=="object")return;
+    if(Array.isArray(o)){o.forEach(walk);return;}
+    const pl=o.player&&typeof o.player==="object"?o.player:o;
+    const names=[pl.fullName,pl.name,[pl.firstName,pl.lastName].filter(Boolean).join(" ")].filter(Boolean);
+    const rank=o.rank??o.ranking??o.currentRank??o.position;
+    if(names.length&&rank!=null&&api.nameMatch(al,names)===2){hit=o;return;}
+    Object.values(o).forEach(walk);
+  };
+  walk(j);
+  if(!hit){console.log("    OWGR: "+team.name+" not found");return null;}
+  const rank=+(hit.rank??hit.ranking??hit.currentRank??hit.position);
+  const pts=hit.pointsAverage??hit.averagePoints??hit.points;
+  console.log(`    OWGR: ${team.name} #${rank}`);
+  return{rank,points:pts!=null?Math.round(+pts*100)/100:null};
+}
+
 const teams={},seen=new Set();let ok=0,failed=0;
 for(const t of Object.values(api.DB)){
   if(seen.has(t.name))continue;seen.add(t.name);
@@ -265,6 +294,14 @@ for(const t of Object.values(api.DB)){
         const s=await tv2Standing(t);
         if(s){data.standing=s.standing;data.standingFrom=s.from;data.standingTs=Date.now();data.source=data.source.replace(" + Wikipedia","")+" + "+s.from;}
       }
+    }
+    if(data&&(t.sport==="Tennis"||t.sport==="Golf")){
+      // ESPN only shows this week's events: keep earlier results from the previous snapshot.
+      const pr=(prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[];
+      const seenR=new Set(),merged=[...(data.recentResults||[]),...pr.filter(r=>r.ts)]
+        .filter(r=>{const k=r.opponent+"|"+r.date;return !seenR.has(k)&&seenR.add(k);}).sort((a,b)=>b.ts-a.ts).slice(0,5);
+      if(merged.length)data.recentResults=merged;
+      if(t.sport==="Golf"&&!data.standing){const s=await owgrStanding(t);if(s){data.standing=s;data.source+=" + OWGR";}}
     }
     const nw=await teamNews(t);
     if(data){
