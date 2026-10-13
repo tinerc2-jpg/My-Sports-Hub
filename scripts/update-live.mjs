@@ -254,22 +254,47 @@ function owgrLoad(){
 }
 async function owgrStanding(team){
   const j=await owgrLoad();if(!j)return null;
-  const al=api.teamAliases(team);let hit=null;
+  const al=api.teamAliases(team);let hit=null;const rows=[];
   const walk=o=>{
     if(hit||!o||typeof o!=="object")return;
     if(Array.isArray(o)){o.forEach(walk);return;}
     const pl=o.player&&typeof o.player==="object"?o.player:o;
     const names=[pl.fullName,pl.name,[pl.firstName,pl.lastName].filter(Boolean).join(" ")].filter(Boolean);
     const rank=o.rank??o.ranking??o.currentRank??o.position;
-    if(names.length&&rank!=null&&api.nameMatch(al,names)===2){hit=o;return;}
+    if(names.length&&rank!=null){rows.push({o,name:names[0]});if(api.nameMatch(al,names)===2){hit=o;return;}}
     Object.values(o).forEach(walk);
   };
   walk(j);
-  if(!hit){console.log("    OWGR: "+team.name+" not found");return null;}
+  if(!hit){
+    // Spelling variants ("Nicklas"/"Niklas"): same last name and first name starting with the same 2 letters.
+    const [first,...rest]=api.norm(team.name).split(" "),last=rest.join(" ");
+    const cands=rows.filter(r=>{const n=api.norm(r.name).split(" ");return n.slice(1).join(" ")===last&&n[0].slice(0,2)===first.slice(0,2);});
+    if(cands.length===1){hit=cands[0].o;console.log(`    OWGR: matched ${team.name} as "${cands[0].name}"`);}
+    else{console.log(`    OWGR: ${team.name} not found`+(rows.length?"; same last name: "+rows.filter(r=>api.norm(r.name).endsWith(" "+last.split(" ").pop())).map(r=>r.name).slice(0,5).join(", "):""));return null;}
+  }
   const rank=+(hit.rank??hit.ranking??hit.currentRank??hit.position);
   const pts=hit.pointsAverage??hit.averagePoints??hit.points;
   console.log(`    OWGR: ${team.name} #${rank}`);
   return{rank,points:pts!=null?Math.round(+pts*100)/100:null};
+}
+
+// ── Rolex Women's World Golf Rankings (public page; read like the handball tables) ──
+const ROLEX_PAGE={name:"Rolex Rankings",url:"https://www.rolexrankings.com/rankings"};
+async function rolexStanding(team){
+  try{
+    const p=await tv2Load(ROLEX_PAGE),al=api.teamAliases(team),tk=p.tokens;
+    const isInt=t=>/^\d{1,4}\.?$/.test(t),isDec=t=>/^\d+[.,]\d+$/.test(t);
+    for(let i=0;i<tk.length;i++){
+      const hit=[1,2,3].some(n=>al.includes(api.norm(tk.slice(i,i+n).join(" "))));
+      if(!hit)continue;
+      let rank=null;for(let k=i-1;k>=Math.max(0,i-6);k--)if(isInt(tk[k])){rank=parseInt(tk[k],10);break;}
+      let pts=null;for(let k=i+1;k<Math.min(tk.length,i+10);k++)if(isDec(tk[k])){pts=parseFloat(tk[k].replace(",","."));break;}
+      console.log(`    Rolex: «${tk.slice(Math.max(0,i-6),i+10).join(" ")}»`);
+      if(rank&&rank<=2000)return{rank,points:pts};
+    }
+    console.log(`    Rolex: ${team.name} not found on page`);
+  }catch(e){console.log("    Rolex:",e.message);}
+  return null;
 }
 
 const teams={},seen=new Set();let ok=0,failed=0;
@@ -301,7 +326,11 @@ for(const t of Object.values(api.DB)){
       const seenR=new Set(),merged=[...(data.recentResults||[]),...pr.filter(r=>r.ts)]
         .filter(r=>{const k=r.opponent+"|"+r.date;return !seenR.has(k)&&seenR.add(k);}).sort((a,b)=>b.ts-a.ts).slice(0,5);
       if(merged.length)data.recentResults=merged;
-      if(t.sport==="Golf"&&!data.standing){const s=await owgrStanding(t);if(s){data.standing=s;data.source+=" + OWGR";}}
+      if(t.sport==="Golf"&&!data.standing){
+        const women=/LPGA|LET/.test(t.league);
+        const s=women?await rolexStanding(t):await owgrStanding(t);
+        if(s){data.standing=s;data.source+=women?" + Rolex Rankings":" + OWGR";}
+      }
     }
     const nw=await teamNews(t);
     if(data){
