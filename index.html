@@ -88,7 +88,7 @@ blockquote span{color:var(--accent)}
 footer{padding:24px 48px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:0.78rem;color:var(--dim)}
 .f-logo{font-size:0.88rem;font-weight:600;color:var(--white)}.f-logo b{color:var(--accent)}
 #landing.hidden{display:none}
-#app-view{display:none;min-height:100vh;background:#0b0f1a}
+#app-view{display:none;min-height:100vh;background:#4b3d5a}
 #app-view.active{display:block}
 #app-topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;background:#1c1b1f;border-bottom:1px solid rgba(255,255,255,0.08);position:sticky;top:0;z-index:10}
 .a-logo{font-size:0.9rem;font-weight:600;color:#fff}.a-logo b{color:#e8409a}
@@ -296,7 +296,7 @@ function tColor(n){let h=0;for(let i=0;i<n.length;i++)h=(h*31+n.charCodeAt(i))%P
 // ── sports list ───────────────────────────────────────────────────────────────
 const SPORTS=[
   {label:"Football",emoji:"⚽",ex:"Arsenal, Liverpool, Barcelona…"},
-  {label:"Handball",emoji:"⚾",ex:"GOG, Aalborg, THW Kiel…"},
+  {label:"Handball",emoji:"🤾",ex:"GOG, Aalborg, THW Kiel…"},
   {label:"Tennis",emoji:"🎾",ex:"Djokovic, Alcaraz, Sinner…"},
   {label:"Basketball",emoji:"🏀",ex:"Lakers, Celtics, Warriors…"},
   {label:"Golf",emoji:"⛳",ex:"McIlroy, Scheffler…"},
@@ -932,9 +932,9 @@ function Lbl({c}){return h("div",{style:{fontSize:"0.6rem",letterSpacing:"2px",o
 
 function StatBox({label,value,sub}){
   return h("div",{style:{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"12px 8px",flex:"1 1 0",minWidth:0,textAlign:"center"}},
-    h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.5rem",fontWeight:800,color:"#fff",lineHeight:1}},value??"-"),
+    h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:String(value??"").length>6?"1.05rem":"1.5rem",fontWeight:800,color:"#fff",lineHeight:1,whiteSpace:"nowrap"}},value??"-"),
     h("div",{style:{fontSize:"0.55rem",opacity:0.5,marginTop:4,letterSpacing:"1px",textTransform:"uppercase",fontFamily:"Inter,sans-serif"}},label),
-    sub&&h("div",{style:{fontSize:"0.6rem",opacity:0.7,marginTop:2,color:"#a3e635"}},sub)
+    sub&&h("div",{style:{fontSize:"0.6rem",opacity:0.7,marginTop:2,color:"#e8409a"}},sub)
   );
 }
 
@@ -1029,11 +1029,11 @@ function NextGame({team}){
     h("div",{style:{display:"flex",gap:12,flexWrap:"wrap",marginBottom:10}},
       h("span",{style:{fontSize:"0.7rem",color:"#94a3b8",fontFamily:"Inter,sans-serif"}},"🗓️ "+g.date),
       h("span",{style:{fontSize:"0.7rem",color:"#94a3b8",fontFamily:"Inter,sans-serif"}},"🕐 "+g.time),
-      h("span",{style:{fontSize:"0.7rem",color:"#a3e635",fontFamily:"Inter,sans-serif",fontWeight:600}},"📺 "+g.tv)
+      h("span",{style:{fontSize:"0.7rem",color:"#e8409a",fontFamily:"Inter,sans-serif",fontWeight:600}},"📺 "+g.tv)
     ),
     h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",borderTop:"1px solid rgba(255,255,255,0.08)",paddingTop:8}},
       h("span",{style:{fontSize:"0.55rem",color:"rgba(255,255,255,0.2)",fontFamily:"Inter,sans-serif"}},team._live?"Auto-updated \xB7 "+team._live:"Data: May 2026"),
-      h("a",{href:getLiveUrl(),target:"_blank",rel:"noopener noreferrer",style:{fontSize:"0.65rem",fontWeight:600,color:"#a3e635",fontFamily:"Inter,sans-serif",textDecoration:"none",background:"rgba(163,230,53,0.1)",border:"1px solid rgba(163,230,53,0.25)",borderRadius:5,padding:"3px 9px"}},getLiveLabel())
+      h("a",{href:getLiveUrl(),target:"_blank",rel:"noopener noreferrer",style:{fontSize:"0.65rem",fontWeight:600,color:"#e8409a",fontFamily:"Inter,sans-serif",textDecoration:"none",background:"rgba(232,64,154,0.1)",border:"1px solid rgba(232,64,154,0.25)",borderRadius:5,padding:"3px 9px"}},getLiveLabel())
     )
   );
 }
@@ -1056,7 +1056,7 @@ function LiveStatus({entry,busy,sport,onRefresh}){
   if(busy)txt="Updating results…";
   else if(entry&&entry.errTs&&(!entry.ts||entry.errTs>entry.ts))txt=(d?"Couldn't update \xB7 showing results from "+timeAgo(entry.ts):"Couldn't reach live results \xB7 showing saved data")+(entry.err?" ("+entry.err+")":""),col="#fbbf24";
   else if(d&&d.newsOnly)txt="News auto-updating \xB7 results for "+sport+" not available yet";
-  else if(d)txt="Auto-updating \xB7 "+d.source+" \xB7 updated "+timeAgo(entry.ts),col="#a3e635";
+  else if(d)txt="Auto-updating \xB7 "+d.source+" \xB7 updated "+timeAgo(entry.ts),col="#e8409a";
   else if(entry)txt="Auto-update not available for "+sport+" yet \xB7 showing saved data";
   else txt="Checking for live results…";
   return h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:12,fontSize:"0.62rem",fontFamily:"Inter,sans-serif",color:col}},
@@ -1081,33 +1081,33 @@ function AddModal({onClose,onAdd}){
   }
 
   return h("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"},onClick:e=>e.target===e.currentTarget&&onClose()},
-    h("div",{style:{background:"#141824",borderRadius:"24px 24px 0 0",width:"100%",maxWidth:560,padding:"20px 18px 40px",maxHeight:"86vh",overflowY:"auto"}},
+    h("div",{style:{background:"#2e2440",borderRadius:"24px 24px 0 0",width:"100%",maxWidth:560,padding:"20px 18px 40px",maxHeight:"86vh",overflowY:"auto"}},
       h("div",{style:{width:40,height:4,background:"rgba(255,255,255,0.15)",borderRadius:2,margin:"0 auto 16px"}}),
 
       step==="sport"&&h("div",null,
         h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.3rem",fontWeight:800,color:"#fff",marginBottom:14}},"Add a Favourite"),
         h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}},
-          SPORTS.map(s=>h("button",{key:s.label,onClick:()=>setSel(s),style:{background:sel&&sel.label===s.label?"rgba(163,230,53,0.12)":"rgba(255,255,255,0.04)",border:sel&&sel.label===s.label?"2px solid #a3e635":"2px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"10px 6px",cursor:"pointer",color:"#fff",textAlign:"center"}},
+          SPORTS.map(s=>h("button",{key:s.label,onClick:()=>setSel(s),style:{background:sel&&sel.label===s.label?"rgba(232,64,154,0.12)":"rgba(255,255,255,0.04)",border:sel&&sel.label===s.label?"2px solid #e8409a":"2px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"10px 6px",cursor:"pointer",color:"#fff",textAlign:"center"}},
             h("div",{style:{fontSize:"1.4rem",marginBottom:3}},s.emoji),
             h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"0.78rem",fontWeight:700,lineHeight:1.2}},s.label)
           ))
         ),
-        h("button",{disabled:!sel,onClick:()=>setStep("search"),style:{width:"100%",background:sel?"#a3e635":"rgba(255,255,255,0.07)",color:sel?"#0f1117":"#555",border:"none",borderRadius:12,padding:13,fontWeight:700,fontSize:"0.88rem",cursor:sel?"pointer":"default",fontFamily:"Inter,sans-serif"}},"Continue →")
+        h("button",{disabled:!sel,onClick:()=>setStep("search"),style:{width:"100%",background:sel?"#e8409a":"rgba(255,255,255,0.07)",color:sel?"#ffffff":"#555",border:"none",borderRadius:12,padding:13,fontWeight:700,fontSize:"0.88rem",cursor:sel?"pointer":"default",fontFamily:"Inter,sans-serif"}},"Continue →")
       ),
 
       step==="search"&&h("div",null,
-        h("button",{onClick:()=>{setStep("sport");setQ("");},style:{background:"none",border:"none",color:"#a3e635",fontSize:"0.76rem",cursor:"pointer",marginBottom:10,padding:0,fontFamily:"Inter,sans-serif"}},"← Back"),
+        h("button",{onClick:()=>{setStep("sport");setQ("");},style:{background:"none",border:"none",color:"#e8409a",fontSize:"0.76rem",cursor:"pointer",marginBottom:10,padding:0,fontFamily:"Inter,sans-serif"}},"← Back"),
         h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.2rem",fontWeight:800,color:"#fff",marginBottom:10}},sel&&sel.emoji+" "+sel.label),
         h("div",{style:{display:"flex",gap:8,marginBottom:14}},
           h("input",{ref,value:q,onChange:e=>setQ(e.target.value),onKeyDown:e=>e.key==="Enter"&&go(),placeholder:sel&&"e.g. "+sel.ex,style:{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"12px 14px",color:"#fff",fontSize:"0.9rem",fontFamily:"Inter,sans-serif",outline:"none"}}),
-          h("button",{onClick:()=>go(),disabled:!q.trim(),style:{background:q.trim()?"#a3e635":"rgba(255,255,255,0.07)",color:q.trim()?"#0f1117":"#555",border:"none",borderRadius:10,padding:"0 16px",fontWeight:700,cursor:q.trim()?"pointer":"default",fontFamily:"Inter,sans-serif",flexShrink:0}},"Go")
+          h("button",{onClick:()=>go(),disabled:!q.trim(),style:{background:q.trim()?"#e8409a":"rgba(255,255,255,0.07)",color:q.trim()?"#ffffff":"#555",border:"none",borderRadius:10,padding:"0 16px",fontWeight:700,cursor:q.trim()?"pointer":"default",fontFamily:"Inter,sans-serif",flexShrink:0}},"Go")
         ),
         h("div",{style:{fontSize:"0.58rem",opacity:0.35,letterSpacing:"1px",textTransform:"uppercase",marginBottom:8,fontFamily:"Inter,sans-serif"}},"Popular"),
         h("div",{style:{display:"flex",flexWrap:"wrap",gap:7}},
           (sel&&HINTS[sel.label]||[]).map(hn=>{
             const inDB=Object.keys(DB).some(k=>DB[k].name===hn||DB[k].shortName===hn);
             const dbEntry=DB[Object.keys(DB).find(k=>DB[k].name===hn||DB[k].shortName===hn)];
-            return h("button",{key:hn,onClick:()=>go(hn),style:{background:inDB?"rgba(163,230,53,0.08)":"rgba(255,255,255,0.05)",border:inDB?"1px solid rgba(163,230,53,0.3)":"1px solid rgba(255,255,255,0.1)",borderRadius:20,padding:"5px 12px",color:inDB?"#a3e635":"#cbd5e1",fontSize:"0.74rem",cursor:"pointer",fontFamily:"Inter,sans-serif",display:"flex",alignItems:"center",gap:6}},
+            return h("button",{key:hn,onClick:()=>go(hn),style:{background:inDB?"rgba(232,64,154,0.08)":"rgba(255,255,255,0.05)",border:inDB?"1px solid rgba(232,64,154,0.3)":"1px solid rgba(255,255,255,0.1)",borderRadius:20,padding:"5px 12px",color:inDB?"#e8409a":"#cbd5e1",fontSize:"0.74rem",cursor:"pointer",fontFamily:"Inter,sans-serif",display:"flex",alignItems:"center",gap:6}},
               dbEntry&&h(TeamLogo,{name:hn,size:20,color:dbEntry.color,accent:dbEntry.accent}),
               hn
             );
@@ -1127,7 +1127,7 @@ function AddModal({onClose,onAdd}){
         ),
         h("div",{style:{display:"flex",gap:10}},
           h("button",{onClick:()=>{setStep("search");setPreview(null);},style:{flex:1,background:"rgba(255,255,255,0.07)",border:"none",borderRadius:12,padding:12,color:"#fff",fontSize:"0.82rem",cursor:"pointer",fontFamily:"Inter,sans-serif"}},"Try again"),
-          h("button",{onClick:()=>onAdd(preview),style:{flex:2,background:"#a3e635",border:"none",borderRadius:12,padding:12,color:"#0f1117",fontWeight:700,fontSize:"0.86rem",cursor:"pointer",fontFamily:"Inter,sans-serif"}},"Add to My Hub ✓")
+          h("button",{onClick:()=>onAdd(preview),style:{flex:2,background:"#e8409a",border:"none",borderRadius:12,padding:12,color:"#ffffff",fontWeight:700,fontSize:"0.86rem",cursor:"pointer",fontFamily:"Inter,sans-serif"}},"Add to My Hub ✓")
         )
       )
     )
@@ -1136,7 +1136,7 @@ function AddModal({onClose,onAdd}){
 
 function RemoveConfirm({teamName,onCancel,onConfirm}){
   return h("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}},
-    h("div",{style:{background:"#1a1f30",borderRadius:18,padding:22,maxWidth:290,width:"100%",textAlign:"center"}},
+    h("div",{style:{background:"#2e2440",borderRadius:18,padding:22,maxWidth:290,width:"100%",textAlign:"center"}},
       h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.1rem",color:"#fff",marginBottom:6}},"Remove "+teamName+"?"),
       h("div",{style:{fontSize:"0.72rem",opacity:0.45,marginBottom:18,fontFamily:"Inter,sans-serif"}},"You can always add it back later."),
       h("div",{style:{display:"flex",gap:10}},
@@ -1157,7 +1157,7 @@ function FavBar({teams,selected,onSelect,onAdd,liveNames}){
         liveNames&&liveNames[t.name]&&h("span",{className:"live-dot",title:"Live now"})
       );
     }),
-    h("button",{onClick:onAdd,style:{display:"flex",alignItems:"center",gap:5,background:"rgba(163,230,53,0.09)",border:"2px dashed rgba(163,230,53,0.35)",borderRadius:40,padding:"6px 14px",cursor:"pointer",color:"#a3e635",fontFamily:"Inter,sans-serif",fontWeight:600,fontSize:"0.78rem",whiteSpace:"nowrap"}},
+    h("button",{onClick:onAdd,style:{display:"flex",alignItems:"center",gap:5,background:"rgba(232,64,154,0.09)",border:"2px dashed rgba(232,64,154,0.35)",borderRadius:40,padding:"6px 14px",cursor:"pointer",color:"#e8409a",fontFamily:"Inter,sans-serif",fontWeight:600,fontSize:"0.78rem",whiteSpace:"nowrap"}},
       h("span",{style:{fontSize:"1rem",lineHeight:1}},"＋"),
       " Add"
     )
@@ -1278,8 +1278,8 @@ function App(){
     persist(updated,newSel);
   }
 
-  if(!ready) return h("div",{style:{minHeight:"100vh",background:"#0b0f1a",padding:14}},
-    h("div",{style:{background:"#0f1420",borderBottom:"1px solid rgba(255,255,255,0.06)",padding:"14px 14px 12px",marginBottom:14}},
+  if(!ready) return h("div",{style:{minHeight:"100vh",background:"#4b3d5a",padding:14}},
+    h("div",{style:{background:"#1c1b1f",borderBottom:"1px solid rgba(255,255,255,0.06)",padding:"14px 14px 12px",marginBottom:14}},
       h("div",{className:"skeleton sk-pill",style:{width:140,marginBottom:10}}),
       h("div",{style:{display:"flex",gap:8}},
         h("div",{className:"skeleton sk-pill",style:{width:80}}),
@@ -1298,8 +1298,8 @@ function App(){
     )
   );
 
-  return h("div",{style:{minHeight:"100vh",background:"#0b0f1a",color:"#f1f5f9",fontFamily:"Inter,sans-serif"}},
-    h("div",{style:{background:"linear-gradient(180deg,#0f1420,#0b0f1a)",borderBottom:"1px solid rgba(255,255,255,0.06)",padding:"14px 14px 12px",position:"sticky",top:0,zIndex:10}},
+  return h("div",{style:{minHeight:"100vh",background:"#4b3d5a",color:"#f1f5f9",fontFamily:"Inter,sans-serif"}},
+    h("div",{style:{background:"#1c1b1f",borderBottom:"1px solid rgba(255,255,255,0.06)",padding:"14px 14px 12px",position:"sticky",top:0,zIndex:10}},
       h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.25rem",fontWeight:900,letterSpacing:"2px",color:"#fff",marginBottom:10}},
         "MY SPORTS HUB",
         h("span",{style:{fontSize:"0.5rem",marginLeft:8,opacity:0.3,letterSpacing:"3px",fontFamily:"Inter,sans-serif",fontWeight:400}},"FAN DASHBOARD")
@@ -1314,7 +1314,7 @@ function App(){
           h("div",{style:{fontSize:"0.68rem",opacity:0.5,marginTop:3}},team.sport+" \xB7 "+team.league+" \xB7 "+team.country)
         ),
         h("div",{style:{display:"flex",gap:6}},
-        h("button",{onClick:handleShare,style:{background:"rgba(163,230,53,0.1)",border:"1px solid rgba(163,230,53,0.25)",borderRadius:8,padding:"5px 10px",color:"#a3e635",cursor:"pointer",fontSize:"0.65rem",fontFamily:"Inter,sans-serif"}},
+        h("button",{onClick:handleShare,style:{background:"rgba(232,64,154,0.1)",border:"1px solid rgba(232,64,154,0.25)",borderRadius:8,padding:"5px 10px",color:"#e8409a",cursor:"pointer",fontSize:"0.65rem",fontFamily:"Inter,sans-serif"}},
           "📤 Share"
         ),
         teams.length>1&&h("button",{onClick:()=>setRemoving(team.id),style:{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"5px 12px",color:"#f87171",cursor:"pointer",fontSize:"0.68rem",fontWeight:500,fontFamily:"Inter,sans-serif"}},"✕ Remove")
