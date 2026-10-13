@@ -363,9 +363,22 @@ async function fetchJSON(url){
   catch(e){throw new Error(e.name==="AbortError"?"timeout":e.message==="Failed to fetch"||e.name==="TypeError"?"blocked":e.message);}
   finally{if(t)clearTimeout(t);}
 }
+// Some APIs (e.g. ESPN) don't send CORS headers to every browser/origin. If a host is
+// blocked, retry through public CORS proxies and remember which one worked for that host.
+// Only public sports-data URLs go through the proxy; no personal data is sent.
+const CORS_PROXIES=["https://corsproxy.io/?url=","https://api.allorigins.win/raw?url="];
+const _proxyFor={};
 async function getJSON(url){
+  const host=new URL(url).host;
+  if(_proxyFor[host])return fetchJSON(_proxyFor[host]+encodeURIComponent(url));
   try{return await fetchJSON(url);}
-  catch(e){throw new Error(new URL(url).host+" "+e.message);}
+  catch(e){
+    if(e.message!=="blocked"&&e.message!=="timeout")throw new Error(host+" "+e.message);
+    for(const p of CORS_PROXIES){
+      try{const j=await fetchJSON(p+encodeURIComponent(url));_proxyFor[host]=p;return j;}catch(e2){}
+    }
+    throw new Error(host+" "+e.message+", proxies failed");
+  }
 }
 function norm(s){return String(s||"").normalize("NFD").replace(/[̀-ͯ]/g,"").toLowerCase()
   .replace(/[^a-z0-9 ]/g," ").replace(/\b(fc|cf|afc|ssc|sc|ac|club|de|the|handbold|handball)\b/g," ").replace(/\s+/g," ").trim();}
