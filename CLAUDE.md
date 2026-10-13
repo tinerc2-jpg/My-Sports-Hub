@@ -11,7 +11,7 @@ Single-file web app (`index.html`): a landing page plus a React 18 fan dashboard
 - PWA: inline data-URL manifest + install banner (iOS Safari / `beforeinstallprompt`).
 
 ## Known issues / TODO
-- Tennis, golf, cycling, rugby, volleyball have no live source yet (static May–June 2026 data). News is always static. Handball standings come from TheSportsDB `lookuptable.php` (league from the team's `idLeague`, season "YYYY-YYYY"); untested against the real API. When a live source gives no table, the standing is blanked ("not available yet") instead of showing May data.
+- Tennis, golf, cycling, rugby, volleyball have no live source yet (static May–June 2026 data). News is always static. Handball standings: TheSportsDB `lookuptable.php` first (returned no rows for Håndboldligaen on the free key), then `wikiStanding` parses the `{{#invoke:Sports table}}` wikitext of the en.wikipedia "<season> <league>" article (rank = position in `team_order`, points from `win_points`/`draw_points`/`adjust_points_X`). `liveLog()` lines are printed per team in the Actions log. When a live source gives no table, the standing is blanked ("not available yet") instead of showing May data.
 - Live API response formats were written from docs, not verified against the real endpoints yet. In the owner's browser ESPN was blocked and both CORS proxies failed (TheSportsDB worked) — hence the GitHub snapshot.
 - `triggerInstall()` reads `window._deferredPrompt`, but the listener stores the event in a local `deferredPrompt` — the Install button does nothing.
 - Handball emoji in `SPORTS` is a baseball (`⚾`).
