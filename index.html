@@ -1073,7 +1073,11 @@ function App(){
     if(!force&&!liveIsStale(cur,t.id===selRef.current))return;
     _inflight[t.name]=true;setBusy(b=>({...b,[t.name]:true}));
     try{
-      const data=await fetchTeamLive(t);
+      let data=await fetchTeamLive(t);
+      if(data&&!data.standing){ // e.g. handball: table only available server-side (API-Sports in the snapshot)
+        const snap=await getSnapshot().catch(()=>null),s=snap&&snap[t.name];
+        if(s&&s.data&&s.data.standing)data={...data,standing:s.data.standing,source:data.source+" + "+(s.data.standingFrom||"table")+" via GitHub"};
+      }
       saveLive(t.name,{ts:Date.now(),data});
     }catch(e){
       const snap=await getSnapshot().catch(()=>null),s=snap&&snap[t.name];
