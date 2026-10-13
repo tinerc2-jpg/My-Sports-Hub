@@ -40,9 +40,13 @@ async function apiSports(path){
   if(errs.length)throw new Error(errs.join("; "));
   return j.response||[];
 }
-let hbTable=null;
+let hbTable=null,hbError=null;
 async function hbTableLoad(){
   if(hbTable)return hbTable;
+  if(hbError)throw hbError; // one failed attempt per run is enough (quota)
+  try{return await hbTableFetch();}catch(e){hbError=e;throw e;}
+}
+async function hbTableFetch(){
   const leagues=await apiSports("/leagues?country=Denmark");
   console.log("    API-Sports leagues in Denmark:",leagues.map(l=>`${l.id} ${l.name} (${l.type})`).join(" | ")||"none");
   const men=leagues.filter(l=>!/kvinde|women|dame|female|cup|pokal|1\.|div/i.test(l.name));
