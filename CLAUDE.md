@@ -7,11 +7,12 @@ Single-file web app (`index.html`): a landing page plus a React 18 fan dashboard
 - `mountApp()` contains the dashboard: `DB` (hardcoded team/player data, added via `add([...keys], {...})`), `FS_IDS` (Flashscore links), `HINTS`, components (`App`, `FavBar`, `AddModal`, `NextGame`, `StandingDisplay`, …).
 - Favourites persist in `localStorage` (`msh-teams`, `msh-sel`). `refreshFromDB` re-applies DB data on load.
 - Live data: `fetchTeamLive(team)` auto-updates results / next game / standings from free CORS APIs — ESPN (football, NBA, NHL, NFL, MLB), Jolpica (F1), TheSportsDB (handball). `resolveSource` finds the team id by name (cached in `msh-src`), results are cached in `msh-live`, and `mergeLive` overlays them on the static DB entry. If a host blocks the browser (CORS), `getJSON` retries via public CORS proxies (`CORS_PROXIES`: corsproxy.io, allorigins) — approved by the owner. Sections still showing static data are labelled "saved May 2026". `App` ticks every 30s; `liveIsStale` decides refetches (1 min during live games / around kickoff, 10 min for the selected team, 30 min for others).
+- GitHub snapshot (owner-approved): `.github/workflows/update-live-data.yml` runs `scripts/update-live.mjs` every 15 min. The script evals the live-data block of `index.html` (between `// ── Live data (auto-updating results)` and `// ── end live data fetchers` — keep those markers) plus the `add([...])` lines, fetches every DB team and force-pushes `live.json` to the `live-data` branch. When a direct fetch fails, the app falls back to that file (`SNAPSHOT_URL`, shown as "… via GitHub"). Custom teams that aren't in DB aren't in the snapshot.
 - PWA: inline data-URL manifest + install banner (iOS Safari / `beforeinstallprompt`).
 
 ## Known issues / TODO
 - Tennis, golf, cycling, rugby, volleyball have no live source yet (static May–June 2026 data). News is always static. Handball has no live standings.
-- Live API response formats were written from docs, not verified against the real endpoints in a browser yet.
+- Live API response formats were written from docs, not verified against the real endpoints yet. In the owner's browser ESPN was blocked and both CORS proxies failed (TheSportsDB worked) — hence the GitHub snapshot.
 - `triggerInstall()` reads `window._deferredPrompt`, but the listener stores the event in a local `deferredPrompt` — the Install button does nothing.
 - Handball emoji in `SPORTS` is a baseball (`⚾`).
 - GOG's recent results / news disagree with the landing-page mockup (Aalborg vs Skanderborg AGF).
