@@ -713,7 +713,7 @@ async function fetchTennis(team,src){
     liveGame:live?{opponent:live.opponent,score:live.score||"–",detail:live.detail||"Live"}:null,
     standing,
     // ESPN's id for the player (from a match), so the Actions script can look up a rank outside the top 150
-    athleteId:(()=>{for(const {c} of all){const x=(c.competitors||[]).find(isMe);if(x&&x.athlete&&x.athlete.id)return String(x.athlete.id);}return null;})()};
+    athleteId:(()=>{for(const {c} of all){const x=(c.competitors||[]).find(isMe);const id=x&&((x.athlete&&x.athlete.id)||x.id);if(id){liveLog("tennis athlete id "+id);return String(id);}}return null;})()};
 }
 
 // ── Golf (ESPN): this week's tournament on the player's tour(s) ──
