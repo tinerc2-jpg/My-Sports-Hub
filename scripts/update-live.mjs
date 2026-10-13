@@ -278,6 +278,33 @@ async function owgrStanding(team){
   return{rank,points:pts!=null?Math.round(+pts*100)/100:null};
 }
 
+// ── Tennis rank outside ESPN's top-150 list: read it from the player's ESPN profile ──
+// Field names aren't documented, so look for a rank-like number and log what we saw.
+async function espnAthleteRank(id,tour){
+  const urls=[`https://site.web.api.espn.com/apis/common/v3/sports/tennis/${tour}/athletes/${id}`,
+    `https://sports.core.api.espn.com/v2/sports/tennis/leagues/${tour}/athletes/${id}`];
+  for(const u of urls){
+    try{
+      const r=await fetch(u);if(!r.ok){console.log(`    athlete ${id}: HTTP ${r.status} ${new URL(u).host}`);continue;}
+      const j=await r.json();let found=null;const seenKeys=new Set();
+      const walk=(o,path)=>{
+        if(found||!o||typeof o!=="object")return;
+        if(Array.isArray(o)){o.forEach((x,i)=>walk(x,path+"["+i+"]"));return;}
+        for(const [k,v] of Object.entries(o)){
+          if(/rank/i.test(k))seenKeys.add(path+"."+k+"="+JSON.stringify(v).slice(0,40));
+          if(/^(rank|currentRank|ranking|singlesRank)$/i.test(k)&&Number.isFinite(+v)&&+v>0){found=+v;return;}
+          if(/rank/i.test(String(o.name||o.type||""))&&k==="value"&&Number.isFinite(+v)&&+v>0){found=+v;return;}
+        }
+        Object.entries(o).forEach(([k,v])=>walk(v,path+"."+k));
+      };
+      walk(j,"");
+      console.log(`    athlete ${id} (${new URL(u).host}): ${found?"#"+found:"no rank"}`+(seenKeys.size?" · "+[...seenKeys].slice(0,6).join(" "):" · keys "+Object.keys(j).join(",")));
+      if(found)return{rank:found,points:null};
+    }catch(e){console.log(`    athlete ${id}:`,e.message);}
+  }
+  return null;
+}
+
 // ── Rolex Women's World Golf Rankings (public page; read like the handball tables) ──
 const ROLEX_PAGE={name:"Rolex Rankings",url:"https://www.rolexrankings.com/rankings"};
 async function rolexStanding(team){
@@ -326,6 +353,11 @@ for(const t of Object.values(api.DB)){
       const seenR=new Set(),merged=[...(data.recentResults||[]),...pr.filter(r=>r.ts)]
         .filter(r=>{const k=r.opponent+"|"+r.date;return !seenR.has(k)&&seenR.add(k);}).sort((a,b)=>b.ts-a.ts).slice(0,5);
       if(merged.length)data.recentResults=merged;
+      if(t.sport==="Tennis"){
+        const pd=prev[t.name]&&prev[t.name].data;
+        data.athleteId=data.athleteId||(pd&&pd.athleteId)||null; // remember the id in weeks without a match
+        if(!data.standing&&data.athleteId){const s=await espnAthleteRank(data.athleteId,/wta/i.test(t.league)?"wta":"atp");if(s)data.standing=s;}
+      }
       if(t.sport==="Golf"&&!data.standing){
         const women=/LPGA|LET/.test(t.league);
         const s=women?await rolexStanding(t):await owgrStanding(t);

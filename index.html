@@ -428,8 +428,10 @@ async function resolveTSDB(team,al){
   if(!ok)throw lastErr||new Error("offline");
   return null;
 }
+// Bump when new sports get a source, so browsers re-resolve teams cached as "no source".
+const SRC_KEY="msh-src-v2";
 async function resolveSource(team){
-  const all=lsGet("msh-src")||{},hit=all[team.name];
+  const all=lsGet(SRC_KEY)||{},hit=all[team.name];
   if(hit&&Date.now()-hit.ts<7*864e5)return hit.src;
   const al=teamAliases(team);let src=null;
   if(team.sport==="Formula 1")src={p:"f1"};
@@ -447,7 +449,7 @@ async function resolveSource(team){
     if(!ok)throw lastErr||new Error("offline");
     src=best&&best.src;
   }
-  all[team.name]={ts:Date.now(),src};lsSet("msh-src",all);
+  all[team.name]={ts:Date.now(),src};lsSet(SRC_KEY,all);
   return src;
 }
 
@@ -709,7 +711,9 @@ async function fetchTennis(team,src){
     recentResults:done.slice(0,5).map(m=>({opponent:m.opponent,score:m.score,result:m.result,date:fmtShort(m.d),ts:m.d.getTime()})),
     nextGame:next?{opponent:next.opponent,date:fmtDay(next.d),time:fmtTime(next.d),tv:"–",ts:next.d.getTime()}:NO_MATCH(cal?"Next on tour: "+cal.label+" · "+fmtShort(new Date(cal.ts)):null),
     liveGame:live?{opponent:live.opponent,score:live.score||"–",detail:live.detail||"Live"}:null,
-    standing};
+    standing,
+    // ESPN's id for the player (from a match), so the Actions script can look up a rank outside the top 150
+    athleteId:(()=>{for(const {c} of all){const x=(c.competitors||[]).find(isMe);if(x&&x.athlete&&x.athlete.id)return String(x.athlete.id);}return null;})()};
 }
 
 // ── Golf (ESPN): this week's tournament on the player's tour(s) ──
@@ -780,6 +784,7 @@ function liveIsStale(e,selected){
   if(!e)return true;
   const now=Date.now();
   if(e.errTs&&now-e.errTs<LIVE_RETRY)return false;
+  if(!e.data&&now-(e.ts||0)>LIVE_TTL_INGAME)return true; // "no data" is cheap to re-check (the snapshot may have it now)
   const d=e.data,kick=d&&d.nextGame&&d.nextGame.ts;
   if(kick&&now>kick&&now-kick<4*3600e3&&now-e.ts>LIVE_TTL_INGAME)return true; // a game should have started
   const ttl=d&&d.liveGame?LIVE_TTL_INGAME:selected?LIVE_TTL:LIVE_TTL_BG;
@@ -793,7 +798,7 @@ function mergeLive(team,e){
   if(hasNews){out.news=d.news;out._liveFields.news=true;}
   if(d.recentResults&&d.recentResults.length){out.recentResults=d.recentResults;out._liveFields.results=true;}
   if(d.nextGame){const g={...d.nextGame};if(g.ts){const x=new Date(g.ts);g.date=fmtDay(x);if(g.time!=="–")g.time=fmtTime(x);}out.nextGame=g;}
-  if(d.standing){out._liveFields.standing=true;const s={...team.standing};Object.keys(d.standing).forEach(k=>{if(d.standing[k]!=null)s[k]=d.standing[k];});out.standing=s;}
+  if(d.standing){out._liveFields.standing=true;const s={...team.standing};Object.keys(d.standing).forEach(k=>{if(d.standing[k]!==undefined)s[k]=d.standing[k]; /* null = "unknown now": don't keep May's number */});out.standing=s;}
   // Live source but no table: blank it rather than show last season's numbers.
   else{out._liveFields.standing="none";out.standing={rank:null,points:null,wins:null,draws:null,losses:null};}
   return out;
@@ -1196,7 +1201,7 @@ function App(){
       // Some things only exist in the GitHub snapshot (handball table, news): merge them in.
       if(!data||!data.standing||!data.news){
         const snap=await getSnapshot().catch(()=>null),s=snap&&snap[t.name]&&snap[t.name].data;
-        if(s&&!data&&s.newsOnly)data=s;
+        if(s&&!data)data=s.newsOnly?s:{...s,source:s.source+" via GitHub"};
         else if(s&&data){
           if(!data.standing&&s.standing)data={...data,standing:s.standing,source:data.source+" + "+(s.standingFrom||"table")+" via GitHub"};
           if(!data.news&&s.news)data={...data,news:s.news};
