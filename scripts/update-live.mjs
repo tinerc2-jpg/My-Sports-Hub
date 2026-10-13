@@ -176,27 +176,58 @@ function xmlText(s){
     .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'")
     .replace(/&#(\d+);/g,(m,n)=>String.fromCharCode(+n)).replace(/&amp;/g,"&").trim();
 }
+const NEWS_V=3; // bump when the news logic changes so older snapshot news isn't reused
+// Danish sports feeds, filtered per team by name in the headline (loaded once per run).
+const DK_FEEDS=[
+  {name:"DR Sporten",url:"https://www.dr.dk/nyheder/service/feeds/sporten"},
+];
+const _feeds={};
+function loadFeed(f){
+  return _feeds[f.url]||(_feeds[f.url]=fetch(f.url,{headers:{"Accept":"application/rss+xml, application/xml, text/xml"}})
+    .then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);return r.text();})
+    .then(x=>{const items=parseRss(x);console.log(`    feed ${f.name}: ${items.length} items`);return items.map(i=>({...i,src:i.src||f.name}));})
+    .catch(e=>{console.log(`    feed ${f.name}:`,e.message);return [];}));
+}
+// "Højgaard" → "hojgaard" so Danish spellings match the DB's ASCII names.
+const fold=s=>api.norm(String(s||"").replace(/ø/gi,"o").replace(/æ/gi,"ae"));
+function mentions(team,text){
+  const t=" "+fold(text)+" ";
+  return api.teamAliases(team).map(fold).filter(a=>a.length>=3).some(a=>t.includes(" "+a+" "));
+}
+async function rssTry(name,url){
+  try{
+    const r=await fetch(url,{headers:{"Accept":"application/rss+xml, application/xml, text/xml"}});
+    if(!r.ok)throw new Error("HTTP "+r.status);
+    return parseRss(await r.text());
+  }catch(e){console.log(`    news (${name}):`,e.message);return [];}
+}
+const googleUrl=q=>`https://news.google.com/rss/search?hl=en-GB&gl=GB&ceid=GB:en&q=${encodeURIComponent(q+" when:30d")}`;
 async function teamNews(team){
   const p=prev[team.name]&&prev[team.name].data,now=Date.now();
-  if(p&&p.news&&p.news.length&&now-(p.newsTs||0)<NEWS_TTL)return{news:p.news,ts:p.newsTs};
+  if(p&&p.newsV===NEWS_V&&p.news&&p.news.length&&now-(p.newsTs||0)<NEWS_TTL)return{news:p.news,ts:p.newsTs};
   const dk=team.country==="🇩🇰",w=SPORT_WORDS[team.sport]||["",""];
-  const names=[...new Set([team.name,team.shortName])].filter(n=>!/\./.test(n)).map(n=>`"${n}"`); // skip "N. Hojgaard"-style short names
-  const who=names.length>1?"("+names.join(" OR ")+")":names[0];
-  // Google News has no Danish edition (a DK query returns nothing), so Danish teams use Bing News da-DK first.
-  const tries=dk
-    ?[{name:"Bing da-DK",q:`${who} ${w[0]}`,url:q=>`https://www.bing.com/news/search?format=rss&mkt=da-DK&setlang=da&q=${encodeURIComponent(q)}`},
-      {name:"Google en-GB",q:`${who} ${w[0]}`,url:q=>`https://news.google.com/rss/search?hl=en-GB&gl=GB&ceid=GB:en&q=${encodeURIComponent(q+" when:30d")}`}]
-    :[{name:"Google en-GB",q:`${who} ${w[1]}`,url:q=>`https://news.google.com/rss/search?hl=en-GB&gl=GB&ceid=GB:en&q=${encodeURIComponent(q+" when:30d")}`}];
-  for(const t of tries){
-    try{
-      const r=await fetch(t.url(t.q),{headers:{"Accept":"application/rss+xml, application/xml, text/xml"}});
-      if(!r.ok)throw new Error("HTTP "+r.status);
-      const news=parseRss(await r.text());
-      console.log(`    news (${t.name}): ${news.length} items for ${t.q}`);
-      if(news.length)return{news,ts:now};
-    }catch(e){console.log(`    news (${t.name}):`,e.message);}
+  let names=[...new Set([team.name,team.shortName])].filter(n=>!/\./.test(n)); // skip "N. Hojgaard"-style short names
+  if(!names.length)names=[team.name];
+  const who=names.length>1?"("+names.map(n=>`"${n}"`).join(" OR ")+")":`"${names[0]}"`;
+  let items=[];
+  if(dk){
+    // Google News has no Danish edition, so: Danish feeds + Bing da-DK, both kept only if the headline names the team.
+    for(const f of DK_FEEDS){const fi=(await loadFeed(f)).filter(i=>mentions(team,i.title));items.push(...fi);}
+    const bing=(await rssTry("Bing da-DK",`https://www.bing.com/news/search?format=rss&mkt=da-DK&setlang=da&q=${encodeURIComponent(who+" "+w[0])}`))
+      .filter(i=>mentions(team,i.title));
+    items.push(...bing);
+    console.log(`    news DK: ${items.length} headlines naming ${team.shortName} (Bing ${bing.length})`);
   }
-  return p&&p.news?{news:p.news,ts:p.newsTs}:null;
+  if(items.length<3){ // English coverage (use the English sport word: "Vingegaard cykling" finds nothing there)
+    const g=await rssTry("Google en-GB",googleUrl(`${who} ${w[1]}`));
+    console.log(`    news (Google en-GB): ${g.length} items for ${who} ${w[1]}`);
+    items.push(...g);
+  }
+  const seenT=new Set();
+  const news=items.filter(n=>!seenT.has(n.title.toLowerCase())&&seenT.add(n.title.toLowerCase()))
+    .sort((a,b)=>b.ts-a.ts).slice(0,5).map(({title,url,ts,src})=>({title,url,ts,src}));
+  if(news.length)return{news,ts:now};
+  return p&&p.newsV===NEWS_V&&p.news?{news:p.news,ts:p.newsTs}:null;
 }
 // RSS from Google News (<source>) or Bing News (<News:Source>, links wrapped in a bing.com redirect).
 function parseRss(xml){
@@ -208,7 +239,7 @@ function parseRss(xml){
     if(/bing\.com/.test(url)){try{const u=new URL(url).searchParams.get("url");if(u)url=u;}catch(e){}}
     return{title,url,ts:Date.parse(tag("pubDate"))||null,src};
   }).filter(n=>n.title&&n.ts&&n.ts>monthAgo&&!seenT.has(n.title.toLowerCase())&&seenT.add(n.title.toLowerCase()))
-    .sort((a,b)=>b.ts-a.ts).slice(0,5);
+    .sort((a,b)=>b.ts-a.ts);
 }
 
 const teams={},seen=new Set();let ok=0,failed=0;
@@ -236,12 +267,12 @@ for(const t of Object.values(api.DB)){
     }
     const nw=await teamNews(t);
     if(data){
-      if(nw){data.news=nw.news;data.newsTs=nw.ts;}
+      if(nw){data.news=nw.news;data.newsTs=nw.ts;data.newsV=NEWS_V;}
       teams[t.name]={ts:Date.now(),data};ok++;
       const s=data.standing;
       console.log("✓",t.name,"·",data.source,"·",s&&s.rank?"#"+s.rank+(s.points!=null?" "+s.points+" pts":""):"no table");
     }else if(nw){
-      teams[t.name]={ts:Date.now(),data:{newsOnly:true,source:"Google News",news:nw.news,newsTs:nw.ts}};
+      teams[t.name]={ts:Date.now(),data:{newsOnly:true,source:"News",news:nw.news,newsTs:nw.ts,newsV:NEWS_V}};
       console.log("·",t.name,"· news only");
     }
   }catch(e){failed++;console.error("✗",t.name,"-",e.message);}
