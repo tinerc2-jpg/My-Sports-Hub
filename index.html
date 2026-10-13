@@ -1,0 +1,806 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Sports Hub</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js" crossorigin="anonymous"></script>
+<style>
+:root{--bg:#141414;--bg2:#1a1a1a;--bg3:#202020;--border:rgba(255,255,255,0.08);--border2:rgba(255,255,255,0.13);--white:#ffffff;--off:rgba(255,255,255,0.55);--dim:rgba(255,255,255,0.25);--accent:#e8ff48;--accent2:#c8e000}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth}
+body{background:var(--bg);color:var(--white);font-family:'Inter',-apple-system,BlinkMacSystemFont,sans-serif;font-size:16px;line-height:1.5;-webkit-font-smoothing:antialiased;overflow-x:hidden}
+nav{position:fixed;top:0;left:0;right:0;z-index:200;height:64px;padding:0 48px;display:flex;align-items:center;justify-content:space-between;background:rgba(20,20,20,0.88);backdrop-filter:blur(24px);border-bottom:1px solid var(--border)}
+.n-logo{font-size:0.95rem;font-weight:600;color:var(--white)}.n-logo b{color:var(--accent);font-weight:600}
+.n-links{display:flex;align-items:center;gap:36px}.n-links a{font-size:0.82rem;color:var(--off);text-decoration:none}.n-links a:hover{color:var(--white)}
+.n-cta{background:var(--white);color:#141414;font-size:0.82rem;font-weight:600;border:none;padding:9px 22px;border-radius:6px;cursor:pointer}.n-cta:hover{opacity:0.88}
+.hero{min-height:100vh;padding-top:64px;display:flex;align-items:center;background:var(--bg)}
+.hero-inner{width:100%;max-width:1180px;margin:0 auto;padding:96px 48px;display:grid;grid-template-columns:1fr 400px;gap:88px;align-items:center}
+h1{font-size:clamp(2.8rem,5vw,4.4rem);font-weight:700;letter-spacing:-2px;line-height:1.04;color:var(--white);margin-bottom:24px}
+h1 .a{color:var(--accent)}
+.h-label{font-size:0.7rem;font-weight:500;letter-spacing:2px;text-transform:uppercase;color:var(--dim);margin-bottom:24px}
+.h-sub{font-size:1rem;font-weight:300;line-height:1.72;color:var(--off);max-width:430px;margin-bottom:44px}
+.h-actions{display:flex;align-items:center;gap:12px}
+.btn-accent{background:var(--accent);color:#141414;font-size:0.88rem;font-weight:600;border:none;padding:13px 28px;border-radius:6px;cursor:pointer;display:inline-flex;align-items:center;gap:8px}.btn-accent:hover{opacity:0.88}
+.btn-clear{background:transparent;color:var(--off);font-size:0.88rem;border:1px solid var(--border2);padding:12px 22px;border-radius:6px;cursor:pointer}.btn-clear:hover{color:var(--white)}
+.mockup{background:var(--bg2);border:1px solid var(--border2);border-radius:14px;overflow:hidden;box-shadow:0 24px 64px rgba(0,0,0,0.6)}
+.m-bar{padding:13px 16px;background:var(--bg3);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between}
+.m-logo{font-size:0.72rem;font-weight:600;color:var(--white)}.m-logo b{color:var(--accent)}
+.m-live{font-size:0.6rem;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:#4ade80;display:flex;align-items:center;gap:5px}
+.m-live::before{content:'';width:5px;height:5px;border-radius:50%;background:#4ade80;animation:blink 2s ease-in-out infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.3}}
+.m-pills{padding:10px 14px;display:flex;flex-wrap:wrap;gap:5px;border-bottom:1px solid var(--border)}
+.mp{display:flex;align-items:center;gap:4px;padding:4px 9px;border-radius:40px;font-size:0.6rem;font-weight:600}
+.mp-on{background:linear-gradient(135deg,#E63329,#1a1a2e);border:1px solid rgba(230,51,41,0.3);color:#fff}
+.mp-off{background:rgba(255,255,255,0.04);border:1px solid var(--border);color:var(--dim)}
+.mp-add{background:transparent;border:1px dashed rgba(232,255,72,0.3);color:var(--accent)}
+.mp-d{width:13px;height:13px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:0.38rem;color:#fff;font-weight:700}
+.m-body{padding:14px}
+.m-team{display:flex;align-items:center;gap:10px;margin-bottom:12px}
+.m-badge{width:34px;height:34px;border-radius:50%;background:linear-gradient(135deg,#E63329,#1a1a2e);display:flex;align-items:center;justify-content:center;font-size:0.56rem;font-weight:700;color:#fff;border:1px solid rgba(255,255,255,0.1);flex-shrink:0}
+.m-tname{font-size:0.84rem;font-weight:600}.m-tsub{font-size:0.54rem;color:var(--dim);margin-top:2px}
+.m-stats{display:flex;gap:5px;margin-bottom:11px}
+.m-s{flex:1;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:6px;padding:9px 6px;text-align:center}
+.m-sv{font-size:1rem;font-weight:600}.m-sl{font-size:0.42rem;color:var(--dim);text-transform:uppercase;letter-spacing:1px;margin-top:2px}
+.m-next{background:rgba(232,255,72,0.05);border:1px solid rgba(232,255,72,0.12);border-radius:6px;padding:10px 12px;margin-bottom:10px}
+.m-nl{font-size:0.46rem;color:var(--dim);letter-spacing:1.5px;text-transform:uppercase;margin-bottom:5px}
+.m-nt{font-size:0.78rem;font-weight:600;margin-bottom:4px}
+.m-nm{display:flex;gap:12px;font-size:0.54rem;color:var(--dim)}.m-nm .tv{color:var(--accent);font-weight:500}
+.m-result{display:flex;align-items:center;gap:7px;padding:6px 0;border-bottom:1px solid var(--border);font-size:0.54rem}
+.m-rb{font-weight:600;font-size:0.44rem;min-width:26px}.m-ro{flex:1;color:var(--dim)}.m-rs{font-size:0.7rem;font-weight:600}
+.m-news{padding:6px 0;border-bottom:1px solid var(--border);font-size:0.54rem;color:var(--dim);line-height:1.5;display:flex;gap:6px;align-items:flex-start}
+.m-hot{background:#dc2626;color:#fff;font-size:0.38rem;font-weight:600;padding:2px 4px;border-radius:3px;flex-shrink:0;margin-top:1px}
+.ticker{overflow:hidden;padding:13px 0;background:var(--bg2);border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.ticker-track{display:flex;white-space:nowrap;animation:roll 28s linear infinite}
+.ti{font-size:0.72rem;font-weight:500;letter-spacing:2.5px;text-transform:uppercase;color:var(--off);padding:0 32px}
+.ti::after{content:'·';color:var(--dim);margin-left:16px}
+@keyframes roll{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+.stats{display:grid;grid-template-columns:repeat(4,1fr);border-bottom:1px solid var(--border)}
+.stat{padding:48px;border-right:1px solid var(--border)}.stat:last-child{border-right:none}
+.stat-n{font-size:clamp(2rem,3vw,2.8rem);font-weight:700;letter-spacing:-2px;color:var(--white);line-height:1;margin-bottom:10px}
+.stat-n sup{font-size:.4em;font-weight:500;color:var(--accent);vertical-align:super}
+.stat-d{font-size:0.82rem;color:var(--off);font-weight:300;line-height:1.55}
+.features{padding:112px 48px;max-width:1180px;margin:0 auto}
+.sec-label{font-size:0.68rem;font-weight:500;letter-spacing:2.5px;text-transform:uppercase;color:var(--dim);margin-bottom:14px}
+.sec-h{font-size:clamp(1.8rem,3.5vw,2.8rem);font-weight:700;letter-spacing:-1.5px;color:var(--white);line-height:1.1;margin-bottom:64px}
+.sec-h span{color:var(--accent)}
+.f-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden}
+.fc{background:var(--bg);padding:40px 36px}.fc:hover{background:var(--bg2)}.fc.w2{grid-column:span 2}
+.fc-icon{font-size:1.25rem;margin-bottom:20px;display:block}
+.fc-t{font-size:0.95rem;font-weight:600;color:var(--white);margin-bottom:10px}
+.fc-d{font-size:0.82rem;line-height:1.65;color:var(--off);font-weight:300}
+.fc-tag{display:inline-block;margin-top:18px;font-size:0.62rem;font-weight:500;letter-spacing:1.5px;text-transform:uppercase;color:var(--accent)}
+.sports{padding:96px 48px;background:var(--bg2)}
+.s-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-top:48px}
+.st{background:var(--bg2);padding:28px 16px;text-align:center}.st:hover{background:var(--bg3)}.st:hover .st-n{color:var(--accent)}
+.st-e{font-size:1.65rem;margin-bottom:9px;display:block}.st-n{font-size:0.64rem;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+.quote{padding:128px 48px;text-align:center;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
+.quote-inner{max-width:680px;margin:0 auto}
+blockquote{font-size:clamp(1.7rem,3.5vw,2.8rem);font-weight:700;letter-spacing:-1.5px;line-height:1.15;color:var(--white);margin-bottom:24px}
+blockquote span{color:var(--accent)}
+.q-body{font-size:1rem;font-weight:300;line-height:1.75;color:var(--off);max-width:540px;margin:0 auto 44px}
+.cta{padding:96px 48px;display:flex;align-items:center;justify-content:space-between;gap:48px;flex-wrap:wrap;border-top:1px solid var(--border)}
+.cta h2{font-size:clamp(2rem,4vw,3.2rem);font-weight:700;letter-spacing:-2px;color:var(--white);line-height:1.05;margin-bottom:10px}
+.cta p{font-size:0.95rem;font-weight:300;color:var(--off)}
+footer{padding:24px 48px;border-top:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;font-size:0.78rem;color:var(--dim)}
+.f-logo{font-size:0.88rem;font-weight:600;color:var(--white)}.f-logo b{color:var(--accent)}
+#landing.hidden{display:none}
+#app-view{display:none;min-height:100vh;background:#0b0f1a}
+#app-view.active{display:block}
+#app-topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;background:#111;border-bottom:1px solid rgba(255,255,255,0.08);position:sticky;top:0;z-index:10}
+.a-logo{font-size:0.9rem;font-weight:600;color:#fff}.a-logo b{color:#e8ff48}
+#back-btn{background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:0.78rem;font-weight:500;font-family:'Inter',sans-serif}
+#app-root{min-height:calc(100vh - 53px)}
+.skeleton{background:linear-gradient(90deg,rgba(255,255,255,0.04) 25%,rgba(255,255,255,0.08) 50%,rgba(255,255,255,0.04) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:8px}
+@keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.sk-pill{height:36px;border-radius:40px;display:inline-block}
+.sk-card{height:80px;border-radius:16px}
+.sk-stat{height:72px;border-radius:12px;flex:1}
+.sk-next{height:100px;border-radius:14px;margin-bottom:12px}
+.sk-result{height:44px;border-radius:10px;margin-bottom:6px}
+#install-banner{display:none;position:fixed;bottom:0;left:0;right:0;z-index:300;background:#1a1a2e;border-top:1px solid rgba(232,255,72,0.2);padding:14px 20px;align-items:center;gap:12px;box-shadow:0 -8px 32px rgba(0,0,0,0.4)}
+#install-banner.show{display:flex}
+.ib-icon{font-size:1.6rem;flex-shrink:0}
+.ib-text{flex:1}
+.ib-title{font-size:0.82rem;font-weight:600;color:#fff;margin-bottom:2px}
+.ib-sub{font-size:0.68rem;color:rgba(255,255,255,0.5);line-height:1.4}
+.ib-close{background:none;border:none;color:rgba(255,255,255,0.35);font-size:1.2rem;cursor:pointer;padding:4px;flex-shrink:0}
+.ib-steps{display:flex;align-items:center;gap:6px;margin-top:8px;flex-wrap:wrap}
+.ib-step{font-size:0.65rem;color:rgba(255,255,255,0.6);display:flex;align-items:center;gap:4px}
+.ib-step b{color:#e8ff48}
+@media(max-width:960px){nav{padding:0 22px}.n-links{display:none}.hero-inner{grid-template-columns:1fr;gap:48px;padding:60px 22px}.mockup{display:none}.stats{grid-template-columns:1fr 1fr}.stat{padding:32px 24px}.features{padding:72px 22px}.f-grid{grid-template-columns:1fr}.fc.w2{grid-column:span 1}.sports{padding:64px 22px}.s-grid{grid-template-columns:repeat(3,1fr)}.quote{padding:80px 22px}.cta{padding:64px 22px;flex-direction:column}footer{padding:22px;flex-direction:column;text-align:center}}
+</style>
+<link rel="manifest" href="data:application/json,%7B%22name%22%3A%22My%20Sports%20Hub%22%2C%22short_name%22%3A%22SportsHub%22%2C%22start_url%22%3A%22.%22%2C%22display%22%3A%22standalone%22%2C%22background_color%22%3A%22%23141414%22%2C%22theme_color%22%3A%22%23e8ff48%22%2C%22icons%22%3A%5B%7B%22src%22%3A%22data%3Aimage%2Fsvg%2Bxml%2C%3Csvg%20xmlns%3D%27http%3A%2F%2Fwww.w3.org%2F2000%2Fsvg%27%20viewBox%3D%270%200%20100%20100%27%3E%3Crect%20width%3D%27100%27%20height%3D%27100%27%20rx%3D%2722%27%20fill%3D%27%23141414%27%2F%3E%3Ctext%20y%3D%27.9em%27%20font-size%3D%2780%27%20x%3D%2710%27%3E%F0%9F%8F%86%3C%2Ftext%3E%3C%2Fsvg%3E%22%2C%22sizes%22%3A%22any%22%2C%22type%22%3A%22image%2Fsvg%2Bxml%22%7D%5D%7D">
+<meta name="theme-color" content="#141414">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SportsHub">
+</head>
+<body>
+<div id="landing">
+<nav>
+  <div class="n-logo">My Sports<b>Hub</b></div>
+  <div class="n-links"><a href="#features">Features</a><a href="#sports">Sports</a></div>
+  <button class="n-cta" onclick="showApp()">Open App</button>
+</nav>
+<div class="hero">
+  <div class="hero-inner">
+    <div>
+      <div class="h-label">Fan Dashboard &middot; 12 Sports</div>
+      <h1>Your teams.<br>Your sports.<br><span class="a">Always on.</span></h1>
+      <p class="h-sub">Everything you follow in one place &mdash; standings, scores, TV fixtures and the latest news. Add any team or player across 12 sports.</p>
+      <div class="h-actions">
+        <button class="btn-accent" onclick="showApp()">Try it free &rarr;</button>
+        <button class="btn-clear" onclick="document.getElementById('features').scrollIntoView({behavior:'smooth'})">How it works</button>
+      </div>
+    </div>
+    <div class="mockup">
+      <div class="m-bar"><div class="m-logo">My Sports<b>Hub</b></div><div class="m-live">Live</div></div>
+      <div class="m-pills">
+        <div class="mp mp-on"><div class="mp-d" style="background:linear-gradient(135deg,#E63329,#1a1a2e)">G</div>GOG</div>
+        <div class="mp mp-off"><div class="mp-d" style="background:linear-gradient(135deg,#A50044,#004D98)">B</div>Bar&ccedil;a</div>
+        <div class="mp mp-off"><div class="mp-d" style="background:linear-gradient(135deg,#EF0107,#063672)">A</div>Arsenal</div>
+        <div class="mp mp-add">&#xFF0B; Add</div>
+      </div>
+      <div class="m-body">
+        <div class="m-team"><div class="m-badge">GOG</div><div><div class="m-tname">GOG H&aring;ndbold</div><div class="m-tsub">Handball &middot; H&aring;ndboldligaen &middot; &#127465;&#127472;</div></div></div>
+        <div class="m-stats">
+          <div class="m-s"><div class="m-sv">#3</div><div class="m-sl">Position</div></div>
+          <div class="m-s"><div class="m-sv">34</div><div class="m-sl">Points</div></div>
+          <div class="m-s"><div class="m-sv">15W</div><div class="m-sl">Wins</div></div>
+        </div>
+        <div class="m-next"><div class="m-nl">Next up</div><div class="m-nt">Bronze playoff &mdash; Jun 2026</div><div class="m-nm"><span>TBD</span><span class="tv">TV2 Sport</span></div></div>
+        <div class="m-result" style="border-left:2px solid #ef4444"><span class="m-rb" style="color:#ef4444">LOSS</span><span class="m-ro">Skanderborg AGF (SF)</span><span class="m-rs">26&ndash;33</span></div>
+        <div class="m-result" style="border-left:2px solid #22c55e"><span class="m-rb" style="color:#22c55e">WIN</span><span class="m-ro">Skjern (playoff)</span><span class="m-rs">36&ndash;27</span></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="ticker"><div class="ticker-track">
+  <span class="ti">Football</span><span class="ti">Handball</span><span class="ti">Tennis</span><span class="ti">Cycling</span><span class="ti">Golf</span><span class="ti">Formula 1</span><span class="ti">Basketball</span><span class="ti">Ice Hockey</span><span class="ti">Rugby</span><span class="ti">Baseball</span><span class="ti">Am. Football</span><span class="ti">Volleyball</span>
+  <span class="ti">Football</span><span class="ti">Handball</span><span class="ti">Tennis</span><span class="ti">Cycling</span><span class="ti">Golf</span><span class="ti">Formula 1</span><span class="ti">Basketball</span><span class="ti">Ice Hockey</span><span class="ti">Rugby</span><span class="ti">Baseball</span><span class="ti">Am. Football</span><span class="ti">Volleyball</span>
+</div></div>
+<div class="stats">
+  <div class="stat"><div class="stat-n">12<sup>+</sup></div><div class="stat-d">Sports covered</div></div>
+  <div class="stat"><div class="stat-n">100<sup>+</sup></div><div class="stat-d">Teams and players ready to add</div></div>
+  <div class="stat"><div class="stat-n">1<sup> tap</sup></div><div class="stat-d">To switch between favourites</div></div>
+  <div class="stat"><div class="stat-n">0<sup> ads</sup></div><div class="stat-d">No algorithms, no ads</div></div>
+</div>
+<section class="features" id="features">
+  <div class="sec-label">What you get</div>
+  <div class="sec-h">Simple by design.<br><span>Powerful by default.</span></div>
+  <div class="f-grid">
+    <div class="fc w2"><span class="fc-icon">&#11088;</span><div class="fc-t">Your favourites, always on page one</div><p class="fc-d">Every team and player you follow lives on the front page. Switch between GOG, Barça, Holger Rune, Arsenal and Vingegaard in one tap. Mix any sport, any league, any country.</p><span class="fc-tag">Persistent &middot; Instant</span></div>
+    <div class="fc"><span class="fc-icon">&#9889;</span><div class="fc-t">Always on</div><p class="fc-d">Open and everything is right where you left it.</p><span class="fc-tag">Zero friction</span></div>
+    <div class="fc"><span class="fc-icon">&#128202;</span><div class="fc-t">Live standings</div><p class="fc-d">League tables, rankings and standings always current.</p><span class="fc-tag">All leagues</span></div>
+    <div class="fc"><span class="fc-icon">&#128250;</span><div class="fc-t">TV fixtures</div><p class="fc-d">Channel, time and date at a glance.</p><span class="fc-tag">Never miss a game</span></div>
+    <div class="fc"><span class="fc-icon">&#127942;</span><div class="fc-t">Recent results</div><p class="fc-d">Win, lose or draw &mdash; last results with scores.</p><span class="fc-tag">Full coverage</span></div>
+    <div class="fc"><span class="fc-icon">&#128240;</span><div class="fc-t">Breaking news</div><p class="fc-d">Transfers, injuries, previews. Hot stories flagged.</p><span class="fc-tag">Always fresh</span></div>
+  </div>
+</section>
+<section class="sports" id="sports">
+  <div class="sec-label">Coverage</div>
+  <div class="sec-h" style="margin-bottom:48px">12 sports. One place.</div>
+  <div class="s-grid">
+    <div class="st"><span class="st-e">&#9917;</span><div class="st-n">Football</div></div>
+    <div class="st"><span class="st-e">&#129342;</span><div class="st-n">Handball</div></div>
+    <div class="st"><span class="st-e">&#127934;</span><div class="st-n">Tennis</div></div>
+    <div class="st"><span class="st-e">&#128692;</span><div class="st-n">Cycling</div></div>
+    <div class="st"><span class="st-e">&#9971;</span><div class="st-n">Golf</div></div>
+    <div class="st"><span class="st-e">&#127950;</span><div class="st-n">Formula 1</div></div>
+    <div class="st"><span class="st-e">&#127936;</span><div class="st-n">Basketball</div></div>
+    <div class="st"><span class="st-e">&#127954;</span><div class="st-n">Ice Hockey</div></div>
+    <div class="st"><span class="st-e">&#127944;</span><div class="st-n">Am. Football</div></div>
+    <div class="st"><span class="st-e">&#127945;</span><div class="st-n">Rugby</div></div>
+    <div class="st"><span class="st-e">&#9918;</span><div class="st-n">Baseball</div></div>
+    <div class="st"><span class="st-e">&#127952;</span><div class="st-n">Volleyball</div></div>
+  </div>
+</section>
+<section class="quote">
+  <div class="quote-inner">
+    <blockquote>No algorithms.<br>No ads.<br><span>Just your sports.</span></blockquote>
+    <p class="q-body">My Sports Hub puts everything you follow in one place.</p>
+    <button class="btn-accent" onclick="showApp()" style="margin:0 auto;display:inline-flex">Get started free &rarr;</button>
+  </div>
+</section>
+<div class="cta">
+  <div><h2>One tap.<br>Always on.</h2><p>Your teams. Your sports. Right where you left them.</p></div>
+  <button class="btn-accent" onclick="showApp()" style="padding:14px 32px;font-size:0.92rem">Open My Sports Hub &rarr;</button>
+</div>
+<footer>
+  <div class="f-logo">My Sports<b>Hub</b></div>
+  <div>Your teams. Your sports. Always on.</div>
+  <div>&copy; 2026 My Sports Hub</div>
+</footer>
+</div>
+<div id="app-view">
+  <div id="app-topbar">
+    <div class="a-logo">My Sports<b>Hub</b></div>
+    <button id="back-btn" onclick="hideApp()">&larr; Back</button>
+  </div>
+  <div id="app-root"></div>
+</div>
+<script>
+var _appMounted=false;
+function showApp(){document.getElementById('landing').classList.add('hidden');document.getElementById('app-view').classList.add('active');window.scrollTo(0,0);if(!_appMounted){_appMounted=true;mountApp();}}
+
+function dismissBanner(){
+  document.getElementById('install-banner').classList.remove('show');
+  try{localStorage.setItem('msh-banner-dismissed','1');}catch(e){}
+}
+
+// Install banner - supports iOS Safari + Chrome/Edge on Android & Desktop
+(function(){
+  var isIOS=/iphone|ipad|ipod/i.test(navigator.userAgent);
+  var isStandalone=window.navigator.standalone===true||window.matchMedia('(display-mode: standalone)').matches;
+  var dismissed=false;
+  try{dismissed=localStorage.getItem('msh-banner-dismissed')==='1';}catch(e){}
+  if(isStandalone||dismissed) return;
+
+  // Chrome/Edge: listen for beforeinstallprompt (Android + Desktop)
+  var deferredPrompt=null;
+  window.addEventListener('beforeinstallprompt',function(e){
+    e.preventDefault();
+    deferredPrompt=e;
+    // Show banner with "Install" button
+    var banner=document.getElementById('install-banner');
+    var sub=banner.querySelector('.ib-sub');
+    var steps=banner.querySelector('.ib-steps');
+    if(sub) sub.textContent='One tap to install as a native app on your device';
+    if(steps){
+      steps.innerHTML='<button onclick="triggerInstall()" style="background:#e8ff48;color:#141414;border:none;border-radius:6px;padding:7px 18px;font-size:0.75rem;font-weight:700;cursor:pointer;font-family:Inter,sans-serif">Install App</button>';
+    }
+    setTimeout(function(){banner.classList.add('show');},3000);
+  });
+
+  // iOS Safari: show manual instructions
+  if(isIOS){
+    var isSafari=/safari/i.test(navigator.userAgent)&&!/crios|fxios|chrome/i.test(navigator.userAgent);
+    if(isSafari){
+      setTimeout(function(){
+        document.getElementById('install-banner').classList.add('show');
+      },3000);
+    }
+  }
+})();
+
+function triggerInstall(){
+  var banner=document.getElementById('install-banner');
+  if(window._deferredPrompt){
+    window._deferredPrompt.prompt();
+    window._deferredPrompt.userChoice.then(function(r){
+      if(r.outcome==='accepted') dismissBanner();
+      window._deferredPrompt=null;
+    });
+  }
+}
+function hideApp(){document.getElementById('app-view').classList.remove('active');document.getElementById('landing').classList.remove('hidden');window.scrollTo(0,0);}
+function mountApp(){
+
+(function(){
+const {useState,useRef,useEffect,createElement:h}=React;
+
+// ── colours ──────────────────────────────────────────────────────────────────
+const RC={W:"#22c55e",L:"#ef4444",D:"#facc15"};
+const RL={W:"WIN",L:"LOSS",D:"DRAW"};
+const PAL=[["#EF0107","#063672"],["#C8102E","#00B2A9"],["#1B458F","#C8102E"],["#034694","#EE2523"],["#6CABDD","#1C2C5B"],["#E63329","#1a1a2e"],["#A50044","#004D98"],["#1B4332","#40916C"],["#c0392b","#922b21"],["#7d3c98","#6c3483"],["#DC052D","#0066B2"],["#003865","#C8102E"]];
+function tColor(n){let h=0;for(let i=0;i<n.length;i++)h=(h*31+n.charCodeAt(i))%PAL.length;return{color:PAL[h][0],accent:PAL[h][1]};}
+
+// ── sports list ───────────────────────────────────────────────────────────────
+const SPORTS=[
+  {label:"Football",emoji:"⚽",ex:"Arsenal, Liverpool, Barcelona…"},
+  {label:"Handball",emoji:"⚾",ex:"GOG, Aalborg, THW Kiel…"},
+  {label:"Tennis",emoji:"🎾",ex:"Djokovic, Alcaraz, Sinner…"},
+  {label:"Basketball",emoji:"🏀",ex:"Lakers, Celtics, Warriors…"},
+  {label:"Golf",emoji:"⛳",ex:"McIlroy, Scheffler…"},
+  {label:"Cycling",emoji:"🚴",ex:"Vingegaard, Pogačar…"},
+  {label:"Formula 1",emoji:"🏎️",ex:"Verstappen, Leclerc…"},
+  {label:"Ice Hockey",emoji:"🏒",ex:"Maple Leafs, Rangers…"},
+  {label:"Am. Football",emoji:"🏈",ex:"Chiefs, Cowboys…"},
+  {label:"Rugby",emoji:"🏉",ex:"All Blacks, England…"},
+  {label:"Baseball",emoji:"⚾",ex:"Yankees, Dodgers…"},
+  {label:"Volleyball",emoji:"🏐",ex:"Brazil NT, Italy NT…"},
+];
+function sEmoji(s){const f=SPORTS.find(c=>c.label===s);return f?f.emoji:"🏅";}
+
+// ── team database ─────────────────────────────────────────────────────────────
+const DB={};
+function add(keys,d){keys.forEach(k=>DB[k.toLowerCase()]=d);}
+
+add(["arsenal","arsenal fc"],{name:"Arsenal FC",shortName:"Arsenal",sport:"Football",league:"Premier League",country:"🇬🇧",color:"#EF0107",accent:"#063672",emoji:"⚽",standing:{rank:1,points:79,wins:24,draws:7,losses:5},recentResults:[{opponent:"West Ham",score:"1–0",result:"W",date:"May 11"},{opponent:"Bournemouth",score:"1–2",result:"L",date:"May 7"},{opponent:"Man City",score:"2–2",result:"D",date:"Apr 19"}],nextGame:{opponent:"Pre-season - 2026-27 campaign",date:"Jul 2026",time:"-",tv:"-"},news:[{title:"Arsenal PL champions 2025-26! UCL Final result vs PSG - check live for result",time:"2w ago",hot:true},{title:"Historic double in sight - PL title + UCL Final May 30",time:"2w ago",hot:true},{title:"Pre-season begins Jul 2026 - defending champions",time:"today",hot:false}]});
+add(["liverpool","liverpool fc"],{name:"Liverpool FC",shortName:"Liverpool",sport:"Football",league:"Premier League",country:"🇬🇧",color:"#C8102E",accent:"#00B2A9",emoji:"⚽",standing:{rank:5,points:59,wins:17,draws:8,losses:11},recentResults:[{opponent:"Aston Villa",score:"1–2",result:"L",date:"May 15"},{opponent:"Chelsea",score:"1–1",result:"D",date:"May 9"},{opponent:"Arsenal",score:"2–2",result:"D",date:"Apr 19"}],nextGame:{opponent:"Season complete - pre-season Jul 2026",date:"Season complete",time:"-",tv:"-"},news:[{title:"Liverpool out of top 4 race",time:"2d ago",hot:true},{title:"Slot: 'We have not been good enough'",time:"3d ago",hot:false},{title:"Salah farewell on final day",time:"5d ago",hot:false}]});
+add(["man city","manchester city"],{name:"Manchester City",shortName:"Man City",sport:"Football",league:"Premier League",country:"🇬🇧",color:"#6CABDD",accent:"#1C2C5B",emoji:"⚽",standing:{rank:2,points:78,wins:24,draws:6,losses:6},recentResults:[{opponent:"Crystal Palace",score:"3–0",result:"W",date:"May 17"},{opponent:"Brentford",score:"3–0",result:"W",date:"May 11"},{opponent:"Everton",score:"3–3",result:"D",date:"May 3"}],nextGame:{opponent:"Season complete - 2nd place",date:"Season complete",time:"-",tv:"-"},news:[{title:"Man City 1pt behind Arsenal – must win",time:"today",hot:true},{title:"Haaland hits 30 PL goals",time:"4d ago",hot:false},{title:"Guardiola: 'It is in our hands'",time:"1w ago",hot:false}]});
+add(["chelsea","chelsea fc"],{name:"Chelsea FC",shortName:"Chelsea",sport:"Football",league:"Premier League",country:"🇬🇧",color:"#034694",accent:"#EE2523",emoji:"⚽",standing:{rank:9,points:49,wins:13,draws:10,losses:13},recentResults:[{opponent:"Liverpool",score:"1–1",result:"D",date:"May 9"},{opponent:"Man City",score:"0–3",result:"L",date:"Apr 12"},{opponent:"Nottm Forest",score:"2–1",result:"W",date:"Apr 5"}],nextGame:{opponent:"Season complete - pre-season Jul 2026",date:"Season complete",time:"-",tv:"-"},news:[{title:"Xabi Alonso confirmed as new Chelsea manager",time:"2d ago",hot:true},{title:"Palmer: 'New manager brings energy'",time:"3d ago",hot:false},{title:"Mid-table finish – Europa League exit",time:"1w ago",hot:false}]});
+add(["barcelona","fc barcelona","barca"],{name:"FC Barcelona",shortName:"Barc\xE0",sport:"Football",league:"La Liga",country:"🇪🇸",color:"#A50044",accent:"#004D98",emoji:"⚽",standing:{rank:1,points:94,wins:31,draws:1,losses:5},recentResults:[{opponent:"Real Betis",score:"3–1",result:"W",date:"May 17"},{opponent:"Alav\xE9s",score:"0–1",result:"L",date:"May 13"},{opponent:"Real Madrid",score:"2–0",result:"W",date:"May 10"}],nextGame:{opponent:"Season complete - La Liga champions + UCL SF exit",date:"Season complete",time:"-",tv:"-"},news:[{title:"Historic! All 19 home wins – first ever in La Liga",time:"today",hot:true},{title:"Lewandowski farewell – Raphinha bags a brace",time:"today",hot:true},{title:"Champions with 94 pts",time:"1w ago",hot:false}]});
+add(["real madrid"],{name:"Real Madrid CF",shortName:"R. Madrid",sport:"Football",league:"La Liga",country:"🇪🇸",color:"#FEBE10",accent:"#00529F",emoji:"⚽",standing:{rank:2,points:80,wins:25,draws:5,losses:6},recentResults:[{opponent:"Barcelona",score:"0–2",result:"L",date:"May 10"},{opponent:"Atletico",score:"2–1",result:"W",date:"May 3"},{opponent:"Sevilla",score:"3–0",result:"W",date:"Apr 26"}],nextGame:{opponent:"Season complete - pre-season Jul 2026",date:"Season complete",time:"-",tv:"-"},news:[{title:"Ancelotti confirms exit this summer",time:"5d ago",hot:true},{title:"Mbapp\xE9 ends season as top scorer",time:"3d ago",hot:true},{title:"14 pts behind champions Barc\xE0",time:"1w ago",hot:false}]});
+add(["atletico madrid","atletico"],{name:"Atl\xE9tico de Madrid",shortName:"Atl\xE9tico",sport:"Football",league:"La Liga",country:"🇪🇸",color:"#CE3524",accent:"#272E61",emoji:"⚽",standing:{rank:4,points:66,wins:20,draws:6,losses:10},recentResults:[{opponent:"Real Madrid",score:"1–2",result:"L",date:"May 3"},{opponent:"Getafe",score:"2–0",result:"W",date:"Apr 27"},{opponent:"Villarreal",score:"1–1",result:"D",date:"Apr 20"}],nextGame:{opponent:"Season complete - pre-season Jul 2026",date:"Season complete",time:"-",tv:"-"},news:[{title:"4th place and UCL spot confirmed",time:"2d ago",hot:false},{title:"Juli\xE1n \xC1lvarez top scorer with 19 goals",time:"4d ago",hot:false},{title:"Simeone marks 15 years as boss",time:"1w ago",hot:false}]});
+add(["bayern","bayern munich"],{name:"FC Bayern M\xFCnchen",shortName:"Bayern",sport:"Football",league:"Bundesliga",country:"🇩🇪",color:"#DC052D",accent:"#0066B2",emoji:"⚽",standing:{rank:1,points:79,wins:24,draws:7,losses:7},recentResults:[{opponent:"Dortmund",score:"3–1",result:"W",date:"May 11"},{opponent:"Leverkusen",score:"1–2",result:"L",date:"May 4"},{opponent:"Frankfurt",score:"2–0",result:"W",date:"Apr 27"}],nextGame:{opponent:"Season complete - pre-season Jul 2026",date:"Season complete",time:"-",tv:"-"},news:[{title:"Bayern clinch Bundesliga title",time:"2d ago",hot:true},{title:"Kane breaks Bundesliga scoring record",time:"5d ago",hot:true},{title:"Kompany named best coach",time:"1w ago",hot:false}]});
+add(["psg","paris saint-germain"],{name:"Paris Saint-Germain",shortName:"PSG",sport:"Football",league:"Ligue 1",country:"🇫🇷",color:"#003F7D",accent:"#DA0000",emoji:"⚽",standing:{rank:1,points:85,wins:26,draws:7,losses:5},recentResults:[{opponent:"Marseille",score:"2–0",result:"W",date:"May 11"},{opponent:"Lyon",score:"3–1",result:"W",date:"May 4"},{opponent:"Monaco",score:"1–1",result:"D",date:"Apr 27"}],nextGame:{opponent:"Pre-season - 2026-27 campaign",date:"Jul 2026",time:"-",tv:"-"},news:[{title:"PSG vs Arsenal UCL Final May 30 - check live for result",time:"2w ago",hot:true},{title:"PSG won Ligue 1 2025-26 + UCL Final appearance",time:"2w ago",hot:false},{title:"Pre-season begins Jul 2026",time:"today",hot:false}]});
+add(["inter","inter milan"],{name:"FC Internazionale",shortName:"Inter",sport:"Football",league:"Serie A",country:"🇮🇹",color:"#003DA5",accent:"#000000",emoji:"⚽",standing:{rank:1,points:84,wins:26,draws:6,losses:6},recentResults:[{opponent:"Juventus",score:"2–1",result:"W",date:"May 11"},{opponent:"Milan",score:"1–0",result:"W",date:"May 4"},{opponent:"Napoli",score:"2–2",result:"D",date:"Apr 27"}],nextGame:{opponent:"Season complete - pre-season Jul 2026",date:"Season complete",time:"-",tv:"-"},news:[{title:"Inter crowned Serie A champions",time:"1d ago",hot:true},{title:"Lautaro wins Capocannoniere",time:"4d ago",hot:true},{title:"Inzaghi signs three-year deal",time:"1w ago",hot:false}]});
+add(["gog","gog handball"],{name:"GOG H\xE5ndbold",shortName:"GOG",sport:"Handball",league:"H\xE5ndboldligaen",country:"🇩🇰",color:"#E63329",accent:"#1a1a2e",emoji:"🤾",standing:{rank:3,points:34,wins:15,draws:4,losses:7},recentResults:[{opponent:"Aalborg (playoff)",score:"32–35",result:"L",date:"May 9"},{opponent:"Skjern (playoff)",score:"36–27",result:"W",date:"May 4"},{opponent:"Aalborg (playoff)",score:"34–36",result:"L",date:"Apr 27"}],nextGame:{opponent:"Bronze playoff vs Mors-Thy",date:"Jun 2026",time:"TBD",tv:"TV2 Sport"},news:[{title:"GOG play Mors-Thy in bronze playoff - date TBC June 2026",time:"today",hot:false},{title:"Eliminated by Skanderborg AGF in SF - lost both legs",time:"3w ago",hot:false},{title:"Aalborg face SAH in DM Final",time:"3w ago",hot:false}]});
+add(["aalborg","aalborg handball"],{name:"Aalborg H\xE5ndbold",shortName:"Aalborg",sport:"Handball",league:"H\xE5ndboldligaen",country:"🇩🇰",color:"#003865",accent:"#C8102E",emoji:"🤾",standing:{rank:1,points:50,wins:25,draws:0,losses:1},recentResults:[{opponent:"GOG (playoff)",score:"35–32",result:"W",date:"May 9"},{opponent:"Fredericia",score:"36–26",result:"W",date:"May 4"},{opponent:"GOG (playoff)",score:"36–34",result:"W",date:"Apr 27"}],nextGame:{opponent:"Mors-Thy (SF leg 1)",date:"Wed May 20",time:"TBD",tv:"TV2 Sport"},news:[{title:"Aalborg in DM SF vs Mors-Thy",time:"1d ago",hot:true},{title:"24-game unbeaten run in regular season",time:"1w ago",hot:false},{title:"EHF CL: Aalborg face Sporting CP",time:"3d ago",hot:true}]});
+add(["holger rune","rune"],{name:"Holger Rune",shortName:"Rune",sport:"Tennis",league:"ATP Tour",country:"🇩🇰",color:"#1B4332",accent:"#40916C",emoji:"🎾",standing:{rank:40,points:1050,careerHigh:4,prize:"$14.2M"},recentResults:[{opponent:"Ugo Humbert – ret.",score:"ret.",result:"L",date:"Oct 2025"}],nextGame:{opponent:"Wimbledon 2026 - R1",date:"Mon Jun 29",time:"TBD",tv:"BBC/Eurosport"},news:[{title:"Rune targets Wimbledon - grass season comeback after injury",time:"today",hot:true},{title:"Alcaraz won Roland Garros 2026, now all eyes on Wimbledon",time:"2w ago",hot:false},{title:"Rune ranked #40 ATP - targeting deep Wimbledon run",time:"today",hot:false}]});
+add(["djokovic","novak djokovic"],{name:"Novak Djokovic",shortName:"Djokovic",sport:"Tennis",league:"ATP Tour",country:"🇷🇸",color:"#003F7D",accent:"#C8102E",emoji:"🎾",standing:{rank:5,points:4200,careerHigh:1,prize:"$180M"},recentResults:[{opponent:"Alcaraz – RG QF",score:"4–6 6–3 7–6 4–6",result:"L",date:"Jun 4"},{opponent:"Monfils – RG R4",score:"6–2 6–1 6–2",result:"W",date:"Jun 1"}],nextGame:{opponent:"Wimbledon 2026",date:"Jun 29 onwards",time:"TBD",tv:"BBC/Eurosport"},news:[{title:"Djokovic targeting record 25th Grand Slam at Wimbledon",time:"today",hot:true},{title:"Lost RG QF to Alcaraz - refocusing for grass",time:"2w ago",hot:false},{title:"Wimbledon starts Jun 29",time:"today",hot:false}]});
+add(["alcaraz","carlos alcaraz"],{name:"Carlos Alcaraz",shortName:"Alcaraz",sport:"Tennis",league:"ATP Tour",country:"🇪🇸",color:"#C60B1E",accent:"#FFC400",emoji:"🎾",standing:{rank:2,points:8200,careerHigh:1,prize:"$40M"},recentResults:[{opponent:"Djokovic – RG SF",score:"6–4 3–6 6–3 6–2",result:"W",date:"Jun 5"},{opponent:"Fils – RG QF",score:"6–3 6–2 6–4",result:"W",date:"Jun 4"}],nextGame:{opponent:"Queens Club or Wimbledon 2026",date:"Jun 2026",time:"TBD",tv:"BBC/Eurosport"},news:[{title:"Alcaraz won Roland Garros 2026 - now targeting Wimbledon grass title",time:"2w ago",hot:true},{title:"Back-to-back RG titles - gunning for career Grand Slam at Wimbledon",time:"2w ago",hot:true},{title:"Queens Club warm-up before Wimbledon starts Jun 29",time:"today",hot:false}]});
+add(["sinner","jannik sinner"],{name:"Jannik Sinner",shortName:"Sinner",sport:"Tennis",league:"ATP Tour",country:"🇮🇹",color:"#009246",accent:"#CE2B37",emoji:"🎾",standing:{rank:1,points:11200,careerHigh:1,prize:"$35M"},recentResults:[{opponent:"Zverev – RG SF",score:"6–3 6–4 6–2",result:"W",date:"Jun 5"},{opponent:"Shelton – RG QF",score:"6–2 7–5 6–3",result:"W",date:"Jun 3"}],nextGame:{opponent:"Queens Club or Wimbledon 2026",date:"Jun 2026",time:"TBD",tv:"BBC/Eurosport"},news:[{title:"Sinner RG runner-up - targeting first Wimbledon title",time:"2w ago",hot:false},{title:"World No.1 - grass season starts at Halle or Queens",time:"today",hot:false},{title:"Wimbledon starts Jun 29",time:"today",hot:false}]});
+add(["vingegaard","jonas vingegaard"],{name:"Jonas Vingegaard",shortName:"Vingegaard",sport:"Cycling",league:"UCI World Tour",country:"🇩🇰",color:"#FFD700",accent:"#003366",emoji:"🚴",standing:{rank:1,points:9200,note:"Giro d'Italia 2026 winner - Grand Tour treble!"},recentResults:[{opponent:"Giro Stage 21 - Rome (final)",score:"Peloton finish, GC won",result:"W",date:"May 31"},{opponent:"Giro Stage 20 - Cles to Cles",score:"Stage win",result:"W",date:"May 30"},{opponent:"Giro Stage 14 - Pila",score:"Stage win + Maglia Rosa",result:"W",date:"May 23"}],nextGame:{opponent:"Tour de France - Grand Depart Barcelona",date:"Sat Jul 4",time:"TBD",tv:"Eurosport/GCN"},news:[{title:"VINGEGAARD WINS GIRO 2026! Historic Grand Tour treble - joins elite club of 8",time:"2w ago",hot:true},{title:"5 stage wins, 5:22 lead over Gall - one of the most dominant Giros ever",time:"2w ago",hot:true},{title:"Next: Tour de France from Barcelona Jul 4 - Pogacar main rival",time:"today",hot:false}]});
+add(["mcilroy","rory mcilroy"],{name:"Rory McIlroy",shortName:"McIlroy",sport:"Golf",league:"PGA Tour",country:"🇬🇧",color:"#003865",accent:"#E8B700",emoji:"⛳",standing:{rank:3,points:11.4,careerHigh:1,prize:"$70M"},recentResults:[{opponent:"PGA Championship",score:"Top 10",result:"L",date:"May 17"},{opponent:"Wells Fargo",score:"-19",result:"W",date:"May 4"}],nextGame:{opponent:"US Open at Shinnecock Hills - R1",date:"Thu Jun 18",time:"TBD",tv:"Eurosport/NBC"},news:[{title:"US Open at Shinnecock Hills starts Thursday Jun 18 - Rory targeting career Grand Slam",time:"today",hot:true},{title:"Rory won Wells Fargo, T5 PGA - in form heading into Shinnecock",time:"1mo ago",hot:false},{title:"Career Grand Slam within reach - needs US Open to complete set",time:"today",hot:true}]});
+add(["verstappen","max verstappen"],{name:"Max Verstappen",shortName:"Verstappen",sport:"Formula 1",league:"FIA Formula 1",country:"🇳🇱",color:"#1E41FF",accent:"#FF1E00",emoji:"🏎️",standing:{rank:7,points:26,note:"2026 – new regs hurt Red Bull"},recentResults:[{opponent:"Monaco GP Qualifying",score:"P4",result:"D",date:"May 24"},{opponent:"Emilia Romagna GP",score:"P4",result:"D",date:"May 18"},{opponent:"Miami GP",score:"P4",result:"D",date:"May 3"}],nextGame:{opponent:"Canadian GP - Montreal",date:"Jun 14",time:"20:00 CEST",tv:"Viaplay"},news:[{title:"Canadian GP in Montreal TODAY 20:00 CEST",time:"today",hot:true},{title:"Monaco GP - Leclerc won on home circuit May 25",time:"3w ago",hot:false},{title:"Verstappen 7th in championship - Red Bull struggling with 2026 regs",time:"today",hot:false}]});
+add(["lakers","la lakers"],{name:"LA Lakers",shortName:"Lakers",sport:"Basketball",league:"NBA",country:"🇺🇸",color:"#552583",accent:"#FDB927",emoji:"🏀",standing:{rank:4,wins:47,losses:35},recentResults:[{opponent:"OKC Thunder G4 (R1)",score:"110-115",result:"L",date:"May 11"},{opponent:"OKC Thunder G3 (R1)",score:"108-131",result:"L",date:"May 9"},{opponent:"OKC Thunder G2 (R1)",score:"107-125",result:"L",date:"May 7"}],nextGame:{opponent:"Season complete - eliminated by OKC in R1",date:"Season complete",time:"-",tv:"-"},news:[{title:"Lakers swept 4-0 by OKC in R1 - off-season begins",time:"2w ago",hot:false},{title:"OKC leads Spurs 2-1 in West Finals (G4 today), Knicks leads Cavs 3-0",time:"today",hot:true},{title:"LeBron: We need to rebuild this summer",time:"2w ago",hot:false}]});
+add(["celtics","boston celtics"],{name:"Boston Celtics",shortName:"Celtics",sport:"Basketball",league:"NBA",country:"🇺🇸",color:"#007A33",accent:"#BA9653",emoji:"🏀",standing:{rank:2,wins:61,losses:21},recentResults:[{opponent:"76ers G7",score:"100–109",result:"L",date:"May 4"},{opponent:"76ers G6",score:"93–106",result:"L",date:"May 2"}],nextGame:{opponent:"Season complete - eliminated in R1",date:"Season complete",time:"-",tv:"-"},news:[{title:"Celtics eliminated in R1 - title defence over",time:"1mo ago",hot:false},{title:"NBA Conf Finals: OKC vs Spurs (2-2 tied), Knicks vs Cavs (Knicks leads 3-0)",time:"today",hot:true},{title:"Offseason rebuild begins for Boston",time:"1mo ago",hot:false}]});
+
+
+// ── Live data cache ────────────────────────────────────────────────────────────
+const _liveCache={};
+async function fetchTeamLive(team){return null;}
+
+// ── Flashscore IDs ─────────────────────────────────────────────────────────────
+const FS_IDS={
+  "Arsenal FC":"arsenal/hA1Zm19f",
+  "Liverpool FC":"liverpool/h0Oq6KQ9",
+  "Manchester City":"manchester-city/Gz9Xwn2j",
+  "Chelsea FC":"chelsea/YFBOvfnB",
+  "Tottenham Hotspur":"tottenham-hotspur/Qj0q1jaR",
+  "Brentford FC":"brentford/xYe7DwID",
+  "FC Barcelona":"barcelona/SKbpVP5K",
+  "Real Madrid CF":"real-madrid/UFGtcWce",
+  "FC Bayern Munchen":"fc-bayern-munchen/fxVF5TJM",
+  "Borussia Dortmund":"borussia-dortmund/WLfE6SXP",
+  "Paris Saint-Germain":"paris-sg/zoxMilN8",
+  "FC Internazionale":"inter/p9W2TOR5",
+  "SSC Napoli":"napoli/WLfHc3JC",
+  "Juventus FC":"juventus/GaUZHl69",
+  "GOG H\xE5ndbold":"gog/foY6hOvn",
+  "Aalborg H\xE5ndbold":"aalborg-handbold/fDQfxPPh",
+  "LA Lakers":"la-lakers/vKDiRNkf",
+  "Boston Celtics":"boston-celtics/UjN8SFNB",
+  "Golden State Warriors":"golden-state-warriors/jSfM7DtA",
+  "Denver Nuggets":"denver-nuggets/n5aTzY3s",
+  "Rasmus Hojgaard":"rasmus-hojgaard/6a1grFs5",
+  "Nicolai Hojgaard":"nicolai-hojgaard/Kz5NfElF",
+};
+
+// ── Persistence ────────────────────────────────────────────────────────────────
+var _cachedTeams=null,_cachedSel=null;
+
+function refreshFromDB(teams){
+  return teams.map(t=>{
+    const key=Object.keys(DB).find(k=>DB[k].name===t.name||DB[k].shortName===t.shortName);
+    if(!key)return t;
+    const f=DB[key];
+    return {...t,name:f.name,shortName:f.shortName,sport:f.sport,league:f.league,
+      country:f.country,color:f.color,accent:f.accent,emoji:f.emoji,
+      nextGame:f.nextGame,recentResults:f.recentResults,news:f.news,standing:f.standing,_unknown:false};
+  });
+}
+function loadTeams(){
+  if(_cachedTeams&&_cachedTeams.length>0)return refreshFromDB(_cachedTeams);
+  try{const s=localStorage.getItem("msh-teams");
+    if(s){const t=JSON.parse(s);if(t&&t.length>0){_cachedTeams=t;return refreshFromDB(t);}}}catch(e){}
+  return INIT;
+}
+function loadSel(){
+  if(_cachedSel)return _cachedSel;
+  try{return localStorage.getItem("msh-sel")||"s-gog";}catch(e){return "s-gog";}
+}
+function persist(teams,sel){
+  const toSave=teams.map(t=>({id:t.id,name:t.name,shortName:t.shortName,
+    sport:t.sport,league:t.league,country:t.country,
+    color:t.color,accent:t.accent,emoji:t.emoji,standing:t.standing}));
+  _cachedTeams=teams;_cachedSel=sel;
+  try{localStorage.setItem("msh-teams",JSON.stringify(toSave));
+    localStorage.setItem("msh-sel",sel);}catch(e){}
+}
+add(["brentford","brentford fc"],{name:"Brentford FC",shortName:"Brentford",sport:"Football",league:"Premier League",country:"🇬🇧",color:"#E30613",accent:"#1C1C1C",emoji:"⚽",standing:{rank:9,points:49,wins:14,draws:7,losses:16},recentResults:[{opponent:"Liverpool (A)",score:"1-1",result:"D",date:"May 24"},{opponent:"Crystal Palace (H)",score:"2-2",result:"D",date:"May 17"},{opponent:"Man City (A)",score:"0-3",result:"L",date:"May 9"}],nextGame:{opponent:"Season complete - 9th place finish",date:"Season complete",time:"-",tv:"-"},news:[{title:"Brentford 9th - solid PL season done, drew 1-1 at Liverpool",time:"today",hot:false},{title:"Igor Thiago top scorer 21 PL goals - breakthrough season",time:"today",hot:true},{title:"Keith Andrews confirmed as permanent head coach",time:"today",hot:false}]});
+add(["warriors","golden state warriors"],{name:"Golden State Warriors",shortName:"Warriors",sport:"Basketball",league:"NBA",country:"🇺🇸",color:"#1D428A",accent:"#FFC72C",emoji:"🏀",standing:{rank:10,wins:42,losses:40},recentResults:[{opponent:"Suns (play-in)",score:"121-126",result:"L",date:"Apr 17"},{opponent:"Clippers (play-in)",score:"126-121",result:"W",date:"Apr 15"},{opponent:"Memphis",score:"118-112",result:"W",date:"Apr 12"}],nextGame:{opponent:"Season complete - eliminated in play-in",date:"Season complete",time:"-",tv:"-"},news:[{title:"Warriors eliminated in play-in by Suns",time:"5w ago",hot:false},{title:"NBA Finals start Jun 3: OKC vs winner of East",time:"today",hot:true},{title:"Curry: Will be back stronger next season",time:"5w ago",hot:false}]});
+add(["nuggets","denver nuggets"],{name:"Denver Nuggets",shortName:"Nuggets",sport:"Basketball",league:"NBA",country:"🇺🇸",color:"#0E2240",accent:"#FEC524",emoji:"🏀",standing:{rank:3,wins:54,losses:28},recentResults:[{opponent:"OKC G4 (R2)",score:"98-118",result:"L",date:"May 13"},{opponent:"OKC G3 (R2)",score:"112-119",result:"L",date:"May 11"},{opponent:"OKC G2 (R2)",score:"108-125",result:"L",date:"May 9"}],nextGame:{opponent:"Season complete - eliminated by OKC in R2",date:"Season complete",time:"-",tv:"-"},news:[{title:"Nuggets eliminated by OKC 4-1 in R2",time:"2w ago",hot:false},{title:"Jokic wins 4th MVP but no title this year",time:"1mo ago",hot:true},{title:"OKC vs Spurs in West Finals (tied 2-2)",time:"today",hot:true}]});
+add(["leclerc","charles leclerc"],{name:"Charles Leclerc",shortName:"Leclerc",sport:"Formula 1",league:"FIA Formula 1",country:"🇲🇨",color:"#E8002D",accent:"#000000",emoji:"🏎️",standing:{rank:3,points:72,note:"2026 F1 standings"},recentResults:[{opponent:"Monaco GP",score:"P1 WIN",result:"W",date:"May 25"},{opponent:"Emilia Romagna GP",score:"P2",result:"W",date:"May 18"},{opponent:"Monaco GP Qualifying",score:"P1 POLE",result:"W",date:"May 24"}],nextGame:{opponent:"Canadian GP - Montreal",date:"Jun 14",time:"20:00 CEST",tv:"Viaplay"},news:[{title:"Canadian GP in Montreal TODAY 20:00 CEST",time:"today",hot:true},{title:"Leclerc WON Monaco GP on home circuit - emotional victory!",time:"3w ago",hot:true},{title:"Leclerc now 2nd in championship - Ferrari surging",time:"today",hot:false}]});
+add(["hamilton","lewis hamilton"],{name:"Lewis Hamilton",shortName:"Hamilton",sport:"Formula 1",league:"FIA Formula 1",country:"🇬🇧",color:"#DC0000",accent:"#9B0000",emoji:"🏎️",standing:{rank:5,points:44,note:"2026 - first year at Ferrari"},recentResults:[{opponent:"Monaco GP Qualifying",score:"P3",result:"D",date:"May 24"},{opponent:"Emilia Romagna GP",score:"P4",result:"D",date:"May 18"},{opponent:"Miami GP",score:"P5",result:"D",date:"May 3"}],nextGame:{opponent:"Canadian GP - Montreal",date:"Jun 14",time:"20:00 CEST",tv:"Viaplay"},news:[{title:"Canadian GP in Montreal TODAY 20:00 CEST",time:"today",hot:false},{title:"Hamilton P3 at Monaco - Ferrari improving race by race",time:"3w ago",hot:false},{title:"First Ferrari win still the dream",time:"today",hot:false}]});
+add(["scheffler","scottie scheffler"],{name:"Scottie Scheffler",shortName:"Scheffler",sport:"Golf",league:"PGA Tour",country:"🇺🇸",color:"#002868",accent:"#BF0A30",emoji:"⛳",standing:{rank:1,points:24.1,careerHigh:1},recentResults:[{opponent:"Charles Schwab Challenge",score:"Playing this week",result:"D",date:"May 22-25"},{opponent:"PGA Championship",score:"T3",result:"D",date:"May 17"},{opponent:"The Masters",score:"-11 (W)",result:"W",date:"Apr 13"}],nextGame:{opponent:"US Open at Shinnecock Hills - R1",date:"Thu Jun 18",time:"TBD",tv:"Eurosport/NBC"},news:[{title:"US Open this week at Shinnecock - Scheffler can complete career Grand Slam on 30th birthday (Sun)",time:"today",hot:true},{title:"World No.1 - won PGA Championship and The Open in 2025 + Masters 2026",time:"today",hot:false},{title:"Final round Sunday Jun 21 = Scheffler's 30th birthday",time:"today",hot:true}]});
+add(["maple leafs","toronto maple leafs"],{name:"Toronto Maple Leafs",shortName:"Maple Leafs",sport:"Ice Hockey",league:"NHL",country:"🇨🇦",color:"#003E7E",accent:"#FFFFFF",emoji:"🏒",standing:{rank:3,wins:49,losses:27,points:103},recentResults:[{opponent:"Florida Panthers G5 (R2)",score:"Result TBC",result:"D",date:"May 2026"},{opponent:"Florida Panthers G4 (R2)",score:"3-2 OT",result:"W",date:"May 20"},{opponent:"Florida Panthers G3 (R2)",score:"4-2",result:"W",date:"May 17"}],nextGame:{opponent:"NHL Playoffs - check live",date:"May/Jun 2026",time:"TBD",tv:"Viaplay"},news:[{title:"Maple Leafs deep in NHL playoffs - check Flashscore for latest",time:"today",hot:true},{title:"Led Florida Panthers 3-1 in R2 - one win from Conf Finals",time:"3d ago",hot:false},{title:"Matthews hat-trick in Game 1",time:"1w ago",hot:false}]});
+add(["rangers","new york rangers"],{name:"New York Rangers",shortName:"Rangers",sport:"Ice Hockey",league:"NHL",country:"🇺🇸",color:"#0038A8",accent:"#CE1126",emoji:"🏒",standing:{rank:2,wins:52,losses:24,points:109},recentResults:[{opponent:"Carolina G5 (R2)",score:"Result TBC",result:"D",date:"May 2026"},{opponent:"Carolina G4 (R2)",score:"4-2",result:"W",date:"May 20"},{opponent:"Carolina G3 (R2)",score:"3-4 OT",result:"L",date:"May 17"}],nextGame:{opponent:"NHL Playoffs - check live",date:"May/Jun 2026",time:"TBD",tv:"Viaplay"},news:[{title:"Rangers deep in NHL playoffs - check Flashscore for latest",time:"today",hot:true},{title:"Led Carolina 3-1 in R2 - one win from Conf Finals",time:"3d ago",hot:false},{title:"Panarin leading the charge",time:"1w ago",hot:false}]});
+add(["chiefs","kansas city chiefs"],{name:"Kansas City Chiefs",shortName:"Chiefs",sport:"Am. Football",league:"NFL",country:"🇺🇸",color:"#E31837",accent:"#FFB81C",emoji:"🏈",standing:{rank:1,wins:15,losses:2,note:"Super Bowl LX Champions"},recentResults:[{opponent:"Super Bowl LX vs Eagles",score:"28-22",result:"W",date:"Feb 8"},{opponent:"AFC Championship",score:"35-17",result:"W",date:"Jan 25"},{opponent:"AFC Divisional",score:"28-14",result:"W",date:"Jan 18"}],nextGame:{opponent:"2026-27 NFL season - Training camp",date:"Season complete",time:"-",tv:"-"},news:[{title:"Chiefs win Super Bowl LX - 4 titles in 6 years!",time:"3mo ago",hot:true},{title:"Mahomes wins 4th Super Bowl MVP",time:"3mo ago",hot:true},{title:"Training camp opens Jul 2026",time:"today",hot:false}]});
+add(["eagles","philadelphia eagles"],{name:"Philadelphia Eagles",shortName:"Eagles",sport:"Am. Football",league:"NFL",country:"🇺🇸",color:"#004C54",accent:"#A5ACAF",emoji:"🏈",standing:{rank:2,wins:14,losses:3,note:"Super Bowl LX runners-up"},recentResults:[{opponent:"Super Bowl LX vs Chiefs",score:"22-28",result:"L",date:"Feb 8"},{opponent:"NFC Championship",score:"27-21",result:"W",date:"Jan 25"},{opponent:"NFC Divisional",score:"34-10",result:"W",date:"Jan 18"}],nextGame:{opponent:"2026-27 NFL season - Training camp",date:"Season complete",time:"-",tv:"-"},news:[{title:"Eagles Super Bowl heartbreak - lost 22-28 to Chiefs",time:"3mo ago",hot:true},{title:"Hurts: We will be back stronger",time:"3mo ago",hot:false},{title:"Training camp opens Jul 2026",time:"today",hot:false}]});
+add(["all blacks","new zealand"],{name:"New Zealand All Blacks",shortName:"All Blacks",sport:"Rugby",league:"Rugby Championship",country:"🇳🇿",color:"#000000",accent:"#FFFFFF",emoji:"🏉",standing:{rank:1,points:0,note:"World Rugby Ranking #1"},recentResults:[{opponent:"Ireland (Test)",score:"38-17",result:"W",date:"Nov 2025"},{opponent:"France (Test)",score:"29-24",result:"W",date:"Nov 2025"},{opponent:"Argentina (RC)",score:"42-21",result:"W",date:"Oct 2025"}],nextGame:{opponent:"British & Irish Lions - Test 1",date:"Sat Jun 27",time:"TBD",tv:"Sky Sport/Viaplay"},news:[{title:"All Blacks vs British & Irish Lions series begins Jun 27",time:"today",hot:true},{title:"Full squad named for Lions series",time:"1mo ago",hot:false},{title:"World Rugby No.1 ranking confirmed",time:"3mo ago",hot:false}]});
+add(["yankees","new york yankees"],{name:"New York Yankees",shortName:"Yankees",sport:"Baseball",league:"MLB",country:"🇺🇸",color:"#003087",accent:"#E4002C",emoji:"⚾",standing:{rank:1,wins:33,losses:16,note:"AL East leaders"},recentResults:[{opponent:"Red Sox",score:"5-3",result:"W",date:"May 23"},{opponent:"Blue Jays",score:"7-2",result:"W",date:"May 21"},{opponent:"Orioles",score:"4-6",result:"L",date:"May 19"}],nextGame:{opponent:"Baltimore Orioles (A)",date:"Mon May 25",time:"19:05 CEST",tv:"MLB.tv"},news:[{title:"Yankees lead AL East by 4.5 games - best in AL",time:"today",hot:true},{title:"Judge hitting .318 with 18 HR - MVP pace",time:"today",hot:false},{title:"Cole dominant as ace - 8 wins already",time:"1w ago",hot:false}]});
+add(["dodgers","la dodgers"],{name:"LA Dodgers",shortName:"Dodgers",sport:"Baseball",league:"MLB",country:"🇺🇸",color:"#005A9C",accent:"#EF3E42",emoji:"⚾",standing:{rank:1,wins:35,losses:14,note:"NL West leaders - best in MLB"},recentResults:[{opponent:"Giants",score:"8-3",result:"W",date:"May 23"},{opponent:"Padres",score:"5-4",result:"W",date:"May 21"},{opponent:"Rockies",score:"11-2",result:"W",date:"May 19"}],nextGame:{opponent:"San Francisco Giants (A)",date:"Mon May 25",time:"22:10 CEST",tv:"MLB.tv"},news:[{title:"Dodgers best record in MLB 35-14 - dominant NL West",time:"today",hot:true},{title:"Ohtani .318 avg 16 HR - MVP frontrunner",time:"today",hot:true},{title:"Targeting back-to-back World Series",time:"1w ago",hot:false}]});
+add(["spurs","tottenham","tottenham hotspur"],{name:"Tottenham Hotspur",shortName:"Spurs",sport:"Football",league:"Premier League",country:"🇬🇧",color:"#132257",accent:"#9E9E9E",emoji:"⚽",standing:{rank:17,points:38,wins:9,draws:11,losses:17},recentResults:[{opponent:"Everton (H)",score:"2-1",result:"W",date:"May 24"},{opponent:"Liverpool (H)",score:"0-2",result:"L",date:"May 18"},{opponent:"Chelsea (A)",score:"1-1",result:"D",date:"May 11"}],nextGame:{opponent:"Season complete - survived relegation!",date:"Season complete",time:"-",tv:"-"},news:[{title:"Spurs SURVIVE! Beat Everton 2-1 on final day to stay up",time:"yesterday",hot:true},{title:"17th place finish - closest escape in years",time:"yesterday",hot:true},{title:"Thomas Frank rebuild starts this summer",time:"yesterday",hot:false}]});
+add(["juventus","juve"],{name:"Juventus FC",shortName:"Juventus",sport:"Football",league:"Serie A",country:"🇮🇹",color:"#000000",accent:"#FFFFFF",emoji:"⚽",standing:{rank:4,points:68,wins:20,draws:8,losses:10},recentResults:[{opponent:"Atalanta (A)",score:"2-2",result:"D",date:"May 24"},{opponent:"Inter (H)",score:"1-2",result:"L",date:"May 11"},{opponent:"Lazio (H)",score:"2-0",result:"W",date:"May 4"}],nextGame:{opponent:"Season complete - 4th place",date:"Season complete",time:"-",tv:"-"},news:[{title:"Juve finish 4th in Serie A - UCL spot secured",time:"yesterday",hot:false},{title:"Vlahovic 18 goals - solid but inconsistent season",time:"yesterday",hot:false},{title:"Thiago Motta confirmed for 2026-27",time:"yesterday",hot:false}]});
+
+add(["napoli","ssc napoli"],{name:"SSC Napoli",shortName:"Napoli",sport:"Football",league:"Serie A",country:"🇮🇹",color:"#0067B2",accent:"#00A4E4",emoji:"⚽",standing:{rank:2,points:78,wins:24,draws:6,losses:8},recentResults:[{opponent:"Udinese (H)",score:"2-0",result:"W",date:"May 24"},{opponent:"Genoa (A)",score:"1-2",result:"L",date:"May 17"},{opponent:"Lazio (H)",score:"0-2",result:"L",date:"May 10"}],nextGame:{opponent:"Season complete - 2nd place, UCL qualified",date:"Season complete",time:"-",tv:"-"},news:[{title:"Napoli finish 2nd in Serie A - Champions League secured",time:"yesterday",hot:true},{title:"Defending champions fall short - Inter crowned Serie A winners",time:"yesterday",hot:true},{title:"Napoli won 4th Scudetto in 2024-25 - back-to-back UCL runs",time:"1mo ago",hot:false}]});
+add(["pogacar","tadej pogacar"],{name:"Tadej Pogacar",shortName:"Pogacar",sport:"Cycling",league:"UCI World Tour",country:"🇸🇮",color:"#E31E24",accent:"#003DA5",emoji:"🚴",standing:{rank:1,points:13200,note:"UCI World No.1"},recentResults:[{opponent:"Tour de Romandie GC",score:"1st",result:"W",date:"May 4"},{opponent:"Liege-Bastogne-Liege",score:"1st",result:"W",date:"Apr 27"},{opponent:"Amstel Gold Race",score:"1st",result:"W",date:"Apr 13"}],nextGame:{opponent:"Tour de France - Grand Depart Barcelona",date:"Sat Jul 4",time:"TBD",tv:"Eurosport/GCN"},news:[{title:"Pogacar targets 5th Tour de France title from Barcelona Jul 4",time:"today",hot:true},{title:"Skipped Giro - focused entirely on Tour de France",time:"1mo ago",hot:false},{title:"Main rivalry: Vingegaard (Giro winner) vs Pogacar at TdF",time:"today",hot:true}]});
+add(["van aert","wout van aert"],{name:"Wout van Aert",shortName:"Van Aert",sport:"Cycling",league:"UCI World Tour",country:"🇧🇪",color:"#000000",accent:"#FFD700",emoji:"🚴",standing:{rank:2,points:9100,note:"UCI World No.2"},recentResults:[{opponent:"Paris-Roubaix",score:"1st",result:"W",date:"Apr 13"},{opponent:"E3 Saxo Classic",score:"2nd",result:"D",date:"Mar 29"},{opponent:"Strade Bianche",score:"3rd",result:"D",date:"Mar 8"}],nextGame:{opponent:"Tour de France - Grand Depart Barcelona",date:"Sat Jul 4",time:"TBD",tv:"Eurosport/GCN"},news:[{title:"Van Aert targeting Tour de France Jul 4 - supporting Vingegaard for GC",time:"today",hot:false},{title:"Won Paris-Roubaix - cobbles king backs up for Tour",time:"2mo ago",hot:true},{title:"Visma team built around Vingegaard for TdF GC assault",time:"today",hot:false}]});
+add(["nicolai hojgaard","nicolai hojgaard"],{name:"Nicolai Hojgaard",shortName:"N. Hojgaard",sport:"Golf",league:"PGA Tour / DP World Tour",country:"🇩🇰",color:"#004B87",accent:"#C8A96E",emoji:"⛳",standing:{rank:28,points:0,careerHigh:20},recentResults:[{opponent:"US Open Shinnecock Hills",score:"Playing this week",result:"D",date:"Jun 18-21"},{opponent:"Memorial Tournament",score:"T18",result:"D",date:"Jun 7"},{opponent:"Zurich Classic (team)",score:"2nd",result:"D",date:"Apr 26"}],nextGame:{opponent:"US Open at Shinnecock Hills",date:"Jun 18-21",time:"TBD",tv:"Eurosport"},news:[{title:"Nicolai Hojgaard at US Open this week - Shinnecock Hills Jun 18-21",time:"today",hot:true},{title:"OWGR #28 - Denmark best ranked at PGA Tour",time:"today",hot:false},{title:"4 top-10s in 2026 PGA Tour season",time:"1w ago",hot:false}]});
+add(["rasmus hojgaard","rasmus hojgaard"],{name:"Rasmus Hojgaard",shortName:"R. Hojgaard",sport:"Golf",league:"PGA Tour / DP World Tour",country:"🇩🇰",color:"#1A472A",accent:"#C8A96E",emoji:"⛳",standing:{rank:67,points:0,careerHigh:37},recentResults:[{opponent:"US Open Shinnecock Hills",score:"Playing this week",result:"D",date:"Jun 18-21"},{opponent:"Memorial Tournament",score:"T25",result:"D",date:"Jun 7"},{opponent:"Zurich Classic (team)",score:"2nd",result:"D",date:"Apr 26"}],nextGame:{opponent:"US Open at Shinnecock Hills",date:"Jun 18-21",time:"TBD",tv:"Eurosport"},news:[{title:"Rasmus Hojgaard at US Open this week - Shinnecock Hills Jun 18-21",time:"today",hot:true},{title:"OWGR #67 - 2025 Ryder Cup winner with Europe",time:"today",hot:false},{title:"Twins runner-up at Zurich Classic together",time:"1mo ago",hot:false}]});
+add(["olesen","thorbjorn olesen"],{name:"Thorbjørn Olesen",shortName:"Olesen",sport:"Golf",league:"DP World Tour",country:"🇩🇰",color:"#1B3A6B",accent:"#C8A96E",emoji:"⛳",standing:{rank:113,points:0,careerHigh:33},recentResults:[{opponent:"US Open qualifying",score:"Did not qualify",result:"L",date:"Jun 2026"},{opponent:"Valderrama Masters",score:"T18",result:"D",date:"Apr 2026"},{opponent:"Betway Championship",score:"T12",result:"D",date:"Mar 2026"}],nextGame:{opponent:"DP World Tour event TBD",date:"Jun/Jul 2026",time:"TBD",tv:"Eurosport"},news:[{title:"Olesen targets return to top 100 OWGR - competing on DP World Tour",time:"today",hot:false},{title:"8 DP World Tour wins - experienced campaigner",time:"1mo ago",hot:false},{title:"Won 2016 World Cup of Golf for Denmark with Soren Kjeldsen",time:"1mo ago",hot:false}]});
+add(["emily pedersen","emily kristine pedersen"],{name:"Emily K. Pedersen",shortName:"E. Pedersen",sport:"Golf",league:"LET / LPGA Tour",country:"🇩🇰",color:"#8B1A4A",accent:"#C8A96E",emoji:"⛳",standing:{rank:30,points:0,careerHigh:5},recentResults:[{opponent:"Chevron Championship (Major)",score:"T24",result:"D",date:"Apr 2026"},{opponent:"LET event",score:"Top 20",result:"D",date:"May 2026"},{opponent:"Women British Open 2025",score:"T11",result:"D",date:"Aug 2025"}],nextGame:{opponent:"KPMG Women PGA Championship",date:"Jun 19-22",time:"TBD",tv:"Eurosport"},news:[{title:"Emily K. Pedersen at KPMG Women PGA Championship this week",time:"today",hot:true},{title:"Denmark best female golfer - 6 pro wins, LET Player of Year 2020",time:"1mo ago",hot:false},{title:"Targeting first Major win in 2026",time:"today",hot:false}]});
+add(["bjerregaard","lucas bjerregaard"],{name:"Lucas Bjerregaard",shortName:"Bjerregaard",sport:"Golf",league:"DP World Tour",country:"🇩🇰",color:"#1A3A5C",accent:"#C8A96E",emoji:"⛳",standing:{rank:517,points:0,careerHigh:42},recentResults:[{opponent:"DP World Tour event",score:"TBC",result:"D",date:"Jun 2026"},{opponent:"Asian Tour event",score:"TBC",result:"D",date:"2026"},{opponent:"Alfred Dunhill Links 2018",score:"Won",result:"W",date:"Oct 2018"}],nextGame:{opponent:"DP World Tour / Asian Tour event TBD",date:"Jun/Jul 2026",time:"TBD",tv:"Eurosport"},news:[{title:"Bjerregaard competing on DP World Tour - targeting comeback to top 100",time:"today",hot:false},{title:"Career high OWGR #42 in 2019 - won Alfred Dunhill Links at St Andrews",time:"1mo ago",hot:false},{title:"Attempting return to elite level after difficult years",time:"today",hot:false}]});
+add(["norgaard","nicklas norgaard"],{name:"Nicklas Nørgaard",shortName:"Nørgaard",sport:"Golf",league:"PGA Tour / DP World Tour",country:"🇩🇰",color:"#2C5F2E",accent:"#C8A96E",emoji:"⛳",standing:{rank:100,points:0,careerHigh:83},recentResults:[{opponent:"US Open Shinnecock Hills",score:"Playing this week",result:"D",date:"Jun 18-21"},{opponent:"Memorial Tournament",score:"T30",result:"D",date:"Jun 7"},{opponent:"Betfred British Masters 2024",score:"Won",result:"W",date:"May 2024"}],nextGame:{opponent:"US Open at Shinnecock Hills",date:"Jun 18-21",time:"TBD",tv:"Eurosport"},news:[{title:"Norgaard at US Open this week - Shinnecock Hills Jun 18-21",time:"today",hot:true},{title:"Holds PGA Tour dual membership - 11th Race to Dubai 2025",time:"today",hot:false},{title:"Won maiden DP World Tour title at Betfred British Masters 2024",time:"1mo ago",hot:false}]});
+const HINTS={
+  Football:["Arsenal","Liverpool","Man City","Chelsea","Barcelona","Real Madrid","Atletico Madrid","Bayern Munich","PSG","Inter Milan"],
+  Handball:["GOG","Aalborg","THW Kiel"],
+  Tennis:["Holger Rune","Djokovic","Alcaraz","Sinner"],
+  Basketball:["Lakers","Celtics"],
+  Golf:["McIlroy"],
+  Cycling:["Vingegaard"],
+  "Formula 1":["Verstappen"],
+  "Ice Hockey":["Maple Leafs","Rangers"],
+  "Am. Football":["Chiefs","Cowboys"],
+  Rugby:["All Blacks","England"],
+  Baseball:["Yankees","Dodgers"],
+  Volleyball:["Brazil NT","Italy NT"],
+};
+
+function lookup(name,sport){
+  const q=name.trim().toLowerCase();
+  const k=Object.keys(DB).find(k=>k===q||q.includes(k)||k.includes(q));
+  if(k)return{...DB[k]};
+  const pal=tColor(name);
+  return{name:name.trim().split(" ").map(w=>w[0].toUpperCase()+w.slice(1)).join(" "),shortName:name.trim().split(" ").slice(-1)[0].slice(0,10),sport,league:sport+" League",country:"🏳️",color:pal.color,accent:pal.accent,emoji:sEmoji(sport),standing:{rank:null,points:null,wins:null,draws:null,losses:null},recentResults:[],nextGame:{opponent:"Check official site",date:"TBD",time:"–",tv:"–"},news:[{title:"Added as custom favourite",time:"now",hot:false}],_unknown:true};
+}
+
+// ── Initials Badge ─────────────────────────────────────────────────────────────
+function getInitials(name){
+  const skip=["FC","AFC","CF","SC","AC","AS","VfB","VfL","RB","Handball","ATP","PGA","UCI","FIA","NBA","NFL","NHL","Tour","de","Grand"];
+  const words=name.split(/[\s\-]+/).filter(w=>w.length>1&&!skip.includes(w));
+  if(!words.length)return name.slice(0,2).toUpperCase();
+  if(words.length===1)return words[0].slice(0,3).toUpperCase();
+  return(words[0][0]+words[1][0]).toUpperCase();
+}
+function TeamLogo({name,size=32,color="#555",accent="#222"}){
+  const ini=getInitials(name);
+  const fs=ini.length>2?size*0.28:size*0.36;
+  return h("div",{style:{width:size,height:size,borderRadius:"50%",background:"linear-gradient(135deg,"+color+","+accent+")",display:"flex",alignItems:"center",justifyContent:"center",flexShrink:0,boxShadow:"0 2px 8px rgba(0,0,0,0.4)",border:"2px solid rgba(255,255,255,0.2)"}},
+    h("span",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:900,fontSize:fs+"px",color:"#fff",letterSpacing:"-0.5px",lineHeight:1,userSelect:"none"}},ini)
+  );
+}
+
+// ── small components ──────────────────────────────────────────────────────────
+function Lbl({c}){return h("div",{style:{fontSize:"0.6rem",letterSpacing:"2px",opacity:0.4,textTransform:"uppercase",marginBottom:8,fontFamily:"Inter,sans-serif"}},c);}
+
+function StatBox({label,value,sub}){
+  return h("div",{style:{background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"12px 8px",flex:"1 1 0",minWidth:0,textAlign:"center"}},
+    h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.5rem",fontWeight:800,color:"#fff",lineHeight:1}},value??"-"),
+    h("div",{style:{fontSize:"0.55rem",opacity:0.5,marginTop:4,letterSpacing:"1px",textTransform:"uppercase",fontFamily:"Inter,sans-serif"}},label),
+    sub&&h("div",{style:{fontSize:"0.6rem",opacity:0.7,marginTop:2,color:"#a3e635"}},sub)
+  );
+}
+
+function ResultPill({r}){
+  const c=RC[r.result]||"#888",l=RL[r.result]||r.result;
+  return h("div",{style:{display:"flex",alignItems:"center",gap:10,background:"rgba(255,255,255,0.04)",borderRadius:10,padding:"9px 12px",borderLeft:"3px solid "+c}},
+    h("div",{style:{fontSize:"0.58rem",fontWeight:700,color:c,fontFamily:"Inter,sans-serif",minWidth:28}},l),
+    h("div",{style:{flex:1,fontSize:"0.78rem",color:"#e2e8f0",fontFamily:"Inter,sans-serif"}},r.opponent),
+    h("div",{style:{fontSize:"0.78rem",fontWeight:600,color:"#fff",fontFamily:"'Barlow Condensed',sans-serif"}},r.score),
+    h("div",{style:{fontSize:"0.58rem",opacity:0.4,minWidth:36,textAlign:"right",fontFamily:"Inter,sans-serif"}},r.date)
+  );
+}
+
+function NewsItem({n,color}){
+  return h("div",{style:{display:"flex",alignItems:"flex-start",gap:8,padding:"8px 0",borderBottom:"1px solid rgba(255,255,255,0.06)"}},
+    n.hot&&h("span",{style:{background:color,color:"#fff",fontSize:"0.5rem",fontWeight:700,padding:"2px 5px",borderRadius:4,flexShrink:0,marginTop:2,fontFamily:"Inter,sans-serif"}},"HOT"),
+    h("div",{style:{flex:1}},
+      h("div",{style:{fontSize:"0.78rem",color:"#e2e8f0",lineHeight:1.4,fontFamily:"Inter,sans-serif"}},n.title),
+      h("div",{style:{fontSize:"0.58rem",opacity:0.4,marginTop:2,fontFamily:"Inter,sans-serif"}},n.time)
+    )
+  );
+}
+
+function StandingDisplay({team}){
+  const s=team.standing;
+  if(s.careerHigh!=null)return h("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+    h(StatBox,{label:"Ranking",value:s.rank?"#"+s.rank:"–"}),
+    h(StatBox,{label:"Points",value:s.points?s.points.toLocaleString():"–"}),
+    h(StatBox,{label:"Career High",value:"#"+(s.careerHigh||"?")}),
+    h(StatBox,{label:"Prize",value:s.prize||"–"})
+  );
+  if(s.note&&s.wins==null)return h("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+    h(StatBox,{label:"Rank",value:s.rank?"#"+s.rank:"–",sub:s.note}),
+    h(StatBox,{label:"Points",value:s.points?s.points.toLocaleString():"–"})
+  );
+  return h("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+    h(StatBox,{label:"Position",value:s.rank?"#"+s.rank:"–",sub:team.league}),
+    h(StatBox,{label:"Points",value:s.points??"-"}),
+    h(StatBox,{label:"Wins",value:s.wins??"-"}),
+    h(StatBox,{label:"Record",value:s.wins!=null?s.wins+"W\xB7"+(s.draws||0)+"D\xB7"+(s.losses||0)+"L":"–"})
+  );
+}
+
+function NextGame({team}){
+  const g=team.nextGame;if(!g)return null;
+  const s=team.sport;
+  const n=team.name;
+  const slug=n.toLowerCase().replace(/\s+/g,"-").replace(/[^a-z0-9-]/g,"");
+  const offKeywords=["season complete","off-season","off season","pre-season","training camp","offseason","season ended","eliminated"];
+  const isOff=offKeywords.some(k=>g.opponent.toLowerCase().includes(k)||g.date.toLowerCase().includes(k));
+
+  function getLiveUrl(){
+    if(s==="Cycling") return "https://www.procyclingstats.com/rider/"+slug;
+    if(s==="Tennis") return "https://www.atptour.com/en/players/-/"+slug+"/overview";
+    if(s==="Golf"){const id=FS_IDS[n];return id?"https://www.flashscore.com/player/"+id+"/":"https://www.pgatour.com/leaderboard";}
+    if(s==="Formula 1") return "https://www.formula1.com/en/racing/2026";
+    if(s==="Basketball") return "https://www.nba.com/scores";
+    if(s==="Ice Hockey") return "https://www.nhl.com/scores";
+    if(s==="Baseball") return "https://www.mlb.com/scores";
+    if(s==="Rugby") return "https://www.espn.com/rugby";
+    if(s==="Am. Football") return "https://www.nfl.com/scores";
+    const id=FS_IDS[n];
+    return id?"https://www.flashscore.com/team/"+id+"/":"https://www.flashscore.com/search/?q="+encodeURIComponent(n);
+  }
+  function getLiveLabel(){
+    if(s==="Cycling") return "ProCyclingStats ↗";
+    if(s==="Tennis") return "ATP Tour ↗";
+    if(s==="Golf") return "Live scores ↗";
+    if(s==="Formula 1") return "F1.com ↗";
+    if(s==="Basketball") return "NBA ↗";
+    if(s==="Ice Hockey") return "NHL ↗";
+    if(s==="Baseball") return "MLB ↗";
+    if(s==="Rugby") return "ESPN ↗";
+    if(s==="Am. Football") return "NFL ↗";
+    return FS_IDS[n]?"Flashscore ↗":"Search ↗";
+  }
+
+  if(isOff) return h("div",{style:{background:"rgba(255,255,255,0.03)",border:"1px solid rgba(255,255,255,0.08)",borderRadius:14,padding:14,display:"flex",alignItems:"center",justifyContent:"space-between"}},
+    h("div",null,
+      h("div",{style:{fontSize:"0.55rem",letterSpacing:"2px",opacity:0.4,fontFamily:"Inter,sans-serif",textTransform:"uppercase",marginBottom:4}},"Off Season"),
+      h("div",{style:{fontSize:"0.88rem",fontWeight:600,color:"rgba(255,255,255,0.5)",fontFamily:"Barlow Condensed,sans-serif"}},"Season complete"),
+      h("div",{style:{fontSize:"0.65rem",color:"rgba(255,255,255,0.3)",marginTop:3,fontFamily:"Inter,sans-serif"}},g.date&&g.date!=="-"?g.date:"Check back next season")
+    ),
+    h("a",{href:getLiveUrl(),target:"_blank",rel:"noopener noreferrer",style:{fontSize:"0.62rem",color:"rgba(255,255,255,0.35)",fontFamily:"Inter,sans-serif",textDecoration:"none",border:"1px solid rgba(255,255,255,0.1)",borderRadius:5,padding:"3px 8px",whiteSpace:"nowrap"}},getLiveLabel())
+  );
+
+  return h("div",{style:{background:"linear-gradient(135deg,"+team.color+"22,"+team.accent+"33)",border:"1px solid "+team.color+"44",borderRadius:14,padding:14}},
+    h("div",{style:{fontSize:"0.55rem",letterSpacing:"2px",opacity:0.5,fontFamily:"Inter,sans-serif",textTransform:"uppercase",marginBottom:5}},"📅 Next Up"),
+    h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.05rem",fontWeight:700,color:"#fff",marginBottom:5}},team.shortName+" vs "+g.opponent),
+    h("div",{style:{display:"flex",gap:12,flexWrap:"wrap",marginBottom:10}},
+      h("span",{style:{fontSize:"0.7rem",color:"#94a3b8",fontFamily:"Inter,sans-serif"}},"🗓️ "+g.date),
+      h("span",{style:{fontSize:"0.7rem",color:"#94a3b8",fontFamily:"Inter,sans-serif"}},"🕐 "+g.time),
+      h("span",{style:{fontSize:"0.7rem",color:"#a3e635",fontFamily:"Inter,sans-serif",fontWeight:600}},"📺 "+g.tv)
+    ),
+    h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",borderTop:"1px solid rgba(255,255,255,0.08)",paddingTop:8}},
+      h("span",{style:{fontSize:"0.55rem",color:"rgba(255,255,255,0.2)",fontFamily:"Inter,sans-serif"}},"Data: May 2026"),
+      h("a",{href:getLiveUrl(),target:"_blank",rel:"noopener noreferrer",style:{fontSize:"0.65rem",fontWeight:600,color:"#a3e635",fontFamily:"Inter,sans-serif",textDecoration:"none",background:"rgba(163,230,53,0.1)",border:"1px solid rgba(163,230,53,0.25)",borderRadius:5,padding:"3px 9px"}},getLiveLabel())
+    )
+  );
+}
+
+function AddModal({onClose,onAdd}){
+  const [step,setStep]=useState("sport");
+  const [sel,setSel]=useState(null);
+  const [q,setQ]=useState("");
+  const [preview,setPreview]=useState(null);
+  const ref=useRef();
+  useEffect(()=>{if(step==="search")setTimeout(()=>ref.current&&ref.current.focus(),100);},[step]);
+
+  function go(name){
+    const n=(name||q).trim();if(!n||!sel)return;
+    const found=lookup(n,sel.label);
+    setPreview({...found,id:n.toLowerCase().replace(/\s+/g,"-")+"-"+Date.now()});
+    setStep("preview");
+  }
+
+  return h("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"},onClick:e=>e.target===e.currentTarget&&onClose()},
+    h("div",{style:{background:"#141824",borderRadius:"24px 24px 0 0",width:"100%",maxWidth:560,padding:"20px 18px 40px",maxHeight:"86vh",overflowY:"auto"}},
+      h("div",{style:{width:40,height:4,background:"rgba(255,255,255,0.15)",borderRadius:2,margin:"0 auto 16px"}}),
+
+      step==="sport"&&h("div",null,
+        h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.3rem",fontWeight:800,color:"#fff",marginBottom:14}},"Add a Favourite"),
+        h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}},
+          SPORTS.map(s=>h("button",{key:s.label,onClick:()=>setSel(s),style:{background:sel&&sel.label===s.label?"rgba(163,230,53,0.12)":"rgba(255,255,255,0.04)",border:sel&&sel.label===s.label?"2px solid #a3e635":"2px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"10px 6px",cursor:"pointer",color:"#fff",textAlign:"center"}},
+            h("div",{style:{fontSize:"1.4rem",marginBottom:3}},s.emoji),
+            h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"0.78rem",fontWeight:700,lineHeight:1.2}},s.label)
+          ))
+        ),
+        h("button",{disabled:!sel,onClick:()=>setStep("search"),style:{width:"100%",background:sel?"#a3e635":"rgba(255,255,255,0.07)",color:sel?"#0f1117":"#555",border:"none",borderRadius:12,padding:13,fontWeight:700,fontSize:"0.88rem",cursor:sel?"pointer":"default",fontFamily:"Inter,sans-serif"}},"Continue →")
+      ),
+
+      step==="search"&&h("div",null,
+        h("button",{onClick:()=>{setStep("sport");setQ("");},style:{background:"none",border:"none",color:"#a3e635",fontSize:"0.76rem",cursor:"pointer",marginBottom:10,padding:0,fontFamily:"Inter,sans-serif"}},"← Back"),
+        h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.2rem",fontWeight:800,color:"#fff",marginBottom:10}},sel&&sel.emoji+" "+sel.label),
+        h("div",{style:{display:"flex",gap:8,marginBottom:14}},
+          h("input",{ref,value:q,onChange:e=>setQ(e.target.value),onKeyDown:e=>e.key==="Enter"&&go(),placeholder:sel&&"e.g. "+sel.ex,style:{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"12px 14px",color:"#fff",fontSize:"0.9rem",fontFamily:"Inter,sans-serif",outline:"none"}}),
+          h("button",{onClick:()=>go(),disabled:!q.trim(),style:{background:q.trim()?"#a3e635":"rgba(255,255,255,0.07)",color:q.trim()?"#0f1117":"#555",border:"none",borderRadius:10,padding:"0 16px",fontWeight:700,cursor:q.trim()?"pointer":"default",fontFamily:"Inter,sans-serif",flexShrink:0}},"Go")
+        ),
+        h("div",{style:{fontSize:"0.58rem",opacity:0.35,letterSpacing:"1px",textTransform:"uppercase",marginBottom:8,fontFamily:"Inter,sans-serif"}},"Popular"),
+        h("div",{style:{display:"flex",flexWrap:"wrap",gap:7}},
+          (sel&&HINTS[sel.label]||[]).map(hn=>{
+            const inDB=Object.keys(DB).some(k=>DB[k].name===hn||DB[k].shortName===hn);
+            const dbEntry=DB[Object.keys(DB).find(k=>DB[k].name===hn||DB[k].shortName===hn)];
+            return h("button",{key:hn,onClick:()=>go(hn),style:{background:inDB?"rgba(163,230,53,0.08)":"rgba(255,255,255,0.05)",border:inDB?"1px solid rgba(163,230,53,0.3)":"1px solid rgba(255,255,255,0.1)",borderRadius:20,padding:"5px 12px",color:inDB?"#a3e635":"#cbd5e1",fontSize:"0.74rem",cursor:"pointer",fontFamily:"Inter,sans-serif",display:"flex",alignItems:"center",gap:6}},
+              dbEntry&&h(TeamLogo,{name:hn,size:20,color:dbEntry.color,accent:dbEntry.accent}),
+              hn
+            );
+          })
+        )
+      ),
+
+      step==="preview"&&preview&&h("div",null,
+        h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.2rem",fontWeight:800,color:"#fff",marginBottom:12}},preview._unknown?"New entry":"Found it! ✓"),
+        preview._unknown&&h("div",{style:{background:"rgba(250,204,21,0.1)",border:"1px solid rgba(250,204,21,0.3)",borderRadius:10,padding:"9px 12px",marginBottom:12,fontSize:"0.74rem",color:"#fde68a",fontFamily:"Inter,sans-serif"}},"⚠️ Not in database yet – added as placeholder."),
+        h("div",{style:{background:"linear-gradient(135deg,"+preview.color+"33,"+preview.accent+"55)",border:"1px solid "+preview.color+"55",borderRadius:14,padding:16,marginBottom:14,display:"flex",alignItems:"center",gap:14}},
+          h(TeamLogo,{name:preview.name,size:52,color:preview.color,accent:preview.accent}),
+          h("div",null,
+            h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.3rem",fontWeight:700,color:"#fff"}},preview.name),
+            h("div",{style:{fontSize:"0.68rem",opacity:0.5,marginTop:2,fontFamily:"Inter,sans-serif"}},preview.sport+" \xB7 "+preview.league+" \xB7 "+preview.country)
+          )
+        ),
+        h("div",{style:{display:"flex",gap:10}},
+          h("button",{onClick:()=>{setStep("search");setPreview(null);},style:{flex:1,background:"rgba(255,255,255,0.07)",border:"none",borderRadius:12,padding:12,color:"#fff",fontSize:"0.82rem",cursor:"pointer",fontFamily:"Inter,sans-serif"}},"Try again"),
+          h("button",{onClick:()=>onAdd(preview),style:{flex:2,background:"#a3e635",border:"none",borderRadius:12,padding:12,color:"#0f1117",fontWeight:700,fontSize:"0.86rem",cursor:"pointer",fontFamily:"Inter,sans-serif"}},"Add to My Hub ✓")
+        )
+      )
+    )
+  );
+}
+
+function RemoveConfirm({teamName,onCancel,onConfirm}){
+  return h("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.72)",zIndex:200,display:"flex",alignItems:"center",justifyContent:"center",padding:20}},
+    h("div",{style:{background:"#1a1f30",borderRadius:18,padding:22,maxWidth:290,width:"100%",textAlign:"center"}},
+      h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.1rem",color:"#fff",marginBottom:6}},"Remove "+teamName+"?"),
+      h("div",{style:{fontSize:"0.72rem",opacity:0.45,marginBottom:18,fontFamily:"Inter,sans-serif"}},"You can always add it back later."),
+      h("div",{style:{display:"flex",gap:10}},
+        h("button",{onClick:onCancel,style:{flex:1,background:"rgba(255,255,255,0.08)",border:"none",borderRadius:10,padding:11,color:"#fff",cursor:"pointer",fontFamily:"Inter,sans-serif"}},"Cancel"),
+        h("button",{onClick:onConfirm,style:{flex:1,background:"#ef4444",border:"none",borderRadius:10,padding:11,color:"#fff",fontWeight:700,cursor:"pointer",fontFamily:"Inter,sans-serif"}},"Remove")
+      )
+    )
+  );
+}
+
+function FavBar({teams,selected,onSelect,onAdd}){
+  return h("div",{style:{display:"flex",flexWrap:"wrap",gap:8,paddingBottom:2}},
+    teams.map(t=>{
+      const on=selected===t.id;
+      return h("button",{key:t.id,onClick:()=>onSelect(t.id),style:{display:"flex",alignItems:"center",gap:7,background:on?"linear-gradient(135deg,"+t.color+","+t.accent+")":"rgba(255,255,255,0.05)",border:on?"2px solid "+t.color:"2px solid rgba(255,255,255,0.1)",borderRadius:40,padding:"6px 14px 6px 8px",cursor:"pointer",color:"#fff",transition:"all 0.2s",whiteSpace:"nowrap"}},
+        h(TeamLogo,{name:t.name,size:26,color:t.color,accent:t.accent}),
+        h("span",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"0.9rem",fontWeight:700}},t.shortName)
+      );
+    }),
+    h("button",{onClick:onAdd,style:{display:"flex",alignItems:"center",gap:5,background:"rgba(163,230,53,0.09)",border:"2px dashed rgba(163,230,53,0.35)",borderRadius:40,padding:"6px 14px",cursor:"pointer",color:"#a3e635",fontFamily:"Inter,sans-serif",fontWeight:600,fontSize:"0.78rem",whiteSpace:"nowrap"}},
+      h("span",{style:{fontSize:"1rem",lineHeight:1}},"＋"),
+      " Add"
+    )
+  );
+}
+
+// ── Persistence (module-level) ─────────────────────────────────────────────────
+function dbGet(key,id){const e=DB[key];if(!e)return null;return {...e,id};}
+const INIT=[
+  dbGet("gog","s-gog"),
+  dbGet("barcelona","s-barca"),
+  dbGet("holger rune","s-rune"),
+  dbGet("arsenal","s-arsenal"),
+  dbGet("brentford","s-brentford"),
+  dbGet("vingegaard","s-ving"),
+].filter(Boolean);
+
+function App(){
+  const [teams,setTeams]=useState(loadTeams);
+  const [selected,setSelected]=useState(loadSel);
+  const [showModal,setShowModal]=useState(false);
+  const [removing,setRemoving]=useState(null);
+  const [ready,setReady]=useState(false);
+  const team=teams.find(t=>t.id===selected)||teams[0];
+  useEffect(()=>{const t=setTimeout(()=>setReady(true),600);return()=>clearTimeout(t);},[]);
+
+  function handleSelect(id){setSelected(id);persist(teams,id);}
+
+  function handleShare(){
+    const g=team.nextGame;
+    const offKeywords=["season complete","off-season","pre-season","eliminated","offseason"];
+    const isOff=g&&offKeywords.some(k=>g.opponent.toLowerCase().includes(k));
+    const nextLine=g&&!isOff
+      ? "📅 Next: "+team.shortName+" vs "+g.opponent+" — "+g.date+" "+g.time+" ("+g.tv+")"
+      : "🏆 Season complete — "+team.league;
+    const recent=team.recentResults&&team.recentResults.length>0
+      ?team.recentResults.slice(0,3).map(r=>(r.result==="W"?"✅":r.result==="L"?"❌":"➖")+" "+r.opponent+" "+r.score).join("\n"):"";
+    const text=
+      team.emoji+" "+team.name+" — "+team.league+"\n"+
+      (team.standing.rank?"#"+team.standing.rank+(team.standing.points?" • "+team.standing.points+"pts":"")+"\n":"")+
+      nextLine+"\n\n"+
+      (recent?"Recent:\n"+recent+"\n\n":"")+
+      "📲 My Sports Hub";
+    if(navigator.share){
+      navigator.share({title:team.name,text}).catch(()=>{});
+    }else{
+      try{navigator.clipboard.writeText(text).then(()=>alert("Copied!"));}
+      catch(e){alert(text);}
+    }
+  }
+  function handleAdd(nt){
+    if(teams.find(x=>x.name===nt.name))return setShowModal(false);
+    const updated=[...teams,nt];
+    setTeams(updated);setSelected(nt.id);setShowModal(false);
+    persist(updated,nt.id);
+  }
+  function handleRemove(id){
+    const updated=teams.filter(t=>t.id!==id);
+    const newSel=updated.find(t=>t.id!==id)?.id||updated[0]?.id||"s-gog";
+    setTeams(updated);setSelected(newSel);setRemoving(null);
+    persist(updated,newSel);
+  }
+
+  if(!ready) return h("div",{style:{minHeight:"100vh",background:"#0b0f1a",padding:14}},
+    h("div",{style:{background:"#0f1420",borderBottom:"1px solid rgba(255,255,255,0.06)",padding:"14px 14px 12px",marginBottom:14}},
+      h("div",{className:"skeleton sk-pill",style:{width:140,marginBottom:10}}),
+      h("div",{style:{display:"flex",gap:8}},
+        h("div",{className:"skeleton sk-pill",style:{width:80}}),
+        h("div",{className:"skeleton sk-pill",style:{width:80}}),
+        h("div",{className:"skeleton sk-pill",style:{width:80}})
+      )
+    ),
+    h("div",{style:{maxWidth:640,margin:"0 auto"}},
+      h("div",{className:"skeleton sk-card",style:{marginBottom:12}}),
+      h("div",{style:{display:"flex",gap:8,marginBottom:12}},
+        h("div",{className:"skeleton sk-stat"}),h("div",{className:"skeleton sk-stat"}),h("div",{className:"skeleton sk-stat"}),h("div",{className:"skeleton sk-stat"})
+      ),
+      h("div",{className:"skeleton sk-next"}),
+      h("div",{className:"skeleton sk-result"}),
+      h("div",{className:"skeleton sk-result"})
+    )
+  );
+
+  return h("div",{style:{minHeight:"100vh",background:"#0b0f1a",color:"#f1f5f9",fontFamily:"Inter,sans-serif"}},
+    h("div",{style:{background:"linear-gradient(180deg,#0f1420,#0b0f1a)",borderBottom:"1px solid rgba(255,255,255,0.06)",padding:"14px 14px 12px",position:"sticky",top:0,zIndex:10}},
+      h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.25rem",fontWeight:900,letterSpacing:"2px",color:"#fff",marginBottom:10}},
+        "MY SPORTS HUB",
+        h("span",{style:{fontSize:"0.5rem",marginLeft:8,opacity:0.3,letterSpacing:"3px",fontFamily:"Inter,sans-serif",fontWeight:400}},"FAN DASHBOARD")
+      ),
+      h(FavBar,{teams,selected,onSelect:handleSelect,onAdd:()=>setShowModal(true)})
+    ),
+    h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
+      h("div",{style:{background:"linear-gradient(135deg,"+team.color+"33,"+team.accent+"55)",borderRadius:16,padding:"14px 16px",marginBottom:12,border:"1px solid "+team.color+"44",display:"flex",alignItems:"center",gap:14}},
+        h(TeamLogo,{name:team.name,size:60,color:team.color,accent:team.accent}),
+        h("div",{style:{flex:1,minWidth:0}},
+          h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.4rem",fontWeight:900,lineHeight:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},team.name),
+          h("div",{style:{fontSize:"0.68rem",opacity:0.5,marginTop:3}},team.sport+" \xB7 "+team.league+" \xB7 "+team.country)
+        ),
+        h("div",{style:{display:"flex",gap:6}},
+        h("button",{onClick:handleShare,style:{background:"rgba(163,230,53,0.1)",border:"1px solid rgba(163,230,53,0.25)",borderRadius:8,padding:"5px 10px",color:"#a3e635",cursor:"pointer",fontSize:"0.65rem",fontFamily:"Inter,sans-serif"}},
+          "📤 Share"
+        ),
+        teams.length>1&&h("button",{onClick:()=>setRemoving(team.id),style:{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"5px 12px",color:"#f87171",cursor:"pointer",fontSize:"0.68rem",fontWeight:500,fontFamily:"Inter,sans-serif"}},"✕ Remove")
+      )
+      ),
+      h("div",{style:{marginBottom:12}},h(Lbl,{c:"📊 Ranking / Standing"}),h(StandingDisplay,{team})),
+      team.nextGame&&h("div",{style:{marginBottom:12}},h(Lbl,{c:"📺 Next On TV"}),h(NextGame,{team})),
+      team.recentResults&&team.recentResults.length>0&&h("div",{style:{marginBottom:12}},
+        h(Lbl,{c:"🏆 Recent Results"}),
+        h("div",{style:{display:"flex",flexDirection:"column",gap:6}},team.recentResults.map((r,i)=>h(ResultPill,{key:i,r})))
+      ),
+      team.news&&team.news.length>0&&h("div",{style:{marginBottom:12}},
+        h(Lbl,{c:"📰 Latest News"}),
+        h("div",{style:{background:"rgba(255,255,255,0.03)",borderRadius:12,padding:"4px 12px"}},
+          team.news.map((n,i)=>h(NewsItem,{key:i,n,color:team.color}))
+        )
+      ),
+      h("div",{style:{height:30}})
+    ),
+    showModal&&h(AddModal,{onClose:()=>setShowModal(false),onAdd:handleAdd}),
+    removing&&h(RemoveConfirm,{teamName:teams.find(t=>t.id===removing)&&teams.find(t=>t.id===removing).name,onCancel:()=>setRemoving(null),onConfirm:()=>handleRemove(removing)})
+  );
+}
+
+if(!window._reactRoot){window._reactRoot=ReactDOM.createRoot(document.getElementById('app-root'));}
+window._reactRoot.render(h(App));
+})();
+
+}
+</script>
+<div id="install-banner">
+  <div class="ib-icon">&#128241;</div>
+  <div class="ib-text">
+    <div class="ib-title">Add to Home Screen</div>
+    <div class="ib-sub">Install My Sports Hub for instant access &mdash; works like a native app</div>
+    <div class="ib-steps">
+      <span class="ib-step">1. Tap <b>&#9075;</b> Share</span>
+      <span class="ib-step">&rarr; 2. <b>Add to Home Screen</b></span>
+      <span class="ib-step">&rarr; 3. <b>Add</b></span>
+    </div>
+  </div>
+  <button class="ib-close" onclick="dismissBanner()" aria-label="Dismiss">&times;</button>
+</div>
+</body>
+</html>
