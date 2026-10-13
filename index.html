@@ -367,16 +367,18 @@ async function fetchJSON(url){
 // blocked, retry through public CORS proxies and remember which one worked for that host.
 // Only public sports-data URLs go through the proxy; no personal data is sent.
 const CORS_PROXIES=["https://corsproxy.io/?url=","https://api.allorigins.win/raw?url="];
-const _proxyFor={};
+const _proxyFor={},_blockedAt={};
 async function getJSON(url){
   const host=new URL(url).host;
   if(_proxyFor[host])return fetchJSON(_proxyFor[host]+encodeURIComponent(url));
+  if(_blockedAt[host]&&Date.now()-_blockedAt[host]<30*60*1000)throw new Error(host+" blocked");
   try{return await fetchJSON(url);}
   catch(e){
     if(e.message!=="blocked"&&e.message!=="timeout")throw new Error(host+" "+e.message);
     for(const p of CORS_PROXIES){
       try{const j=await fetchJSON(p+encodeURIComponent(url));_proxyFor[host]=p;return j;}catch(e2){}
     }
+    _blockedAt[host]=Date.now();
     throw new Error(host+" "+e.message+", proxies failed");
   }
 }
@@ -551,6 +553,19 @@ async function fetchTeamLive(team){
   if(src.p==="tsdb")return fetchTSDB(src);
   return null;
 }
+// ── end live data fetchers (scripts/update-live.mjs runs everything above in GitHub Actions)
+
+// Snapshot written every ~15 min by .github/workflows/update-live-data.yml; used when the
+// browser can't reach the APIs itself.
+const SNAPSHOT_URL="https://raw.githubusercontent.com/tinerc2-jpg/My-Sports-Hub/live-data/live.json";
+let _snap=null,_snapTs=0;
+async function getSnapshot(){
+  if(_snap&&Date.now()-_snapTs<5*60*1000)return _snap;
+  const j=await fetchJSON(SNAPSHOT_URL+"?t="+Math.floor(Date.now()/300000));
+  _snap=j.teams||{};_snapTs=Date.now();
+  return _snap;
+}
+
 function liveIsStale(e,selected){
   if(!e)return true;
   const now=Date.now();
@@ -564,7 +579,7 @@ function mergeLive(team,e){
   const d=e&&e.data;if(!d)return team;
   const out={...team,_live:d.source,liveGame:d.liveGame||null,_liveFields:{}};
   if(d.recentResults&&d.recentResults.length){out.recentResults=d.recentResults;out._liveFields.results=true;}
-  if(d.nextGame)out.nextGame=d.nextGame;
+  if(d.nextGame){const g={...d.nextGame};if(g.ts){const x=new Date(g.ts);g.date=fmtDay(x);g.time=fmtTime(x);}out.nextGame=g;}
   if(d.standing){out._liveFields.standing=true;const s={...team.standing};Object.keys(d.standing).forEach(k=>{if(d.standing[k]!=null)s[k]=d.standing[k];});out.standing=s;}
   return out;
 }
@@ -962,7 +977,10 @@ function App(){
       const data=await fetchTeamLive(t);
       saveLive(t.name,{ts:Date.now(),data});
     }catch(e){
-      saveLive(t.name,{...(cur||{}),errTs:Date.now(),err:String(e&&e.message||e)});
+      const snap=await getSnapshot().catch(()=>null),s=snap&&snap[t.name];
+      if(s&&s.data&&(!cur||!cur.data||!cur.ts||s.ts>=cur.ts))
+        saveLive(t.name,{ts:s.ts,data:{...s.data,source:s.data.source+" via GitHub"}});
+      else saveLive(t.name,{...(cur||{}),errTs:Date.now(),err:String(e&&e.message||e)});
     }finally{
       delete _inflight[t.name];setBusy(b=>({...b,[t.name]:false}));
     }
