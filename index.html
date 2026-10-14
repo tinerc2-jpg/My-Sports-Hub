@@ -944,7 +944,7 @@ const HINTS={
   Handball:["GOG","Aalborg","THW Kiel"],
   Tennis:["Holger Rune","Djokovic","Alcaraz","Sinner"],
   Basketball:["Lakers","Celtics"],
-  Golf:["McIlroy"],
+  Golf:["Nicolai Højgaard","Rasmus Højgaard","Thorbjørn Olesen","Nicklas Nørgaard","Lucas Bjerregaard","Emily Pedersen","McIlroy","Scheffler"],
   Cycling:["Vingegaard"],
   "Formula 1":["Verstappen"],
   "Ice Hockey":["Maple Leafs","Rangers"],
@@ -955,8 +955,10 @@ const HINTS={
 };
 
 function lookup(name,sport){
-  const q=name.trim().toLowerCase();
-  const k=Object.keys(DB).find(k=>k===q||q.includes(k)||k.includes(q));
+  // Compare folded names so "Nicolai Højgaard" finds "nicolai hojgaard" (ø/æ/å, accents, case)
+  const q=norm(name);
+  const k=q&&(Object.keys(DB).find(k=>norm(k)===q||norm(DB[k].name)===q)
+    ||Object.keys(DB).find(k=>{const nk=norm(k);return nk.length>=3&&(q.includes(nk)||nk.includes(q));}));
   if(k)return{...DB[k]};
   const pal=tColor(name);
   return{name:name.trim().split(" ").map(w=>w[0].toUpperCase()+w.slice(1)).join(" "),shortName:name.trim().split(" ").slice(-1)[0].slice(0,10),sport,league:sport+" League",country:"🏳️",color:pal.color,accent:pal.accent,emoji:sEmoji(sport),standing:{rank:null,points:null,wins:null,draws:null,losses:null},recentResults:[],nextGame:{opponent:"Check official site",date:"TBD",time:"–",tv:"–"},news:[{title:"Added as custom favourite",time:"now",hot:false}],_unknown:true};
@@ -1156,8 +1158,8 @@ function AddModal({onClose,onAdd}){
         h("div",{style:{fontSize:"0.58rem",opacity:0.7,letterSpacing:"1px",textTransform:"uppercase",marginBottom:8,fontFamily:"Inter,sans-serif"}},"Popular"),
         h("div",{style:{display:"flex",flexWrap:"wrap",gap:7}},
           (sel&&HINTS[sel.label]||[]).map(hn=>{
-            const inDB=Object.keys(DB).some(k=>DB[k].name===hn||DB[k].shortName===hn);
-            const dbEntry=DB[Object.keys(DB).find(k=>DB[k].name===hn||DB[k].shortName===hn)];
+            const hk=Object.keys(DB).find(k=>norm(k)===norm(hn)||norm(DB[k].name)===norm(hn)||norm(DB[k].shortName)===norm(hn));
+            const inDB=!!hk,dbEntry=hk&&DB[hk];
             return h("button",{key:hn,onClick:()=>go(hn),style:{background:inDB?"rgba(232,64,154,0.08)":"rgba(255,255,255,0.08)",border:inDB?"1px solid rgba(232,64,154,0.3)":"1px solid rgba(255,255,255,0.1)",borderRadius:20,padding:"5px 12px",color:inDB?"#ff9fd0":"#eef2f8",fontSize:"0.74rem",cursor:"pointer",fontFamily:"Inter,sans-serif",display:"flex",alignItems:"center",gap:6}},
               dbEntry&&h(TeamLogo,{name:hn,size:20,color:dbEntry.color,accent:dbEntry.accent}),
               hn
