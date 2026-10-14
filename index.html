@@ -252,7 +252,7 @@ function dismissBanner(){
   var deferredPrompt=null;
   window.addEventListener('beforeinstallprompt',function(e){
     e.preventDefault();
-    deferredPrompt=e;
+    deferredPrompt=e;window._deferredPrompt=e; // triggerInstall() reads the global
     // Show banner with "Install" button
     var banner=document.getElementById('install-banner');
     var sub=banner.querySelector('.ib-sub');
@@ -1526,6 +1526,14 @@ window._reactRoot.render(h(App));
 })();
 
 }
+// Opened from the home-screen icon (or a link with ?app): go straight into the dashboard, no landing page.
+(function(){
+  var standalone=window.navigator.standalone===true||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);
+  if(standalone||/[?&]app\b/.test(location.search)||location.hash==='#app'){
+    if(standalone){var b=document.getElementById('back-btn');if(b)b.style.display='none';}
+    showApp();
+  }
+})();
 </script>
 <div id="install-banner">
   <div class="ib-icon">&#128241;</div>
