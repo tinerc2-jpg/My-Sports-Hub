@@ -720,7 +720,7 @@ async function fetchTennis(team,src){
 }
 
 // ── Golf (ESPN): this week's tournament on the player's tour(s) ──
-const GOLF_TOURS={"PGA Tour":["pga"],"DP World Tour":["eur"],"PGA Tour / DP World Tour":["pga","eur"],"LET / LPGA Tour":["lpga"]};
+const GOLF_TOURS={"PGA Tour":["pga"],"DP World Tour":["eur"],"PGA Tour / DP World Tour":["pga","eur"],"LET / LPGA Tour":["lpga"],"LPGA Tour":["lpga"]};
 const toPar=s=>{s=String(s==null?"":s).trim();if(/^e(ven)?$/i.test(s))return 0;const n=parseInt(s.replace("+",""),10);return isNaN(n)?null:n;};
 // Finishing position on a leaderboard: ESPN's own position if given, else from the order/to-par.
 function golfPlacing(cs,me){
@@ -939,12 +939,23 @@ add(["olesen","thorbjorn olesen"],{name:"Thorbjørn Olesen",shortName:"Olesen",s
 add(["emily pedersen","emily kristine pedersen"],{name:"Emily K. Pedersen",shortName:"E. Pedersen",sport:"Golf",league:"LET / LPGA Tour",country:"🇩🇰",color:"#8B1A4A",accent:"#C8A96E",emoji:"⛳",standing:{rank:30,points:0,careerHigh:5},recentResults:[{opponent:"Chevron Championship (Major)",score:"T24",result:"D",date:"Apr 2026"},{opponent:"LET event",score:"Top 20",result:"D",date:"May 2026"},{opponent:"Women British Open 2025",score:"T11",result:"D",date:"Aug 2025"}],nextGame:{opponent:"KPMG Women PGA Championship",date:"Jun 19-22",time:"TBD",tv:"Eurosport"},news:[{title:"Emily K. Pedersen at KPMG Women PGA Championship this week",time:"today",hot:true},{title:"Denmark best female golfer - 6 pro wins, LET Player of Year 2020",time:"1mo ago",hot:false},{title:"Targeting first Major win in 2026",time:"today",hot:false}]});
 add(["bjerregaard","lucas bjerregaard"],{name:"Lucas Bjerregaard",shortName:"Bjerregaard",sport:"Golf",league:"DP World Tour",country:"🇩🇰",color:"#1A3A5C",accent:"#C8A96E",emoji:"⛳",standing:{rank:517,points:0,careerHigh:42},recentResults:[{opponent:"DP World Tour event",score:"TBC",result:"D",date:"Jun 2026"},{opponent:"Asian Tour event",score:"TBC",result:"D",date:"2026"},{opponent:"Alfred Dunhill Links 2018",score:"Won",result:"W",date:"Oct 2018"}],nextGame:{opponent:"DP World Tour / Asian Tour event TBD",date:"Jun/Jul 2026",time:"TBD",tv:"Eurosport"},news:[{title:"Bjerregaard competing on DP World Tour - targeting comeback to top 100",time:"today",hot:false},{title:"Career high OWGR #42 in 2019 - won Alfred Dunhill Links at St Andrews",time:"1mo ago",hot:false},{title:"Attempting return to elite level after difficult years",time:"today",hot:false}]});
 add(["norgaard","nicklas norgaard"],{name:"Nicklas Nørgaard",shortName:"Nørgaard",sport:"Golf",league:"PGA Tour / DP World Tour",country:"🇩🇰",color:"#2C5F2E",accent:"#C8A96E",emoji:"⛳",standing:{rank:100,points:0,careerHigh:83},recentResults:[{opponent:"US Open Shinnecock Hills",score:"Playing this week",result:"D",date:"Jun 18-21"},{opponent:"Memorial Tournament",score:"T30",result:"D",date:"Jun 7"},{opponent:"Betfred British Masters 2024",score:"Won",result:"W",date:"May 2024"}],nextGame:{opponent:"US Open at Shinnecock Hills",date:"Jun 18-21",time:"TBD",tv:"Eurosport"},news:[{title:"Norgaard at US Open this week - Shinnecock Hills Jun 18-21",time:"today",hot:true},{title:"Holds PGA Tour dual membership - 11th Race to Dubai 2025",time:"today",hot:false},{title:"Won maiden DP World Tour title at Betfred British Masters 2024",time:"1mo ago",hot:false}]});
+add(["rasmus neergaard-petersen","neergaard-petersen","neergaard"],{name:"Rasmus Neergaard-Petersen",shortName:"Neergaard-P.",sport:"Golf",league:"DP World Tour",country:"🇩🇰",color:"#0B3D6E",accent:"#C8A96E",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
+add(["jacob skov olesen","skov olesen"],{name:"Jacob Skov Olesen",shortName:"Skov Olesen",sport:"Golf",league:"DP World Tour",country:"🇩🇰",color:"#123C69",accent:"#C8102E",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
+add(["joachim b. hansen","joachim hansen"],{name:"Joachim B. Hansen",shortName:"J. B. Hansen",sport:"Golf",league:"DP World Tour",country:"🇩🇰",color:"#1D3557",accent:"#C8A96E",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
+add(["marcus helligkilde","helligkilde"],{name:"Marcus Helligkilde",shortName:"Helligkilde",sport:"Golf",league:"DP World Tour",country:"🇩🇰",color:"#14406B",accent:"#E63946",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
+add(["nanna koerstz madsen","nanna madsen","koerstz madsen"],{name:"Nanna Koerstz Madsen",shortName:"N. K. Madsen",sport:"Golf",league:"LPGA Tour",country:"🇩🇰",color:"#7B1E57",accent:"#C8A96E",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
+add(["ludvig aberg","aberg","ludvig åberg","åberg"],{name:"Ludvig Åberg",shortName:"Åberg",sport:"Golf",league:"PGA Tour",country:"🇸🇪",color:"#005B99",accent:"#FECC02",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
+add(["alex noren","noren","alex norén","norén"],{name:"Alex Norén",shortName:"Norén",sport:"Golf",league:"PGA Tour / DP World Tour",country:"🇸🇪",color:"#004B87",accent:"#FECC02",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
+add(["vincent norrman","norrman"],{name:"Vincent Norrman",shortName:"Norrman",sport:"Golf",league:"PGA Tour / DP World Tour",country:"🇸🇪",color:"#0A4F8C",accent:"#FECC02",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
+add(["alexander bjork","alexander björk","bjork","björk"],{name:"Alexander Björk",shortName:"Björk",sport:"Golf",league:"DP World Tour",country:"🇸🇪",color:"#00539C",accent:"#FFCD00",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
+add(["sebastian soderberg","sebastian söderberg","soderberg","söderberg"],{name:"Sebastian Söderberg",shortName:"Söderberg",sport:"Golf",league:"DP World Tour",country:"🇸🇪",color:"#0D5C9E",accent:"#FFCD00",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
+add(["jesper svensson"],{name:"Jesper Svensson",shortName:"Svensson",sport:"Golf",league:"DP World Tour",country:"🇸🇪",color:"#08518F",accent:"#FFCD00",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
 const HINTS={
   Football:["Arsenal","Liverpool","Man City","Chelsea","Barcelona","Real Madrid","Atletico Madrid","Bayern Munich","PSG","Inter Milan"],
   Handball:["GOG","Aalborg","THW Kiel"],
   Tennis:["Holger Rune","Djokovic","Alcaraz","Sinner"],
   Basketball:["Lakers","Celtics"],
-  Golf:["Nicolai Højgaard","Rasmus Højgaard","Thorbjørn Olesen","Nicklas Nørgaard","Lucas Bjerregaard","Emily Pedersen","McIlroy","Scheffler"],
+  Golf:["Nicolai Højgaard","Rasmus Højgaard","Thorbjørn Olesen","Nicklas Nørgaard","Rasmus Neergaard-Petersen","Jacob Skov Olesen","Joachim B. Hansen","Marcus Helligkilde","Lucas Bjerregaard","Emily Pedersen","Nanna Koerstz Madsen","Ludvig Åberg","Alex Norén","Vincent Norrman","Alexander Björk","Sebastian Söderberg","Jesper Svensson","McIlroy","Scheffler"],
   Cycling:["Vingegaard"],
   "Formula 1":["Verstappen"],
   "Ice Hockey":["Maple Leafs","Rangers"],
@@ -1015,10 +1026,10 @@ function NewsItem({n,color}){
 
 function StandingDisplay({team}){
   const s=team.standing;
-  if(s.careerHigh!=null)return h("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
+  if(s.careerHigh!=null||team.sport==="Golf"||team.sport==="Tennis")return h("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
     h(StatBox,{label:"Ranking",value:s.rank?"#"+s.rank:"–"}),
     h(StatBox,{label:"Points",value:s.points?s.points.toLocaleString():"–"}),
-    h(StatBox,{label:"Career High",value:"#"+(s.careerHigh||"?")}),
+    h(StatBox,{label:"Career High",value:s.careerHigh?"#"+s.careerHigh:"–"}),
     h(StatBox,{label:"Prize",value:s.prize||"–"})
   );
   if(s.note&&s.wins==null)return h("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
