@@ -991,7 +991,11 @@ function refreshFromDB(teams){
     // Folded compare, so favourites saved as "Nicolai Hojgaard" still find "Nicolai Højgaard"
     const key=Object.keys(DB).find(k=>DB[k].name===t.name||DB[k].shortName===t.shortName)
       ||Object.keys(DB).find(k=>norm(DB[k].name)===norm(t.name));
-    if(!key)return t;
+    if(!key){
+      // whole-league clubs (Superliga …): take the robot's latest short name / colours, e.g. "FCK"
+      const x=EXTRA.find(e=>norm(e.name)===norm(t.name));
+      return x?{...t,shortName:x.shortName,color:x.color,accent:x.accent,league:x.league,country:x.country,sport:x.sport,emoji:x.emoji}:t;
+    }
     const f=DB[key];
     return {...t,name:f.name,shortName:f.shortName,sport:f.sport,league:f.league,
       country:f.country,color:f.color,accent:f.accent,emoji:f.emoji,
@@ -1054,7 +1058,7 @@ add(["alexander bjork","alexander björk","bjork","björk"],{name:"Alexander Bj�
 add(["sebastian soderberg","sebastian söderberg","soderberg","söderberg"],{name:"Sebastian Söderberg",shortName:"Söderberg",sport:"Golf",league:"DP World Tour",country:"🇸🇪",color:"#0D5C9E",accent:"#FFCD00",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
 add(["jesper svensson"],{name:"Jesper Svensson",shortName:"Svensson",sport:"Golf",league:"DP World Tour",country:"🇸🇪",color:"#08518F",accent:"#FFCD00",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
 const HINTS={
-  Football:["FC København","Brøndby IF","FC Midtjylland","AGF","Arsenal","Liverpool","Man City","Chelsea","Barcelona","Real Madrid","Atletico Madrid","Bayern Munich","PSG","Inter Milan"],
+  Football:["FCK","Brøndby IF","FC Midtjylland","AGF","Arsenal","Liverpool","Man City","Chelsea","Barcelona","Real Madrid","Atletico Madrid","Bayern Munich","PSG","Inter Milan"],
   Handball:["GOG","Aalborg","THW Kiel"],
   Tennis:["Holger Rune","Djokovic","Alcaraz","Sinner"],
   Basketball:["Lakers","Celtics"],
@@ -1520,7 +1524,7 @@ function RemoveConfirm({teamName,onCancel,onConfirm}){
 }
 
 // First visit: greeting, how it works, quick picks and "Add your first team".
-const QUICK_PICKS=["FC København","Brøndby IF","FC Midtjylland","AGF","GOG","Aalborg","Arsenal","Liverpool","Man City","Barcelona","Real Madrid","Inter Milan","Holger Rune","Jonas Vingegaard","Max Verstappen","Nicolai Højgaard"];
+const QUICK_PICKS=["FCK","Brøndby IF","FC Midtjylland","AGF","GOG","Aalborg","Arsenal","Liverpool","Man City","Barcelona","Real Madrid","Inter Milan","Holger Rune","Jonas Vingegaard","Max Verstappen","Nicolai Højgaard"];
 function Welcome({teams,onAdd,onPick,onDone}){
   const chosen=new Set(teams.map(t=>norm(t.name)));
   const picks=QUICK_PICKS.map(n=>{const e=lookup(n,"");return e&&!e._unknown?e:null;}).filter(Boolean);

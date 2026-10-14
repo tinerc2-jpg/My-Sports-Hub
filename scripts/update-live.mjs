@@ -583,7 +583,7 @@ const LEAGUE_TEAMS=[{sp:"soccer",lg:"den.1",league:"Superliga",country:"🇩🇰
   {sp:"soccer",lg:"eng.1",league:"Premier League",country:"🏴󠁧󠁢󠁥󠁮󠁧󠁿"},{sp:"soccer",lg:"ita.1",league:"Serie A",country:"🇮🇹"}];
 // ESPN gives many clubs black/white (or no) colours and some names in another form: club colours / names here.
 const CLUB_STYLE={
-  "F.C. København":{name:"FC København",color:"#1c3f94",accent:"#9fb8e8"},"Brøndby IF":{color:"#f2c500",accent:"#1d3c8f"},
+  "F.C. København":{name:"FC København",shortName:"FCK",color:"#1c3f94",accent:"#9fb8e8"},"Brøndby IF":{color:"#f2c500",accent:"#1d3c8f"},
   "FC Midtjylland":{color:"#c8102e",accent:"#111111"},"AGF":{color:"#1e5fa8",accent:"#9cc3ef"},"AC Horsens":{color:"#e8b400",accent:"#111111"},
   "Lyngby Boldklub":{color:"#004b9b",accent:"#7fb2ea"},"Odense Boldklub":{shortName:"OB",color:"#0055a5",accent:"#8ec0f0"},
   "Randers FC":{color:"#1f78c8",accent:"#81c0ff"},"Silkeborg IF":{color:"#d71920",accent:"#7a0f14"},"Sønderjyske Fodbold":{color:"#3a8fd6",accent:"#0d2f63"},
