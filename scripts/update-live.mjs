@@ -190,7 +190,26 @@ function cphDate(d,mo,y,hh,mm){
   let off=(+parts.hour*60+ +parts.minute)-(hh*60+mm);if(+parts.day!==d)off+=off<0?1440:-1440;
   return new Date(guess-off*60000);
 }
+// Diagnostic (temporary): what a match page looks like, to add handball match stats.
+let _hbMatchProbed=false;
+async function hbMatchProbe(){
+  if(_hbMatchProbed)return;_hbMatchProbed=true;
+  try{
+    const raw=await (await fetch(HB_PROGRAM)).text();
+    const j=raw.indexOf("Skive fH");
+    console.log("    HBM programme raw row: «"+raw.slice(Math.max(0,j-900),j+500).replace(/\s+/g," ")+"»");
+    const ids=[...new Set([...raw.matchAll(/\/match\/(\d+)/g)].map(m=>m[1]))];
+    console.log("    HBM match ids: "+ids.length+" e.g. "+ids.slice(0,5).join(","));
+    const u="https://tophaandbold.dk/match/"+(ids[0]||"8025"),r=await fetch(u),h=await r.text();
+    const txt=h.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/\s+/g," ");
+    const k=Math.max(0,txt.search(/Kampfakta|Statistik|Mål|Topscorer|Spiller/));
+    console.log(`    HBM ${u}: HTTP ${r.status}, ${h.length} bytes · text: «${txt.slice(k,k+1500)}»`);
+    const api=[...new Set([...h.matchAll(/["'](\/[^"']*(?:api|json|stat|match)[^"']*)["']/gi)].map(m=>m[1]))].slice(0,15);
+    console.log("    HBM urls in page: "+api.join(" "));
+  }catch(e){console.log("    HBM probe: "+e.message);}
+}
 async function hbProgramFor(team,tableNames){
+  await hbMatchProbe();
   const text=await hbProgramText();if(!text)return null;
   const names=[...new Set(tableNames)].sort((a,b)=>b.length-a.length);
   const al=api.teamAliases(team),isMe=n=>api.nameMatch(al,[n])===2;
