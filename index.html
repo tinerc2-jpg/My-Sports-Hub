@@ -729,10 +729,16 @@ function golfPlacing(cs,me){
   const flag=re=>re.test(stTxt.replace(/MADE[_ ]?CUT/gi,"")); // "STATUS_CUT" etc., but not "made cut"
   if(flag(/(^|[^A-Z])(CUT|MC)([^A-Z]|$)/i))return{pos:"MC",rank:999,sc};
   if(flag(/(^|[^A-Z])(WD|DQ)([^A-Z]|$)/i))return{pos:/DQ/i.test(stTxt)?"DQ":"WD",rank:999,sc};
+  // Missed cut also shows as fewer rounds played than the field (2 of 4).
+  const rounds=x=>(x.linescores||[]).filter(l=>l&&l.value!=null&&l.value!==""&&+l.value>0).length;
+  const maxR=Math.max(0,...cs.map(rounds));
+  const made=x=>maxR<3||rounds(x)>=maxR;
+  if(maxR>=3&&!made(me))return{pos:"MC",rank:999,sc};
   let pos=me.status&&me.status.position&&me.status.position.displayName;
   if(!pos&&p!=null){
-    const better=cs.filter(x=>{const q=toPar(espnScore(x.score));return q!=null&&q<p&&(x.order==null||me.order==null||x.order<me.order);}).length;
-    const tie=cs.filter(x=>toPar(espnScore(x.score))===p).length>1;pos=(tie?"T":"")+(better+1);
+    const field=cs.filter(made);
+    const better=field.filter(x=>{const q=toPar(espnScore(x.score));return q!=null&&q<p;}).length;
+    const tie=field.filter(x=>toPar(espnScore(x.score))===p).length>1;pos=(tie?"T":"")+(better+1);
   }
   return{pos:pos||null,rank:parseInt(String(pos||"").replace(/\D/g,""),10)||999,sc};
 }
@@ -792,6 +798,7 @@ async function fetchGolf(team,src){
       }
     }
   }
+  if(hit||found){const any=hit?hit.me:null;if(any)liveLog("golf competitor sample: "+JSON.stringify({status:any.status,order:any.order,rounds:(any.linescores||[]).length}).slice(0,160));}
   liveLog(`golf history: ${looked} past weeks checked, ${found} events played`+(results[0]?" · latest "+results.sort((a,b)=>b.ts-a.ts)[0].label+" "+results[0].opponent:""));
   if(results.length)out.recentResults=results.sort((a,b)=>b.ts-a.ts).slice(0,5);
   if(!out.nextGame)out.nextGame=cal?{opponent:"Next tour event"+(cal.label?": "+cal.label:""),date:fmtDay(new Date(cal.ts)),time:"–",tv:"–",ts:cal.ts}:NO_MATCH(null);
