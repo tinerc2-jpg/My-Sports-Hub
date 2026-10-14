@@ -297,26 +297,17 @@ async function hbProgramFor(team,tableNames){
       time:next.d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"}),tv:next.tv||"–",ts:next.d.getTime()}:null,
   };
 }
-// Diagnostic (temporary): eurohandball.com match page for GOG's EHF game (date, score, data endpoints).
+// Diagnostic (temporary): eurohandball.com JSON endpoints (live scores, match details).
 let _ehfProbed=false;
 async function ehfProbe(){
   if(_ehfProbed)return;_ehfProbed=true;
-  try{
-    const home=await (await fetch("https://www.eurohandball.com/")).text();
-    const links=[...new Set([...home.matchAll(/href="([^"]*\/matches\/[^"]*GOG[^"]*)"/gi)].map(m=>m[1]))];
-    console.log("    EHF2 GOG links: "+links.join(" "));
-    const i=home.search(/IFKKristianstad-GOG/);if(i>=0)console.log("    EHF2 calendar item: «"+home.slice(i-200,i+2200).replace(/<img[^>]*>/g,"").replace(/\s+/g," ")+"»");
-    for(const l of links.slice(0,1)){
-      const u=l.startsWith("http")?l:"https://www.eurohandball.com"+l,r=await fetch(u),t=await r.text();
-      const txt=t.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g," ").replace(/<[^>]+>/g," ").replace(/\s+/g," ");
-      const k=txt.indexOf("Kristianstad");
-      console.log(`    EHF2 page ${u}: HTTP ${r.status} · «${txt.slice(Math.max(0,k-300),k+900)}»`);
-      const apis=[...new Set([...t.matchAll(/["']((?:https?:)?\/\/[^"']*(?:api|livescore|match)[^"']*|\/umbraco\/[^"']*)["']/gi)].map(m=>m[1]))].slice(0,20);
-      console.log("    EHF2 urls: "+apis.join(" "));
-      const da=[...t.matchAll(/data-[a-z-]*(?:match|game|id|url|api)[a-z-]*="([^"]+)"/gi)].map(m=>m[0]).slice(0,15);
-      console.log("    EHF2 data attrs: "+da.join(" "));
-    }
-  }catch(e){console.log("    EHF2 probe: "+e.message);}
+  const E="https://www.eurohandball.com/umbraco/api/";
+  for(const u of [E+"livescoreapi/GetLiveScoreMatches/1069",E+"livescoreapi/GetTournaments/1069",E+"matchdetailapi/GetMatchDetails?matchId=202711020101047",E+"matchdetailapi/GetMatchDetails?id=202711020101047"]){
+    try{const r=await fetch(u,{headers:{Accept:"application/json"}}),t=await r.text();
+      const i=t.indexOf("GOG");
+      console.log(`    EHF3 ${u}: HTTP ${r.status}, ${t.length} bytes · head «${t.slice(0,700).replace(/\s+/g," ")}»`+(i>=0?` · GOG «${t.slice(Math.max(0,i-700),i+700).replace(/\s+/g," ")}»`:" · no GOG"));
+    }catch(e){console.log("    EHF3 "+u+": "+e.message);}
+  }
 }
 // Returns {standing, from} from the first page with a valid row, or null.
 async function tv2Standing(team){
