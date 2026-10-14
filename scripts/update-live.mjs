@@ -301,7 +301,7 @@ async function hbProgramFor(team,tableNames){
 let _ehfProbed=false;
 async function ehfProbe(){
   if(_ehfProbed)return;_ehfProbed=true;
-  const H={"Accept":"application/json","User-Agent":"Mozilla/5.0 (compatible; MySportsHub/1.0)"};
+  const H={"Accept":"application/json"}; // the global fetch wrapper sends our own User-Agent
   for(const u of ["https://api.sofascore.com/api/v1/search/all?q=GOG","https://www.sofascore.com/api/v1/search/all?q=GOG",
     "https://www.eurohandball.com/umbraco/api/search/search?query=GOG","https://www.eurohandball.com/en/ehf-champions-league/"]){
     try{const r=await fetch(u,{headers:H}),t=await r.text();
