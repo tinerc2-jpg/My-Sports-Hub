@@ -1001,8 +1001,9 @@ function refreshFromDB(teams){
 function loadTeams(){
   if(_cachedTeams&&_cachedTeams.length>0)return refreshFromDB(_cachedTeams);
   try{const s=localStorage.getItem("msh-teams");
-    if(s){const t=JSON.parse(s);if(t&&t.length>0){_cachedTeams=t;return refreshFromDB(t);}}}catch(e){}
-  return INIT;
+    if(s){const t=JSON.parse(s);if(Array.isArray(t)){_cachedTeams=t;return refreshFromDB(t);}}}catch(e){}
+  // First visit: no favourites; the welcome screen helps pick some.
+  return [];
 }
 function loadSel(){
   if(_cachedSel)return _cachedSel;
@@ -1518,6 +1519,33 @@ function RemoveConfirm({teamName,onCancel,onConfirm}){
   );
 }
 
+// First visit: greeting, how it works, quick picks and "Add your first team".
+const QUICK_PICKS=["FC København","Brøndby IF","FC Midtjylland","AGF","GOG","Aalborg","Arsenal","Liverpool","Man City","Barcelona","Real Madrid","Inter Milan","Holger Rune","Jonas Vingegaard","Max Verstappen","Nicolai Højgaard"];
+function Welcome({teams,onAdd,onPick,onDone}){
+  const chosen=new Set(teams.map(t=>norm(t.name)));
+  const picks=QUICK_PICKS.map(n=>{const e=lookup(n,"");return e&&!e._unknown?e:null;}).filter(Boolean);
+  const step=(n,t)=>h("div",{style:{display:"flex",gap:10,alignItems:"flex-start",fontSize:"0.86rem",color:"#eef2f8",marginBottom:8}},
+    h("span",{style:{flexShrink:0,width:24,height:24,borderRadius:"50%",background:"#e8409a",color:"#fff",display:"flex",alignItems:"center",justifyContent:"center",fontWeight:800,fontSize:"0.78rem"}},n),h("span",null,t));
+  return h("div",{style:{padding:"18px 14px",maxWidth:640,margin:"0 auto"}},
+    h("div",{style:{background:"linear-gradient(135deg,#e8409a33,#1d3360)",border:"1px solid rgba(232,64,154,0.35)",borderRadius:20,padding:"22px 18px",marginBottom:16}},
+      h("div",{style:{fontSize:"2rem",marginBottom:6}},"👋"),
+      h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.8rem",fontWeight:900,color:"#fff",lineHeight:1.05,marginBottom:8}},"Welcome to My Sports Hub"),
+      h("div",{style:{fontSize:"0.9rem",color:"#d5deee",marginBottom:16}},"All your teams and athletes in one place – live scores, results, tables and news."),
+      step(1,"Pick the teams and athletes you follow."),
+      step(2,"See their live score, last result and next game on your home screen."),
+      step(3,"Tap a team for the full table, match stats and news."),
+      h("button",{onClick:onAdd,style:{marginTop:10,width:"100%",background:"#e8409a",color:"#fff",border:"none",borderRadius:14,padding:15,fontSize:"1rem",fontWeight:800,cursor:"pointer",fontFamily:"Inter,sans-serif"}},"＋ Add your first team")
+    ),
+    picks.length>0&&h("div",null,
+      h(Lbl,{c:"Quick picks · tap to follow"}),
+      h("div",{style:{display:"flex",flexWrap:"wrap",gap:8}},picks.map(e=>{const on=chosen.has(norm(e.name));return h("button",{key:e.name,onClick:()=>onPick(e),style:{display:"flex",alignItems:"center",gap:7,background:on?"rgba(232,64,154,0.25)":"rgba(255,255,255,0.08)",border:on?"2px solid #e8409a":"1px solid rgba(255,255,255,0.14)",borderRadius:22,padding:"7px 13px 7px 7px",color:"#fff",fontSize:"0.85rem",cursor:"pointer",fontFamily:"Inter,sans-serif"}},
+        h(TeamLogo,{name:e.name,size:26,color:e.color,accent:e.accent}),(on?"✓ ":e.emoji+" ")+e.shortName);}))
+    ),
+    teams.length>0&&h("button",{onClick:onDone,style:{marginTop:16,width:"100%",background:"#fff",color:"#0f1b33",border:"none",borderRadius:14,padding:14,fontSize:"0.95rem",fontWeight:800,cursor:"pointer",fontFamily:"Inter,sans-serif"}},"Done – show my "+teams.length+" team"+(teams.length>1?"s":"")+" →"),
+    h("div",{style:{fontSize:"0.72rem",color:"#d5deee",textAlign:"center",marginTop:18}},"Tip: add My Sports Hub to your home screen to use it like an app.")
+  );
+}
+
 // Home screen tile: one favourite with its table place, last result (or live score) and next game.
 function TeamTile({t,onClick}){
   const s=t.standing||{},r=(t.recentResults||[])[0],g=t.nextGame,lg=t.liveGame;
@@ -1540,16 +1568,6 @@ function TeamTile({t,onClick}){
 }
 
 // ── Persistence (module-level) ─────────────────────────────────────────────────
-function dbGet(key,id){const e=DB[key];if(!e)return null;return {...e,id};}
-const INIT=[
-  dbGet("gog","s-gog"),
-  dbGet("barcelona","s-barca"),
-  dbGet("holger rune","s-rune"),
-  dbGet("arsenal","s-arsenal"),
-  dbGet("brentford","s-brentford"),
-  dbGet("vingegaard","s-ving"),
-].filter(Boolean);
-
 function App(){
   const [teams,setTeams]=useState(loadTeams);
   const [selected,setSelected]=useState(loadSel);
@@ -1558,14 +1576,15 @@ function App(){
   const [match,setMatch]=useState(null),[showTable,setShowTable]=useState(false);
   // "home" = grid of all favourites, "team" = one team's page
   const [view,setView]=useState("home");
+  const [welcome,setWelcome]=useState(()=>teams.length===0); // first visit
   const viewRef=useRef(view),overlayRef=useRef(false);viewRef.current=view;
   overlayRef.current=showModal||!!match||showTable||!!removing;
   const [ready,setReady]=useState(false);
   const [live,setLive]=useState(()=>lsGet("msh-live")||{});
   const [busy,setBusy]=useState({});
   const [,setClock]=useState(0);
-  const baseTeam=teams.find(t=>t.id===selected)||teams[0];
-  const team=mergeLive(baseTeam,live[baseTeam.name]);
+  const baseTeam=teams.find(t=>t.id===selected)||teams[0]; // undefined when no favourites yet
+  const team=baseTeam?mergeLive(baseTeam,live[baseTeam.name]):null;
   const liveRef=useRef(live),teamsRef=useRef(teams),selRef=useRef(selected);
   liveRef.current=live;teamsRef.current=teams;selRef.current=selected;
   useEffect(()=>{const t=setTimeout(()=>setReady(true),600);return()=>clearTimeout(t);},[]);
@@ -1624,7 +1643,9 @@ function App(){
     return()=>{stopped=true;clearInterval(iv);document.removeEventListener("visibilitychange",wake);window.removeEventListener("online",wake);};
   },[]);
   useEffect(()=>{refreshTeam(baseTeam);},[selected,teams.length]);
-  const lf=team._liveFields||{};
+  const lf=(team&&team._liveFields)||{};
+  // the robot's whole-league club list (for quick picks / search) arrives with the snapshot
+  useEffect(()=>{getSnapshot().then(()=>setClock(Date.now())).catch(()=>{});},[]);
 
   function handleSelect(id){setSelected(id);persist(teams,id);setView("team");window.scrollTo(0,0);history.pushState({msh:"team"},"");}
   function goHome(){if(history.state&&history.state.msh==="team")history.back();else{setView("home");window.scrollTo(0,0);}}
@@ -1670,11 +1691,18 @@ function App(){
     setTeams(updated);setSelected(nt.id);setShowModal(false);
     persist(updated,nt.id);
     // open the new team; replace the Add dialog's history entry so "back" returns to the home grid
-    setView("team");window.scrollTo(0,0);history.replaceState({msh:"team"},"");
+    setWelcome(false);setView("team");window.scrollTo(0,0);history.replaceState({msh:"team"},"");
+  }
+  // Welcome screen quick pick: add without leaving the home screen.
+  function addQuick(e){
+    const had=teams.find(x=>norm(x.name)===norm(e.name));
+    if(had){const updated=teams.filter(x=>x!==had);setTeams(updated);persist(updated,updated[0]?.id||"");return;}
+    const nt={...e,id:norm(e.name).replace(/\s+/g,"-")+"-"+Date.now()},updated=[...teams,nt];
+    setTeams(updated);setSelected(nt.id);persist(updated,nt.id);
   }
   function handleRemove(id){
     const updated=teams.filter(t=>t.id!==id);
-    const newSel=updated.find(t=>t.id!==id)?.id||updated[0]?.id||"s-gog";
+    const newSel=updated[0]?.id||"";
     setTeams(updated);setSelected(newSel);setRemoving(null);
     persist(updated,newSel);
     goHome();
@@ -1713,7 +1741,8 @@ function App(){
         h("button",{onClick:handleShareApp,title:"Share My Sports Hub",style:{flexShrink:0,background:"#e8409a",color:"#ffffff",border:"none",borderRadius:20,padding:"6px 12px",fontSize:"0.72rem",fontWeight:700,fontFamily:"Inter,sans-serif",cursor:"pointer",whiteSpace:"nowrap"}},"📲 Share app")
       )
     ),
-    view==="home"&&h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
+    (welcome||teams.length===0)&&view==="home"&&h(Welcome,{teams,onAdd:()=>setShowModal(true),onPick:addQuick,onDone:()=>setWelcome(false)}),
+    !(welcome||teams.length===0)&&view==="home"&&h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
       h(Lbl,{c:"My teams \xB7 "+teams.length}),
       h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}},
         teams.map(t=>h(TeamTile,{key:t.id,t:mergeLive(t,live[t.name]),onClick:()=>handleSelect(t.id)})),
@@ -1721,7 +1750,7 @@ function App(){
       ),
       h("div",{style:{height:30}})
     ),
-    view==="team"&&h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
+    view==="team"&&team&&h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
       // Wraps on phones: the buttons drop below the name instead of squeezing it to "GO…"
       h("div",{style:{background:"linear-gradient(135deg,"+team.color+"33,"+team.accent+"55)",borderRadius:16,padding:"14px 16px",marginBottom:12,border:"1px solid "+team.color+"44",display:"flex",alignItems:"center",flexWrap:"wrap",gap:"10px 14px"}},
         h(TeamLogo,{name:team.name,size:56,color:team.color,accent:team.accent}),
@@ -1733,7 +1762,7 @@ function App(){
         h("button",{onClick:handleShare,style:{background:"rgba(232,64,154,0.1)",border:"1px solid rgba(232,64,154,0.3)",borderRadius:10,padding:"8px 12px",minHeight:36,color:"#ff9fd0",cursor:"pointer",fontSize:"0.75rem",fontFamily:"Inter,sans-serif"}},
           "📤 Share"
         ),
-        teams.length>1&&h("button",{onClick:()=>setRemoving(team.id),style:{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"8px 12px",minHeight:36,color:"#f87171",cursor:"pointer",fontSize:"0.75rem",fontWeight:500,fontFamily:"Inter,sans-serif"}},"✕ Remove")
+        h("button",{onClick:()=>setRemoving(team.id),style:{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"8px 12px",minHeight:36,color:"#f87171",cursor:"pointer",fontSize:"0.75rem",fontWeight:500,fontFamily:"Inter,sans-serif"}},"✕ Remove")
       )
       ),
       h(LiveStatus,{entry:live[baseTeam.name],busy:!!busy[baseTeam.name],sport:team.sport,onRefresh:()=>refreshTeam(baseTeam,true)}),

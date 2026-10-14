@@ -579,7 +579,8 @@ async function rolexStanding(team){
 // Whole leagues from ESPN's team list (so promoted clubs appear by themselves). Clubs already in DB are
 // skipped; the rest are added as plain entries, fetched like DB teams and listed in live.json's
 // leagueTeams, which the app uses for searching / adding.
-const LEAGUE_TEAMS=[{sp:"soccer",lg:"den.1",league:"Superliga",country:"🇩🇰"}];
+const LEAGUE_TEAMS=[{sp:"soccer",lg:"den.1",league:"Superliga",country:"🇩🇰"},
+  {sp:"soccer",lg:"eng.1",league:"Premier League",country:"🏴󠁧󠁢󠁥󠁮󠁧󠁿"},{sp:"soccer",lg:"ita.1",league:"Serie A",country:"🇮🇹"}];
 // ESPN gives many clubs black/white (or no) colours and some names in another form: club colours / names here.
 const CLUB_STYLE={
   "F.C. København":{name:"FC København",color:"#1c3f94",accent:"#9fb8e8"},"Brøndby IF":{color:"#f2c500",accent:"#1d3c8f"},
@@ -587,7 +588,9 @@ const CLUB_STYLE={
   "Lyngby Boldklub":{color:"#004b9b",accent:"#7fb2ea"},"Odense Boldklub":{shortName:"OB",color:"#0055a5",accent:"#8ec0f0"},
   "Randers FC":{color:"#1f78c8",accent:"#81c0ff"},"Silkeborg IF":{color:"#d71920",accent:"#7a0f14"},"Sønderjyske Fodbold":{color:"#3a8fd6",accent:"#0d2f63"},
   "Viborg FF":{color:"#00843d",accent:"#0b3d22"},"FC Nordsjælland":{color:"#cf010e",accent:"#ff9f1a"},
-  "Vejle Boldklub":{color:"#c8102e",accent:"#111111"},"FC Fredericia":{color:"#c8102e",accent:"#1d3360"},"Aalborg BK":{shortName:"AaB",color:"#c8102e",accent:"#ffffff"},
+  "Vejle Boldklub":{color:"#c8102e",accent:"#111111"},
+  "Juventus":{color:"#3a3a3a",accent:"#c9a227"},"Newcastle United":{color:"#3d3d3d",accent:"#41b6e6"},"Tottenham Hotspur":{color:"#132257",accent:"#8a9ad6"},
+  "Fulham":{color:"#4a4a4a",accent:"#cc0000"},"Udinese":{color:"#3d3d3d",accent:"#bfbfbf"},"Parma":{color:"#1e3f8a",accent:"#f5d000"},"FC Fredericia":{color:"#c8102e",accent:"#1d3360"},"Aalborg BK":{shortName:"AaB",color:"#c8102e",accent:"#ffffff"},
 };
 // the app appends alpha to colours ("#rrggbbcc"), so they must be #rrggbb
 function hslHex(h,sat,l){sat/=100;l/=100;const k=n=>(n+h/30)%12,a=sat*Math.min(l,1-l),f=n=>l-a*Math.max(-1,Math.min(k(n)-3,9-k(n),1));
