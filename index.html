@@ -96,6 +96,7 @@ footer{padding:24px 48px;border-top:1px solid var(--border);display:flex;align-i
 #app-root{min-height:calc(100vh - 53px)}
 .skeleton{background:linear-gradient(90deg,rgba(255,255,255,0.04) 25%,rgba(255,255,255,0.08) 50%,rgba(255,255,255,0.04) 75%);background-size:200% 100%;animation:shimmer 1.4s infinite;border-radius:8px}
 @keyframes shimmer{0%{background-position:200% 0}100%{background-position:-200% 0}}
+.msh-hscroll{scrollbar-width:none;-webkit-overflow-scrolling:touch}.msh-hscroll::-webkit-scrollbar{display:none}
 .live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#ef4444;box-shadow:0 0 0 0 rgba(239,68,68,0.6);animation:livepulse 1.6s infinite;flex-shrink:0}
 @keyframes livepulse{0%{box-shadow:0 0 0 0 rgba(239,68,68,0.6)}70%{box-shadow:0 0 0 7px rgba(239,68,68,0)}100%{box-shadow:0 0 0 0 rgba(239,68,68,0)}}
 .sk-pill{height:36px;border-radius:40px;display:inline-block}
@@ -490,16 +491,29 @@ function espnStanding(j,id,withPoints){
   }
   return null;
 }
+// European cups: ESPN soccer team ids are the same in every competition, so a club's
+// Champions League / Europa League games come from the same id under these leagues.
+const ESPN_EURO_CUPS=[["uefa.champions","CL"],["uefa.europa","EL"],["uefa.europa.conf","ECL"]];
 async function fetchEspn(src){
-  const base=ESPN+"/site/v2/sports/"+src.sp+"/"+src.lg+"/teams/"+src.id+"/schedule";
+  const sched=lg=>ESPN+"/site/v2/sports/"+src.sp+"/"+lg+"/teams/"+src.id+"/schedule";
+  const base=sched(src.lg);
   const soccer=src.sp==="soccer";
-  const [sched,fix,table]=await Promise.all([
+  const cups=soccer?ESPN_EURO_CUPS.filter(([lg])=>lg!==src.lg):[];
+  const [main,fix,table,...cupJs]=await Promise.all([
     getJSON(base),
     soccer?getJSON(base+"?fixture=true").catch(()=>null):Promise.resolve(null),
     getJSON(ESPN+"/v2/sports/"+src.sp+"/"+src.lg+"/standings").catch(()=>null),
+    ...cups.flatMap(([lg])=>[getJSON(sched(lg)).catch(()=>null),getJSON(sched(lg)+"?fixture=true").catch(()=>null)]),
   ]);
   const seen={},evs=[];
-  [sched,fix].forEach(j=>((j&&j.events)||[]).forEach(ev=>{const e=espnEvent(ev,src.id);if(e&&!seen[e.id]){seen[e.id]=1;evs.push(e);}}));
+  const addAll=(j,tag)=>((j&&j.events)||[]).forEach(ev=>{const e=espnEvent(ev,src.id);if(e&&!seen[e.id]){seen[e.id]=1;if(tag)e.opponent+=" \xB7 "+tag;evs.push(e);}});
+  // Cups first, so a cup game listed in the league schedule too still gets its tag. If a cup
+  // answer is mostly the league's own games (ESPN ignoring the league), it is skipped.
+  const leagueIds=new Set([main,fix].flatMap(j=>((j&&j.events)||[]).map(ev=>ev.id)));
+  const echo=j=>{const ids=((j&&j.events)||[]).map(ev=>ev.id);return ids.length>4&&ids.filter(id=>leagueIds.has(id)).length>ids.length*0.6;};
+  cups.forEach(([lg,tag],i)=>[cupJs[2*i],cupJs[2*i+1]].forEach(j=>{if(echo(j))liveLog("espn cups "+lg+": looks like the league schedule, skipped");else addAll(j,tag);}));
+  if(cups.length){const n=evs.length;if(n)liveLog("espn cups "+src.id+": "+n+" European games ("+evs.slice(0,3).map(e=>e.opponent).join("; ")+")");}
+  [main,fix].forEach(j=>addAll(j));
   const now=Date.now();
   const done=evs.filter(e=>e.completed).sort((a,b)=>b.d-a.d);
   const live=evs.find(e=>e.state==="in");
@@ -975,6 +989,39 @@ function lookup(name,sport){
   return{name:name.trim().split(" ").map(w=>w[0].toUpperCase()+w.slice(1)).join(" "),shortName:name.trim().split(" ").slice(-1)[0].slice(0,10),sport,league:sport+" League",country:"🏳️",color:pal.color,accent:pal.accent,emoji:sEmoji(sport),standing:{rank:null,points:null,wins:null,draws:null,losses:null},recentResults:[],nextGame:{opponent:"Check official site",date:"TBD",time:"–",tv:"–"},news:[{title:"Added as custom favourite",time:"now",hot:false}],_unknown:true};
 }
 
+// Spelling help: closest DB entries for what was typed (prefix, word start, contains,
+// then typo distance), the chosen sport first. "vingegard" → Jonas Vingegaard.
+function editDist(a,b){
+  let p=Array.from({length:b.length+1},(_,j)=>j);
+  for(let i=1;i<=a.length;i++){const c=[i];for(let j=1;j<=b.length;j++)c[j]=Math.min(p[j]+1,c[j-1]+1,p[j-1]+(a[i-1]===b[j-1]?0:1));p=c;}
+  return p[b.length];
+}
+function suggest(name,sport,max=6,minScore=40){
+  const q=norm(name).trim();if(q.length<2)return[];
+  const best=new Map();
+  for(const k of Object.keys(DB)){
+    const e=DB[k];let sc=0;
+    for(const a of [norm(k),norm(e.name),norm(e.shortName)]){
+      if(!a)continue;
+      if(a===q)sc=Math.max(sc,100);
+      else if(a.startsWith(q))sc=Math.max(sc,90);
+      else if(a.split(/[\s\-]+/).some(w=>w.startsWith(q)))sc=Math.max(sc,80);
+      else if(q.length>=3&&a.includes(q))sc=Math.max(sc,70);
+      else if(q.length>=3){
+        // typo: compare with the whole name, each word, and the same-length start (still typing)
+        const cands=[a,...a.split(/[\s\-]+/)];if(q.length>=4&&a.length>q.length)cands.push(a.slice(0,q.length));
+        for(const c of cands){const sim=1-editDist(q,c)/Math.max(q.length,c.length);if(sim>=0.6)sc=Math.max(sc,Math.round(sim*65));}
+      }
+    }
+    if(!sc)continue;
+    if(e.sport===sport)sc+=15;
+    const prev=best.get(e.name);if(!prev||prev.sc<sc)best.set(e.name,{e,sc});
+  }
+  // weak typo guesses only when nothing better was found
+  const top=Math.max(0,...[...best.values()].map(x=>x.sc));
+  return [...best.values()].filter(x=>x.sc>=Math.max(minScore,top-35)).sort((a,b)=>b.sc-a.sc||a.e.name.localeCompare(b.e.name)).slice(0,max).map(x=>x.e);
+}
+
 // ── Initials Badge ─────────────────────────────────────────────────────────────
 function getInitials(name){
   const skip=["FC","AFC","CF","SC","AC","AS","VfB","VfL","RB","Handball","ATP","PGA","UCI","FIA","NBA","NFL","NHL","Tour","de","Grand"];
@@ -995,7 +1042,8 @@ function TeamLogo({name,size=32,color="#555",accent="#222"}){
 function Lbl({c}){return h("div",{style:{fontSize:"0.6rem",letterSpacing:"2px",opacity:0.75,textTransform:"uppercase",marginBottom:8,fontFamily:"Inter,sans-serif"}},c);}
 
 function StatBox({label,value,sub}){
-  return h("div",{style:{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px 8px",flex:"1 1 0",minWidth:0,textAlign:"center"}},
+  // 1 1 120px: four boxes in a row on wide screens, 2×2 on phones
+  return h("div",{style:{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px 8px",flex:"1 1 120px",minWidth:0,textAlign:"center"}},
     h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:String(value??"").length>6?"1.05rem":"1.5rem",fontWeight:800,color:"#fff",lineHeight:1,whiteSpace:"nowrap"}},value??"-"),
     h("div",{style:{fontSize:"0.55rem",opacity:0.8,marginTop:4,letterSpacing:"1px",textTransform:"uppercase",fontFamily:"Inter,sans-serif"}},label),
     sub&&h("div",{style:{fontSize:"0.6rem",marginTop:2,color:"#ff9fd0"}},sub)
@@ -1125,7 +1173,7 @@ function LiveStatus({entry,busy,sport,onRefresh}){
   else txt="Checking for live results…";
   return h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:12,fontSize:"0.62rem",fontFamily:"Inter,sans-serif",color:col}},
     h("span",null,(d&&!busy?"● ":"")+txt),
-    h("button",{onClick:onRefresh,disabled:busy,title:"Refresh now",style:{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:6,padding:"3px 9px",color:"#eef2f8",cursor:busy?"default":"pointer",fontSize:"0.62rem",fontFamily:"Inter,sans-serif",flexShrink:0}},"↻ Refresh")
+    h("button",{onClick:onRefresh,disabled:busy,title:"Refresh now",style:{background:"rgba(255,255,255,0.08)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:8,padding:"7px 11px",color:"#eef2f8",cursor:busy?"default":"pointer",fontSize:"0.7rem",fontFamily:"Inter,sans-serif",flexShrink:0}},"↻ Refresh")
   );
 }
 
@@ -1134,44 +1182,88 @@ function AddModal({onClose,onAdd}){
   const [sel,setSel]=useState(null);
   const [q,setQ]=useState("");
   const [preview,setPreview]=useState(null);
-  const ref=useRef();
+  const ref=useRef(),stepRef=useRef(step);
+  stepRef.current=step;
   useEffect(()=>{if(step==="search")setTimeout(()=>ref.current&&ref.current.focus(),100);},[step]);
+  // The phone's own back button / swipe steps back inside the modal instead of leaving the app.
+  useEffect(()=>{
+    history.pushState({msh:"modal"},"");
+    function onPop(){
+      const st=stepRef.current;
+      if(st==="sport")return onClose();
+      setStep(st==="preview"?"search":"sport");setPreview(null);
+      history.pushState({msh:"modal"},"");
+    }
+    function onKey(e){if(e.key==="Escape")onClose();}
+    window.addEventListener("popstate",onPop);window.addEventListener("keydown",onKey);
+    return()=>{
+      window.removeEventListener("popstate",onPop);window.removeEventListener("keydown",onKey);
+      if(history.state&&history.state.msh==="modal")history.back();
+    };
+  },[]);
 
-  function go(name){
-    const n=(name||q).trim();if(!n||!sel)return;
-    const found=lookup(n,sel.label);
-    setPreview({...found,id:n.toLowerCase().replace(/\s+/g,"-")+"-"+Date.now()});
+  function show(entry,n){
+    setPreview({...entry,id:n.toLowerCase().replace(/\s+/g,"-")+"-"+Date.now()});
     setStep("preview");
   }
+  function go(name){
+    const n=(name||q).trim();if(!n||!sel)return;
+    show(lookup(n,sel.label),n);
+  }
+  function back(){
+    if(step==="preview"){setStep("search");setPreview(null);}
+    else{setStep("sport");setQ("");}
+  }
+
+  const font="Inter,sans-serif",cond="'Barlow Condensed',sans-serif";
+  const sugg=step==="search"&&sel?suggest(q,sel.label):[];
+  const didYouMean=step==="preview"&&preview&&preview._unknown?suggest(preview.name,preview.sport,4,30):[];
+  function SuggRow(e,onPick){
+    return h("button",{key:e.name,onClick:onPick,style:{display:"flex",alignItems:"center",gap:10,width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.1)",borderRadius:12,padding:"9px 12px",cursor:"pointer",color:"#fff",textAlign:"left",minHeight:48}},
+      h(TeamLogo,{name:e.name,size:30,color:e.color,accent:e.accent}),
+      h("div",{style:{flex:1,minWidth:0}},
+        h("div",{style:{fontFamily:cond,fontSize:"1.02rem",fontWeight:700}},e.name),
+        h("div",{style:{fontSize:"0.68rem",color:"#d5deee",fontFamily:font}},e.emoji+" "+e.sport+" \xB7 "+e.league+" "+e.country)
+      ),
+      h("span",{style:{color:"#ff9fd0",fontSize:"1.1rem"}},"›")
+    );
+  }
+  const backBtn=h("button",{onClick:back,style:{background:"rgba(255,255,255,0.08)",border:"none",borderRadius:20,color:"#fff",fontSize:"0.85rem",cursor:"pointer",padding:"8px 14px",fontFamily:font,fontWeight:600}},"← Back");
 
   return h("div",{style:{position:"fixed",inset:0,background:"rgba(0,0,0,0.82)",zIndex:100,display:"flex",alignItems:"flex-end",justifyContent:"center"},onClick:e=>e.target===e.currentTarget&&onClose()},
-    h("div",{style:{background:"#16264a",borderRadius:"24px 24px 0 0",width:"100%",maxWidth:560,padding:"20px 18px 40px",maxHeight:"86vh",overflowY:"auto"}},
-      h("div",{style:{width:40,height:4,background:"rgba(255,255,255,0.15)",borderRadius:2,margin:"0 auto 16px"}}),
+    h("div",{style:{background:"#16264a",borderRadius:"24px 24px 0 0",width:"100%",maxWidth:560,padding:"12px 16px calc(28px + env(safe-area-inset-bottom))",maxHeight:"90vh",overflowY:"auto",boxSizing:"border-box"}},
+      h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:12,minHeight:40}},
+        step==="sport"?h("div",{style:{fontFamily:cond,fontSize:"1.3rem",fontWeight:800,color:"#fff"}},"Add a Favourite"):backBtn,
+        h("button",{onClick:onClose,"aria-label":"Close",style:{width:40,height:40,borderRadius:"50%",background:"rgba(255,255,255,0.08)",border:"none",color:"#fff",fontSize:"1.1rem",cursor:"pointer",flexShrink:0}},"✕")
+      ),
 
       step==="sport"&&h("div",null,
-        h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.3rem",fontWeight:800,color:"#fff",marginBottom:14}},"Add a Favourite"),
-        h("div",{style:{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:8,marginBottom:16}},
-          SPORTS.map(s=>h("button",{key:s.label,onClick:()=>setSel(s),style:{background:sel&&sel.label===s.label?"rgba(232,64,154,0.12)":"rgba(255,255,255,0.07)",border:sel&&sel.label===s.label?"2px solid #e8409a":"2px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"10px 6px",cursor:"pointer",color:"#fff",textAlign:"center"}},
+        h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(96px,1fr))",gap:8,marginBottom:16}},
+          SPORTS.map(s=>h("button",{key:s.label,onClick:()=>{setSel(s);setStep("search");},style:{background:sel&&sel.label===s.label?"rgba(232,64,154,0.12)":"rgba(255,255,255,0.07)",border:sel&&sel.label===s.label?"2px solid #e8409a":"2px solid rgba(255,255,255,0.08)",borderRadius:12,padding:"12px 6px",cursor:"pointer",color:"#fff",textAlign:"center"}},
             h("div",{style:{fontSize:"1.4rem",marginBottom:3}},s.emoji),
-            h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"0.78rem",fontWeight:700,lineHeight:1.2}},s.label)
+            h("div",{style:{fontFamily:cond,fontSize:"0.85rem",fontWeight:700,lineHeight:1.2}},s.label)
           ))
         ),
-        h("button",{disabled:!sel,onClick:()=>setStep("search"),style:{width:"100%",background:sel?"#e8409a":"rgba(255,255,255,0.07)",color:sel?"#ffffff":"#555",border:"none",borderRadius:12,padding:13,fontWeight:700,fontSize:"0.88rem",cursor:sel?"pointer":"default",fontFamily:"Inter,sans-serif"}},"Continue →")
+        h("div",{style:{fontSize:"0.72rem",color:"#d5deee",textAlign:"center",fontFamily:font}},"Tap a sport to search for a team or athlete")
       ),
 
       step==="search"&&h("div",null,
-        h("button",{onClick:()=>{setStep("sport");setQ("");},style:{background:"none",border:"none",color:"#ff9fd0",fontSize:"0.76rem",cursor:"pointer",marginBottom:10,padding:0,fontFamily:"Inter,sans-serif"}},"← Back"),
-        h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.2rem",fontWeight:800,color:"#fff",marginBottom:10}},sel&&sel.emoji+" "+sel.label),
-        h("div",{style:{display:"flex",gap:8,marginBottom:14}},
-          h("input",{ref,value:q,onChange:e=>setQ(e.target.value),onKeyDown:e=>e.key==="Enter"&&go(),placeholder:sel&&"e.g. "+sel.ex,style:{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"12px 14px",color:"#fff",fontSize:"0.9rem",fontFamily:"Inter,sans-serif",outline:"none"}}),
-          h("button",{onClick:()=>go(),disabled:!q.trim(),style:{background:q.trim()?"#e8409a":"rgba(255,255,255,0.07)",color:q.trim()?"#ffffff":"#555",border:"none",borderRadius:10,padding:"0 16px",fontWeight:700,cursor:q.trim()?"pointer":"default",fontFamily:"Inter,sans-serif",flexShrink:0}},"Go")
+        h("div",{style:{fontFamily:cond,fontSize:"1.2rem",fontWeight:800,color:"#fff",marginBottom:10}},sel&&sel.emoji+" "+sel.label),
+        h("div",{style:{display:"flex",gap:8,marginBottom:10}},
+          // 16px stops iPhone from zooming in when the field is tapped
+          h("input",{ref,value:q,onChange:e=>setQ(e.target.value),onKeyDown:e=>e.key==="Enter"&&go(),placeholder:sel&&"e.g. "+sel.ex,autoComplete:"off",autoCorrect:"off",spellCheck:false,enterKeyHint:"search",style:{flex:1,minWidth:0,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"12px 14px",color:"#fff",fontSize:"16px",fontFamily:font,outline:"none"}}),
+          h("button",{onClick:()=>go(),disabled:!q.trim(),style:{background:q.trim()?"#e8409a":"rgba(255,255,255,0.07)",color:q.trim()?"#ffffff":"#8090a8",border:"none",borderRadius:10,padding:"0 18px",fontWeight:700,cursor:q.trim()?"pointer":"default",fontFamily:font,flexShrink:0}},"Go")
         ),
-        h("div",{style:{fontSize:"0.58rem",opacity:0.7,letterSpacing:"1px",textTransform:"uppercase",marginBottom:8,fontFamily:"Inter,sans-serif"}},"Popular"),
+        q.trim().length>=2&&h("div",{style:{marginBottom:14}},
+          h("div",{style:{fontSize:"0.62rem",opacity:0.8,letterSpacing:"1px",textTransform:"uppercase",margin:"4px 0 8px",fontFamily:font}},sugg.length?"Did you mean…":"No matches – tap Go to add it anyway"),
+          h("div",{style:{display:"flex",flexDirection:"column",gap:6}},sugg.map(e=>SuggRow(e,()=>show(e,e.name))))
+        ),
+        h("div",{style:{fontSize:"0.62rem",opacity:0.8,letterSpacing:"1px",textTransform:"uppercase",marginBottom:8,fontFamily:font}},"Popular"),
         h("div",{style:{display:"flex",flexWrap:"wrap",gap:7}},
           (sel&&HINTS[sel.label]||[]).map(hn=>{
             const hk=Object.keys(DB).find(k=>norm(k)===norm(hn)||norm(DB[k].name)===norm(hn)||norm(DB[k].shortName)===norm(hn));
             const inDB=!!hk,dbEntry=hk&&DB[hk];
-            return h("button",{key:hn,onClick:()=>go(hn),style:{background:inDB?"rgba(232,64,154,0.08)":"rgba(255,255,255,0.08)",border:inDB?"1px solid rgba(232,64,154,0.3)":"1px solid rgba(255,255,255,0.1)",borderRadius:20,padding:"5px 12px",color:inDB?"#ff9fd0":"#eef2f8",fontSize:"0.74rem",cursor:"pointer",fontFamily:"Inter,sans-serif",display:"flex",alignItems:"center",gap:6}},
+            return h("button",{key:hn,onClick:()=>go(hn),style:{background:inDB?"rgba(232,64,154,0.08)":"rgba(255,255,255,0.08)",border:inDB?"1px solid rgba(232,64,154,0.3)":"1px solid rgba(255,255,255,0.1)",borderRadius:20,padding:"7px 12px",color:inDB?"#ff9fd0":"#eef2f8",fontSize:"0.8rem",cursor:"pointer",fontFamily:font,display:"flex",alignItems:"center",gap:6}},
               dbEntry&&h(TeamLogo,{name:hn,size:20,color:dbEntry.color,accent:dbEntry.accent}),
               hn
             );
@@ -1180,18 +1272,22 @@ function AddModal({onClose,onAdd}){
       ),
 
       step==="preview"&&preview&&h("div",null,
-        h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.2rem",fontWeight:800,color:"#fff",marginBottom:12}},preview._unknown?"New entry":"Found it! ✓"),
-        preview._unknown&&h("div",{style:{background:"rgba(250,204,21,0.1)",border:"1px solid rgba(250,204,21,0.3)",borderRadius:10,padding:"9px 12px",marginBottom:12,fontSize:"0.74rem",color:"#fde68a",fontFamily:"Inter,sans-serif"}},"⚠️ Not in database yet – added as placeholder."),
+        h("div",{style:{fontFamily:cond,fontSize:"1.2rem",fontWeight:800,color:"#fff",marginBottom:12}},preview._unknown?"New entry":"Found it! ✓"),
+        preview._unknown&&h("div",{style:{background:"rgba(250,204,21,0.1)",border:"1px solid rgba(250,204,21,0.3)",borderRadius:10,padding:"9px 12px",marginBottom:12,fontSize:"0.78rem",color:"#fde68a",fontFamily:font}},"⚠️ \""+preview.name+"\" is not in the database – check the spelling, or add it as a placeholder (no live data)."),
+        didYouMean.length>0&&h("div",{style:{marginBottom:14}},
+          h("div",{style:{fontSize:"0.62rem",opacity:0.8,letterSpacing:"1px",textTransform:"uppercase",marginBottom:8,fontFamily:font}},"Did you mean…"),
+          h("div",{style:{display:"flex",flexDirection:"column",gap:6}},didYouMean.map(e=>SuggRow(e,()=>show(e,e.name))))
+        ),
         h("div",{style:{background:"linear-gradient(135deg,"+preview.color+"33,"+preview.accent+"55)",border:"1px solid "+preview.color+"55",borderRadius:14,padding:16,marginBottom:14,display:"flex",alignItems:"center",gap:14}},
           h(TeamLogo,{name:preview.name,size:52,color:preview.color,accent:preview.accent}),
-          h("div",null,
-            h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.3rem",fontWeight:700,color:"#fff"}},preview.name),
-            h("div",{style:{fontSize:"0.68rem",opacity:0.8,marginTop:2,fontFamily:"Inter,sans-serif"}},preview.sport+" \xB7 "+preview.league+" \xB7 "+preview.country)
+          h("div",{style:{minWidth:0}},
+            h("div",{style:{fontFamily:cond,fontSize:"1.3rem",fontWeight:700,color:"#fff"}},preview.name),
+            h("div",{style:{fontSize:"0.72rem",opacity:0.85,marginTop:2,fontFamily:font}},preview.sport+" \xB7 "+preview.league+" \xB7 "+preview.country)
           )
         ),
         h("div",{style:{display:"flex",gap:10}},
-          h("button",{onClick:()=>{setStep("search");setPreview(null);},style:{flex:1,background:"rgba(255,255,255,0.07)",border:"none",borderRadius:12,padding:12,color:"#fff",fontSize:"0.82rem",cursor:"pointer",fontFamily:"Inter,sans-serif"}},"Try again"),
-          h("button",{onClick:()=>onAdd(preview),style:{flex:2,background:"#e8409a",border:"none",borderRadius:12,padding:12,color:"#ffffff",fontWeight:700,fontSize:"0.86rem",cursor:"pointer",fontFamily:"Inter,sans-serif"}},"Add to My Hub ✓")
+          h("button",{onClick:back,style:{flex:1,background:"rgba(255,255,255,0.08)",border:"none",borderRadius:12,padding:14,color:"#fff",fontSize:"0.85rem",cursor:"pointer",fontFamily:font}},"Search again"),
+          h("button",{onClick:()=>onAdd(preview),style:{flex:2,background:"#e8409a",border:"none",borderRadius:12,padding:14,color:"#ffffff",fontWeight:700,fontSize:"0.88rem",cursor:"pointer",fontFamily:font}},preview._unknown?"Add anyway":"Add to My Hub ✓")
         )
       )
     )
@@ -1212,16 +1308,20 @@ function RemoveConfirm({teamName,onCancel,onConfirm}){
 }
 
 function FavBar({teams,selected,onSelect,onAdd,liveNames}){
-  return h("div",{style:{display:"flex",flexWrap:"wrap",gap:8,paddingBottom:2}},
+  // One swipeable row (keeps the sticky header small on phones); "+ Add" stays visible on the right.
+  const rowRef=useRef();
+  useEffect(()=>{const el=rowRef.current&&rowRef.current.querySelector("[data-on]");if(el&&el.scrollIntoView)el.scrollIntoView({block:"nearest",inline:"nearest",behavior:"smooth"});},[selected]);
+  return h("div",{style:{display:"flex",gap:8,alignItems:"center"}},
+    h("div",{ref:rowRef,className:"msh-hscroll",style:{display:"flex",gap:8,overflowX:"auto",flex:1,minWidth:0,paddingBottom:2}},
     teams.map(t=>{
       const on=selected===t.id;
-      return h("button",{key:t.id,onClick:()=>onSelect(t.id),style:{display:"flex",alignItems:"center",gap:7,background:on?"linear-gradient(135deg,"+t.color+","+t.accent+")":"rgba(255,255,255,0.08)",border:on?"2px solid "+t.color:"2px solid rgba(255,255,255,0.1)",borderRadius:40,padding:"6px 14px 6px 8px",cursor:"pointer",color:"#fff",transition:"all 0.2s",whiteSpace:"nowrap"}},
+      return h("button",{key:t.id,"data-on":on?"1":undefined,onClick:()=>onSelect(t.id),style:{display:"flex",alignItems:"center",gap:7,background:on?"linear-gradient(135deg,"+t.color+","+t.accent+")":"rgba(255,255,255,0.08)",border:on?"2px solid "+t.color:"2px solid rgba(255,255,255,0.1)",borderRadius:40,padding:"6px 14px 6px 8px",cursor:"pointer",color:"#fff",transition:"all 0.2s",whiteSpace:"nowrap",flexShrink:0}},
         h(TeamLogo,{name:t.name,size:26,color:t.color,accent:t.accent}),
         h("span",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"0.9rem",fontWeight:700}},t.shortName),
         liveNames&&liveNames[t.name]&&h("span",{className:"live-dot",title:"Live now"})
       );
-    }),
-    h("button",{onClick:onAdd,style:{display:"flex",alignItems:"center",gap:5,background:"rgba(232,64,154,0.09)",border:"2px dashed rgba(232,64,154,0.35)",borderRadius:40,padding:"6px 14px",cursor:"pointer",color:"#ff9fd0",fontFamily:"Inter,sans-serif",fontWeight:600,fontSize:"0.78rem",whiteSpace:"nowrap"}},
+    })),
+    h("button",{onClick:onAdd,style:{flexShrink:0,display:"flex",alignItems:"center",gap:5,background:"rgba(232,64,154,0.09)",border:"2px dashed rgba(232,64,154,0.35)",borderRadius:40,padding:"6px 14px",cursor:"pointer",color:"#ff9fd0",fontFamily:"Inter,sans-serif",fontWeight:600,fontSize:"0.78rem",whiteSpace:"nowrap"}},
       h("span",{style:{fontSize:"1rem",lineHeight:1}},"＋"),
       " Add"
     )
@@ -1382,17 +1482,18 @@ function App(){
       h(FavBar,{teams,selected,onSelect:handleSelect,onAdd:()=>setShowModal(true),liveNames})
     ),
     h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
-      h("div",{style:{background:"linear-gradient(135deg,"+team.color+"33,"+team.accent+"55)",borderRadius:16,padding:"14px 16px",marginBottom:12,border:"1px solid "+team.color+"44",display:"flex",alignItems:"center",gap:14}},
-        h(TeamLogo,{name:team.name,size:60,color:team.color,accent:team.accent}),
-        h("div",{style:{flex:1,minWidth:0}},
-          h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.4rem",fontWeight:900,lineHeight:1,whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"}},team.name),
-          h("div",{style:{fontSize:"0.68rem",opacity:0.8,marginTop:3}},team.sport+" \xB7 "+team.league+" \xB7 "+team.country)
+      // Wraps on phones: the buttons drop below the name instead of squeezing it to "GO…"
+      h("div",{style:{background:"linear-gradient(135deg,"+team.color+"33,"+team.accent+"55)",borderRadius:16,padding:"14px 16px",marginBottom:12,border:"1px solid "+team.color+"44",display:"flex",alignItems:"center",flexWrap:"wrap",gap:"10px 14px"}},
+        h(TeamLogo,{name:team.name,size:56,color:team.color,accent:team.accent}),
+        h("div",{style:{flex:"1 1 160px",minWidth:0}},
+          h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.4rem",fontWeight:900,lineHeight:1.05,overflowWrap:"anywhere"}},team.name),
+          h("div",{style:{fontSize:"0.72rem",opacity:0.85,marginTop:3}},team.sport+" \xB7 "+team.league+" \xB7 "+team.country)
         ),
-        h("div",{style:{display:"flex",gap:6}},
-        h("button",{onClick:handleShare,style:{background:"rgba(232,64,154,0.1)",border:"1px solid rgba(232,64,154,0.25)",borderRadius:8,padding:"5px 10px",color:"#ff9fd0",cursor:"pointer",fontSize:"0.65rem",fontFamily:"Inter,sans-serif"}},
+        h("div",{style:{display:"flex",gap:8,marginLeft:"auto"}},
+        h("button",{onClick:handleShare,style:{background:"rgba(232,64,154,0.1)",border:"1px solid rgba(232,64,154,0.3)",borderRadius:10,padding:"8px 12px",minHeight:36,color:"#ff9fd0",cursor:"pointer",fontSize:"0.75rem",fontFamily:"Inter,sans-serif"}},
           "📤 Share"
         ),
-        teams.length>1&&h("button",{onClick:()=>setRemoving(team.id),style:{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"5px 12px",color:"#f87171",cursor:"pointer",fontSize:"0.68rem",fontWeight:500,fontFamily:"Inter,sans-serif"}},"✕ Remove")
+        teams.length>1&&h("button",{onClick:()=>setRemoving(team.id),style:{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"8px 12px",minHeight:36,color:"#f87171",cursor:"pointer",fontSize:"0.75rem",fontWeight:500,fontFamily:"Inter,sans-serif"}},"✕ Remove")
       )
       ),
       h(LiveStatus,{entry:live[baseTeam.name],busy:!!busy[baseTeam.name],sport:team.sport,onRefresh:()=>refreshTeam(baseTeam,true)}),
