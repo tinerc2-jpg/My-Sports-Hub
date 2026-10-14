@@ -305,6 +305,51 @@ async function espnAthleteRank(id,tour){
   return null;
 }
 
+// ── Cycling: ProCyclingStats rider page (no free cycling API covers results/rankings) ──
+// Reads the UCI World ranking and the latest results table from the public page.
+// The page layout isn't documented, so everything found (or not) is logged.
+const PCS="https://www.procyclingstats.com/rider/";
+function pcsSlug(name){return api.norm(name).replace(/\s+/g,"-");}
+const cellText=s=>s.replace(/<[^>]+>/g," ").replace(/&nbsp;|&#160;/g," ").replace(/&amp;/g,"&").replace(/&#039;|&#39;/g,"'").replace(/\s+/g," ").trim();
+async function pcsCycling(team){
+  const url=PCS+pcsSlug(team.name);
+  try{
+    const r=await fetch(url,{headers:{"Accept":"text/html","Accept-Language":"en"}});
+    const html=await r.text();
+    console.log(`    PCS ${url}: HTTP ${r.status}, ${html.length} bytes`);
+    if(!r.ok)return null;
+    const text=cellText(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g," "));
+    // Ranking: the number shown next to "UCI World" (e.g. "UCI World 2").
+    let rank=null;
+    const m=text.match(/UCI\s*World(?:\s*Ranking)?\D{0,40}?(\d{1,4})\b/i);
+    if(m&&+m[1]>0&&+m[1]<5000)rank=+m[1];
+    const pm=text.match(/PCS\s*Ranking\D{0,40}?(\d{1,4})\b/i);
+    console.log(`    PCS ranks: UCI ${rank||"?"}, PCS ${pm?pm[1]:"?"}`+(rank?"":" · around 'UCI': «"+(text.match(/.{0,60}UCI.{0,80}/i)||[""])[0]+"»"));
+    // Results: rows with a dd.mm date, a result (number/DNF/DNS/OTL) and a race name.
+    const year=new Date().getFullYear(),rows=[];
+    for(const tr of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)){
+      const cells=[...tr[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)].map(c=>cellText(c[1]));
+      if(cells.length<3)continue;
+      const di=cells.findIndex(c=>/^\d{1,2}\.\d{1,2}$/.test(c));
+      const ri=cells.findIndex((c,i)=>i!==di&&/^(\d{1,3}|DNF|DNS|OTL|DSQ)$/.test(c));
+      if(di<0||ri<0)continue;
+      const race=cells.filter((c,i)=>i!==di&&i!==ri&&/[A-Za-z]{3}/.test(c)).sort((a,b)=>b.length-a.length)[0];
+      if(!race)continue;
+      const [dd,mm]=cells[di].split(".").map(Number);
+      const d=new Date(Date.UTC(year,mm-1,dd));if(d.getTime()>Date.now()+864e5)d.setUTCFullYear(year-1);
+      rows.push({d,res:cells[ri],race});
+      if(rows.length>=5)break;
+    }
+    console.log(`    PCS results: ${rows.length} rows`+(rows[0]?` · latest ${rows[0].res} ${rows[0].race} (${rows[0].d.toISOString().slice(0,10)})`:" · first table row: «"+((html.match(/<tr[^>]*>[\s\S]{0,300}/)||[""])[0].replace(/\s+/g," "))+"»"));
+    if(!rank&&!rows.length)return null;
+    const fmt=d=>d.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
+    return{source:"ProCyclingStats",
+      standing:rank?{rank,points:null,note:"UCI World Ranking"}:null,
+      recentResults:rows.map(x=>{const n=parseInt(x.res,10);return{opponent:x.race,score:isNaN(n)?x.res:(n===1?"Win":"P"+n),label:isNaN(n)?x.res:null,result:n===1?"W":n<=10?"D":"L",date:fmt(x.d),ts:x.d.getTime()};}),
+      nextGame:{opponent:"No upcoming race found",offTitle:"No race scheduled",date:"Check the race calendar",time:"–",tv:"–"}};
+  }catch(e){console.log("    PCS:",e.message);return null;}
+}
+
 // ── Rolex Women's World Golf Rankings (public page; read like the handball tables) ──
 const ROLEX_PAGE={name:"Rolex Rankings",url:"https://www.rolexrankings.com/rankings"};
 async function rolexStanding(team){
@@ -329,7 +374,7 @@ for(const t of Object.values(api.DB)){
   if(seen.has(t.name))continue;seen.add(t.name);
   api._liveLog.length=0;
   try{
-    const data=await api.fetchTeamLive(t);
+    let data=await api.fetchTeamLive(t);
     if(data&&t.sport==="Handball"){
       if(!APISPORTS_KEY)console.log("    API-Sports: no APISPORTS_KEY secret set");
       else{
@@ -364,6 +409,7 @@ for(const t of Object.values(api.DB)){
         if(s){data.standing=s;data.source+=women?" + Rolex Rankings":" + OWGR";}
       }
     }
+    if(!data&&t.sport==="Cycling")data=await pcsCycling(t);
     const nw=await teamNews(t);
     if(data){
       if(nw){data.news=nw.news;data.newsTs=nw.ts;data.newsV=NEWS_V;}
