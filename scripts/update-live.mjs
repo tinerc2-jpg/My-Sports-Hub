@@ -297,6 +297,19 @@ async function hbProgramFor(team,tableNames){
       time:next.d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"}),tv:next.tv||"–",ts:next.d.getTime()}:null,
   };
 }
+// Diagnostic (temporary): a source for European handball games (EHF Champions League) with live scores.
+let _ehfProbed=false;
+async function ehfProbe(){
+  if(_ehfProbed)return;_ehfProbed=true;
+  const H={"Accept":"application/json"}; // the global fetch wrapper sends our own User-Agent
+  for(const u of ["https://api.sofascore.com/api/v1/search/all?q=GOG","https://www.sofascore.com/api/v1/search/all?q=GOG",
+    "https://www.eurohandball.com/umbraco/api/search/search?query=GOG","https://www.eurohandball.com/en/ehf-champions-league/"]){
+    try{const r=await fetch(u,{headers:H}),t=await r.text();
+      const i=t.indexOf("GOG");console.log(`    EHF probe ${u}: HTTP ${r.status}, ${t.length} bytes · «${(i>=0?t.slice(Math.max(0,i-300),i+500):t.slice(0,300)).replace(/\s+/g," ")}»`);
+      const apis=[...new Set([...t.matchAll(/https?:\/\/[^"' ]*(?:api|match|livescore)[^"' ]*/gi)].map(m=>m[0]))].slice(0,12);if(apis.length)console.log("    EHF probe urls: "+apis.join(" "));
+    }catch(e){console.log("    EHF probe "+u+": "+e.message);}
+  }
+}
 // Returns {standing, from} from the first page with a valid row, or null.
 async function tv2Standing(team){
   const al=api.teamAliases(team);
@@ -564,6 +577,7 @@ for(const t of Object.values(api.DB)){
       }
       // League results and next game from the match programme (TheSportsDB's free key has only a few games).
       const tbl=data.standing&&data.standing.table;
+      if(t.league===TV2_LEAGUE)await ehfProbe();
       if(t.league===TV2_LEAGUE&&tbl){
         const pg=await hbProgramFor(t,tbl.map(r=>r.n));
         if(pg){
