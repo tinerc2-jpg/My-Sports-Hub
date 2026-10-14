@@ -195,7 +195,10 @@ function cphDate(d,mo,y,hh,mm){
 }
 // Handball match statistics from tophaandbold.dk/match/<id>.json: score, halftime, arena, spectators,
 // top scorers and per-team event counts (goals, saves, 2-min suspensions …) from the event list.
-const HB_EVENT_ORDER=[/goal|m[aå]l$|^m[aå]l/i,/save|redning/i,/7m|straf|penalty/i,/assist/i,/suspen|udvis|two.?min|2 ?min/i,/fault|fejl|turnover/i,/yellow|gul/i,/red|r[oø]d/i];
+// tophaandbold.dk event names (Danish) → shown stats. A shot event belongs to the shooting team;
+// a saved shot counts as a save for the keeper's team.
+const HB_V=2; // bump when hbMatchStats changes, so stats in the previous snapshot are recomputed
+const HB_GOAL=/^(Mål|Straffemål)$/,HB_SAVED=/^(Skud reddet|Straffe reddet)$/,HB_MISS=/^(Skud på stolpe|Skud forbi|Skud blokeret)$/;
 async function hbMatchStats(id,team){
   const r=await fetch("https://tophaandbold.dk/match/"+id+".json");
   if(!r.ok)throw new Error("HTTP "+r.status);
@@ -203,28 +206,36 @@ async function hbMatchStats(id,team){
   const ts=j.teams||[],me=ts.find(t=>api.nameMatch(al,[t.name,t.short_name])===2),op=ts.find(t=>t!==me);
   if(!me||!op)return null;
   const idOf=x=>x&&typeof x==="object"?x.id:x,players={};(j.players||[]).forEach(p=>{players[p.id]=p;});
-  const typeName=e=>{const t=e.event_type;return t&&typeof t==="object"?(t.name||t.title||t.key||String(t.id)):String(t||"");};
-  const pretty=t=>{const x=t.replace(/[_-]+/g," ").trim();return x.charAt(0).toUpperCase()+x.slice(1);};
-  const counts={},scorers={};
+  const typeName=e=>{const t=e.event_type;return String(t&&typeof t==="object"?(t.name||t.title||t.key||t.id):t||"").trim();};
+  const z=()=>({me:0,op:0}),c={goals:z(),pen:z(),shots:z(),saves:z(),susp:z(),turn:z(),warn:z()},scorers={},types={};
+  const sideOf=tm=>tm==me.id?"me":tm==op.id?"op":null,other=s=>s==="me"?"op":"me";
   (j.events||[]).forEach(e=>{
-    const tm=idOf(e.team),side=tm==me.id?"me":tm==op.id?"op":null,ty=typeName(e);
-    if(!side||!ty)return;
-    (counts[ty]=counts[ty]||{me:0,op:0})[side]++;
-    if(HB_EVENT_ORDER[0].test(ty)&&!/miss|forbi|bom/i.test(ty)){
-      const p=players[idOf(e.player)]||(typeof e.player==="object"?e.player:null),who=p&&p.name;
-      if(who){const k=side+"|"+who;scorers[k]=(scorers[k]||0)+1;}
-    }
+    const ty=typeName(e),side=sideOf(idOf(e.team));if(!ty)return;
+    types[ty]=(types[ty]||0)+1;if(!side)return;
+    if(HB_GOAL.test(ty)){
+      c.goals[side]++;c.shots[side]++;if(ty==="Straffemål")c.pen[side]++;
+      const p=players[idOf(e.player)],who=p&&p.name;if(who){const k=side+"|"+who;scorers[k]=(scorers[k]||0)+1;}
+    }else if(HB_SAVED.test(ty)){
+      c.shots[side]++;
+      const kp=players[idOf(e.keeper)],ks=kp&&sideOf(idOf(kp.team));c.saves[ks||other(side)]++;
+    }else if(HB_MISS.test(ty))c.shots[side]++;
+    else if(ty==="Udvisning")c.susp[side]++;
+    else if(ty==="Fejlaflevering"||ty==="Tabt bold"||ty==="Regelfejl")c.turn[side]++;
+    else if(ty==="Advarsel")c.warn[side]++;
   });
-  const types=Object.keys(counts);
-  const rank=t=>{const i=HB_EVENT_ORDER.findIndex(re=>re.test(t));return i<0?99:i;};
-  const stats=types.sort((a,b)=>rank(a)-rank(b)||(counts[b].me+counts[b].op)-(counts[a].me+counts[a].op)).slice(0,8)
-    .map(t=>({label:pretty(t),me:String(counts[t].me),op:String(counts[t].op)}));
+  const pct=s=>c.shots[s]?Math.round(c.goals[s]/c.shots[s]*100)+"%":"–";
+  const row=(label,k)=>({label,me:String(c[k].me),op:String(c[k].op)});
+  const stats=[row("Goals","goals"),row("Shots","shots"),{label:"Shooting %",me:pct("me"),op:pct("op")},row("7m goals","pen"),row("Saves","saves"),
+    row("2-min suspensions","susp"),row("Turnovers & faults","turn"),row("Yellow cards","warn")].filter(x=>x.me!=="0"||x.op!=="0");
   const top=Object.entries(scorers).map(([k,n])=>{const [side,who]=k.split("|");return{who,n,me:side==="me"?1:0};})
     .sort((a,b)=>b.n-a.n).filter((x,i,arr)=>arr.filter(y=>y.me===x.me).indexOf(x)<4);
   const [hh,ha]=String(j.halftime_score||"").split("-"),meHome=ts.indexOf(me)===0;
   const info=[j.halftime_score?"Half-time "+(meHome?hh+"–"+ha:ha+"–"+hh):"",j.arena&&j.arena.name,j.spectators?j.spectators.toLocaleString("en-GB")+" spectators":""].filter(Boolean).join(" \xB7 ");
-  if(!_hbTypesLogged){_hbTypesLogged=true;console.log("    handball event types: "+types.map(t=>t+"="+(counts[t].me+counts[t].op)).join(", "));}
-  return{meName:me.name,opName:op.name,stats,top,info,goals:[]};
+  // sanity check against the official score
+  const [sh,sa]=String(j.score||"").split("-").map(Number),want=meHome?[sh,sa]:[sa,sh];
+  if(!_hbTypesLogged){_hbTypesLogged=true;console.log("    handball event types: "+Object.entries(types).map(([t,n])=>t+"="+n).join(", "));}
+  console.log(`    handball stats ${id}: goals ${c.goals.me}-${c.goals.op} vs score ${want.join("-")}, saves ${c.saves.me}-${c.saves.op}`);
+  return{v:HB_V,meName:me.name,opName:op.name,stats,top,info,goals:[]};
 }
 let _hbTypesLogged=false;
 async function hbProgramFor(team,tableNames){
@@ -559,7 +570,7 @@ for(const t of Object.values(api.DB)){
     if(!data&&t.sport==="Cycling")data=await pcsCycling(t);
     // Match statistics per result. Finished games don't change, so stats from the previous snapshot are reused.
     if(data&&data.recentResults){
-      const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{const k=r.ev||(r.hbm&&"hb"+r.hbm);if(k&&r.stats)old[k]=r.stats;});
+      const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{const k=r.ev||(r.hbm&&"hb"+r.hbm);if(k&&r.stats&&(!r.hbm||r.stats.v===HB_V))old[k]=r.stats;});
       let got=0,reused=0,none=0;
       for(const r of data.recentResults){
         const key=r.ev||(r.hbm&&"hb"+r.hbm);
