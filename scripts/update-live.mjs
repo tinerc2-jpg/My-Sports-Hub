@@ -19,7 +19,7 @@ globalThis.fetch=(url,opts={})=>rawFetch(url,{...opts,headers:{"User-Agent":UA,.
 const api=new Function(`const DB={};function add(keys,d){keys.forEach(k=>DB[k.toLowerCase()]=d);}
 ${adds}
 ${html.slice(start,end)}
-return {DB,fetchTeamLive,_liveLog,teamAliases,nameMatch,norm};`)();
+return {DB,fetchTeamLive,fetchEspnSummary,_liveLog,teamAliases,nameMatch,norm};`)();
 
 // Previous snapshot: lets us reuse API-Sports standings so we stay within the free quota.
 let prev={};
@@ -147,6 +147,29 @@ function tv2FromTokens(tokens,al){
   }
   return{r:null,seen};
 }
+// Whole table from the page text: every "<rank> <name…> <P> <W> <D> <L> [goals] [diff] <points>" row that
+// passes the same checks as the team's own row. Used only when it looks like a full table with our team in it.
+function hbTableFromTokens(tokens,al){
+  const num=t=>/^[+-]?\d+\.?$/.test(t)?parseInt(t,10):null,rows={};
+  for(let i=0;i<tokens.length;i++){
+    const rank=num(tokens[i]);if(rank==null||rank<1||rank>20||rows[rank])continue;
+    let j=i+1;const name=[];
+    while(j<tokens.length&&name.length<5&&num(tokens[j])==null&&!/^\d+[-–:]\d+$/.test(tokens[j]))name.push(tokens[j++]);
+    if(!name.length)continue;
+    const nums=[];let gd;
+    for(;j<tokens.length&&nums.length<10;j++){
+      const g=/^(\d+)[-–:](\d+)$/.exec(tokens[j]);if(g){gd=+g[1]-+g[2];continue;}
+      const n=num(tokens[j]);if(n==null)break;nums.push(n);
+    }
+    if(nums.length<5)continue;
+    const [played,wins,draws,losses]=nums,points=nums.slice(4).find(p=>p===2*wins+draws);
+    if(!hbValid({played,wins,draws,losses,points}))continue;
+    const n=name.join(" ");
+    rows[rank]={r:rank,n,p:played,w:wins,d:draws,l:losses,gd,pts:points,me:api.nameMatch(al,[n])===2?1:undefined};
+  }
+  const list=Object.values(rows).sort((a,b)=>a.r-b.r);
+  return list.length>=8&&list.some(r=>r.me)?list:null;
+}
 // Returns {standing, from} from the first page with a valid row, or null.
 async function tv2Standing(team){
   const al=api.teamAliases(team);
@@ -158,8 +181,9 @@ async function tv2Standing(team){
       if(!r){const t=tv2FromTokens(p.tokens,al);r=t.r;how="text";
         if(!r)console.log(`    ${page.name}: no valid row for ${team.shortName}`+(t.seen.length?" · seen: "+t.seen.map(s=>"«"+s+"»").join(" "):" · name not on page"));}
       if(!r)continue;
-      console.log(`    ${page.name} (${how}): #${r.rank} ${r.played} played ${r.wins}-${r.draws}-${r.losses} ${r.points} pts`);
-      return{standing:{rank:r.rank,points:r.points,wins:r.wins,draws:r.draws,losses:r.losses},from:page.name};
+      const table=hbTableFromTokens(p.tokens,al);
+      console.log(`    ${page.name} (${how}): #${r.rank} ${r.played} played ${r.wins}-${r.draws}-${r.losses} ${r.points} pts · full table: ${table?table.length+" rows":"not found"}`);
+      return{standing:{rank:r.rank,points:r.points,wins:r.wins,draws:r.draws,losses:r.losses,table:table||undefined},from:page.name};
     }catch(e){console.log(`    ${page.name}:`,e.message);}
   }
   return null;
@@ -428,6 +452,18 @@ for(const t of Object.values(api.DB)){
       }
     }
     if(!data&&t.sport==="Cycling")data=await pcsCycling(t);
+    // Match statistics per result. Finished games don't change, so stats from the previous snapshot are reused.
+    if(data&&data.recentResults){
+      const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{if(r.ev&&r.stats)old[r.ev]=r.stats;});
+      let got=0,reused=0,none=0;
+      for(const r of data.recentResults){
+        if(!r.ev||!r.sp||r.stats)continue;
+        if(old[r.ev]){r.stats=old[r.ev];reused++;continue;}
+        try{const st=await api.fetchEspnSummary(r.sp,r.lg,r.ev,r.tid);if(st){r.stats=st;got++;}else none++;}
+        catch(e){none++;console.log(`    summary ${r.ev}:`,e.message);}
+      }
+      if(got+reused+none)console.log(`    match stats: ${got} new, ${reused} reused, ${none} without stats`+(got?" · e.g. "+JSON.stringify(data.recentResults.find(r=>r.stats).stats).slice(0,160):""));
+    }
     const nw=await teamNews(t);
     if(data){
       if(nw){data.news=nw.news;data.newsTs=nw.ts;data.newsV=NEWS_V;}
