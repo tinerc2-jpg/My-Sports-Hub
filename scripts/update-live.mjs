@@ -310,7 +310,8 @@ async function espnAthleteRank(id,tour){
 // The page layout isn't documented, so everything found (or not) is logged.
 const PCS="https://www.procyclingstats.com/rider/";
 function pcsSlug(name){return api.norm(name).replace(/\s+/g,"-");}
-const cellText=s=>s.replace(/<[^>]+>/g," ").replace(/&nbsp;|&#160;/g," ").replace(/&amp;/g,"&").replace(/&#039;|&#39;/g,"'").replace(/\s+/g," ").trim();
+const ENT={nbsp:" ",amp:"&",rsaquo:"›",lsaquo:"‹",raquo:"»",laquo:"«",quot:'"',apos:"'",ndash:"–",mdash:"—",hellip:"…"};
+const cellText=s=>s.replace(/<[^>]+>/g," ").replace(/&(#\d+|[a-z]+);/gi,(m,e)=>e[0]==="#"?String.fromCharCode(+e.slice(1)):(ENT[e.toLowerCase()]??m)).replace(/\s+/g," ").trim();
 async function pcsCycling(team){
   const url=PCS+pcsSlug(team.name);
   try{
@@ -319,33 +320,45 @@ async function pcsCycling(team){
     console.log(`    PCS ${url}: HTTP ${r.status}, ${html.length} bytes`);
     if(!r.ok)return null;
     const text=cellText(html.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g," "));
-    // Ranking: the number shown next to "UCI World" (e.g. "UCI World 2").
-    let rank=null;
-    const m=text.match(/UCI\s*World(?:\s*Ranking)?\D{0,40}?(\d{1,4})\b/i);
+    // Ranking: "UCI World <n>" if the page shows it, else PCS's own ranking ("PCS Ranking <n>").
+    let rank=null,rankName="UCI World Ranking";
+    const m=text.match(/UCI\s*World(?:\s*Ranking)?\s*:?\s*(\d{1,4})\b/i);
     if(m&&+m[1]>0&&+m[1]<5000)rank=+m[1];
-    const pm=text.match(/PCS\s*Ranking\D{0,40}?(\d{1,4})\b/i);
-    console.log(`    PCS ranks: UCI ${rank||"?"}, PCS ${pm?pm[1]:"?"}`+(rank?"":" · around 'UCI': «"+(text.match(/.{0,60}UCI.{0,80}/i)||[""])[0]+"»"));
-    // Results: rows with a dd.mm date, a result (number/DNF/DNS/OTL) and a race name.
-    const year=new Date().getFullYear(),rows=[];
+    const pm=text.match(/PCS\s*Ranking\s*:?\s*(\d{1,4})\b/i);
+    if(!rank&&pm&&+pm[1]>0){rank=+pm[1];rankName="PCS ranking";}
+    console.log(`    PCS ranks: UCI ${m?m[1]:"?"}, PCS ${pm?pm[1]:"?"} → using ${rank?rankName+" #"+rank:"none"}`);
+    // Results, newest first. Stage races: keep the General classification under the race's
+    // name; skip individual stages and other classifications. One-day races: keep as is.
+    const year=new Date().getFullYear(),rows=[],raw=[];
+    const toDate=t=>{const all=[...String(t||"").matchAll(/(\d{1,2})\.(\d{1,2})/g)];if(!all.length)return null;const x=all[all.length-1];
+      const d=new Date(Date.UTC(year,+x[2]-1,+x[1]));if(d.getTime()>Date.now()+864e5)d.setUTCFullYear(year-1);return d;};
+    const clean=t=>t.replace(/^\d+\s+(?=Stage|Prologue)/i,"").replace(/\s*\((?:\d\.[A-Za-z0-9]+|WC|NC|CC|Olympic Games)\)/g,"").replace(/\s+\d+(?:\.\d+)?k$/,"").trim();
+    let curRace=null,curDate=null;
     for(const tr of html.matchAll(/<tr[^>]*>([\s\S]*?)<\/tr>/g)){
-      const cells=[...tr[1].matchAll(/<t[dh][^>]*>([\s\S]*?)<\/t[dh]>/g)].map(c=>cellText(c[1]));
-      if(cells.length<3)continue;
-      const di=cells.findIndex(c=>/^\d{1,2}\.\d{1,2}$/.test(c));
+      const cells=[...tr[1].matchAll(/<td[^>]*>([\s\S]*?)<\/td>/g)].map(c=>cellText(c[1])); // td only: skip header rows
+      if(cells.length<2)continue;
+      const di=cells.findIndex(c=>/^\d{1,2}\.\d{1,2}/.test(c));
       const ri=cells.findIndex((c,i)=>i!==di&&/^(\d{1,3}|DNF|DNS|OTL|DSQ)$/.test(c));
-      if(di<0||ri<0)continue;
-      const race=cells.filter((c,i)=>i!==di&&i!==ri&&/[A-Za-z]{3}/.test(c)).sort((a,b)=>b.length-a.length)[0];
+      const race=cells.filter((c,i)=>i!==di&&i!==ri&&/[A-Za-z]{3}/.test(c)).sort((x,y)=>y.length-x.length)[0];
       if(!race)continue;
-      const [dd,mm]=cells[di].split(".").map(Number);
-      const d=new Date(Date.UTC(year,mm-1,dd));if(d.getTime()>Date.now()+864e5)d.setUTCFullYear(year-1);
-      rows.push({d,res:cells[ri],race});
+      if(raw.length<8)raw.push((di>=0?cells[di]:"-")+"|"+(ri>=0?cells[ri]:"-")+"|"+race.slice(0,40));
+      const d=di>=0?toDate(cells[di]):null;
+      if(/^\d*\s*(Stage\s*\d|Prologue)/i.test(race))continue;                 // a stage
+      if(/(points|mountains?|youth|teams?|young rider|kom|sprint)\s+classification/i.test(race))continue;
+      if(/general classification/i.test(race)){
+        if(ri>=0&&curRace)rows.push({d:d||curDate,res:cells[ri],race:curRace+" · GC"});
+      }else if(ri<0){curRace=clean(race);curDate=d;continue;}                  // stage-race header
+      else rows.push({d,res:cells[ri],race:clean(race)});                       // one-day race
       if(rows.length>=5)break;
     }
-    console.log(`    PCS results: ${rows.length} rows`+(rows[0]?` · latest ${rows[0].res} ${rows[0].race} (${rows[0].d.toISOString().slice(0,10)})`:" · first table row: «"+((html.match(/<tr[^>]*>[\s\S]{0,300}/)||[""])[0].replace(/\s+/g," "))+"»"));
+    rows.sort((x,y)=>(y.d?y.d.getTime():0)-(x.d?x.d.getTime():0));
+    console.log(`    PCS rows (raw): ${raw.join(" ; ")}`);
+    console.log(`    PCS results: ${rows.length} kept`+(rows[0]?` · latest ${rows[0].res} ${rows[0].race}`:""));
     if(!rank&&!rows.length)return null;
     const fmt=d=>d.toLocaleDateString("en-GB",{day:"numeric",month:"short"});
     return{source:"ProCyclingStats",
-      standing:rank?{rank,points:null,note:"UCI World Ranking"}:null,
-      recentResults:rows.map(x=>{const n=parseInt(x.res,10);return{opponent:x.race,score:isNaN(n)?x.res:(n===1?"Win":"P"+n),label:isNaN(n)?x.res:null,result:n===1?"W":n<=10?"D":"L",date:fmt(x.d),ts:x.d.getTime()};}),
+      standing:rank?{rank,points:null,note:rankName}:null,
+      recentResults:rows.map(x=>{const n=parseInt(x.res,10);return{opponent:x.race,score:isNaN(n)?x.res:(n===1?"Win":"P"+n),label:isNaN(n)?x.res:null,result:n===1?"W":n<=10?"D":"L",date:x.d?fmt(x.d):"",ts:x.d?x.d.getTime():0};}),
       nextGame:{opponent:"No upcoming race found",offTitle:"No race scheduled",date:"Check the race calendar",time:"–",tv:"–"}};
   }catch(e){console.log("    PCS:",e.message);return null;}
 }
