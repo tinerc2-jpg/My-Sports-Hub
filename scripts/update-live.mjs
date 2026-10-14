@@ -2,7 +2,7 @@
 // Runs in GitHub Actions (no browser CORS limits); the app falls back to this
 // snapshot when it can't reach the sports APIs directly.
 // Reuses the app's own fetchers: the code between the live-data markers in index.html.
-import {readFileSync,writeFileSync,mkdirSync} from "node:fs";
+import {readFileSync,writeFileSync,mkdirSync,existsSync,rmSync} from "node:fs";
 
 const html=readFileSync(new URL("../index.html",import.meta.url),"utf8");
 const start=html.indexOf("// ── Live data (auto-updating results)");
@@ -22,9 +22,18 @@ ${html.slice(start,end)}
 return {DB,fetchTeamLive,fetchEspnSummary,_liveLog,teamAliases,nameMatch,norm};`)();
 
 // Previous snapshot: lets us reuse API-Sports standings so we stay within the free quota.
+// --live: quick re-run inside the same Actions job (see the workflow's live loop). It starts from this
+// job's own out/live.json and only re-fetches teams that are playing or about to.
+const LIVE=process.argv.includes("--live");
+const NOW=Date.now();
+function needsLive(e){const d=e&&e.data,k=d&&d.nextGame&&d.nextGame.ts;return !!(d&&(d.liveGame||(k&&NOW>k-15*60e3&&NOW<k+150*60e3)));}
 let prev={};
-try{
-  const r=await fetch(`https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY||"tinerc2-jpg/My-Sports-Hub"}/live-data/live.json`);
+if(LIVE&&existsSync("out/live.json"))prev=JSON.parse(readFileSync("out/live.json","utf8")).teams||{};
+else try{
+  // the API has no CDN cache (raw.githubusercontent can be ~5 min old); raw file as fallback
+  const repo=process.env.GITHUB_REPOSITORY||"tinerc2-jpg/My-Sports-Hub";
+  let r=await fetch(`https://api.github.com/repos/${repo}/contents/live.json?ref=live-data`,{headers:{Accept:"application/vnd.github.raw"}});
+  if(!r.ok)r=await fetch(`https://raw.githubusercontent.com/${repo}/live-data/live.json`);
   if(r.ok)prev=(await r.json()).teams||{};
 }catch(e){}
 
@@ -262,11 +271,27 @@ async function hbProgramFor(team,tableNames){
   console.log(`    programme: ${games.length} games, ${mine.length} for ${team.shortName}`+(mine[0]?" · e.g. "+JSON.stringify(mine[0]):""));
   if(!mine.length)return null;
   const now=Date.now();
-  const done=mine.filter(g=>g.hs!=null&&g.d.getTime()<now).sort((a,b)=>b.d-a.d);
+  // A game that started in the last 2½ hours may still be on: ask its match JSON.
+  let live=null;
+  for(const g of mine.filter(g=>g.mid&&g.d.getTime()<now+5*60e3&&g.d.getTime()>now-150*60e3)){
+    try{
+      const j=await (await fetch("https://tophaandbold.dk/match/"+g.mid+".json")).json();
+      const st=String(j.status||""),finished=/finish|ended|slut|afslut|done|played|complete/i.test(st)||(/^60:00/.test(j.time||"")&&!j.time_running);
+      console.log(`    handball live check ${g.mid}: status "${st}", time ${j.time}, running ${j.time_running}, score ${j.score}`);
+      if(finished)continue;
+      const started=j.time_running||(j.time&&j.time!=="00:00.00")||g.d.getTime()<now;
+      if(!started)continue;
+      const [hs,as]=String(j.score||"0-0").split("-").map(Number),home=isMe(g.home),min=parseInt(String(j.time||"0"),10);
+      live={opponent:(home?g.away:g.home)+(home?" (H)":" (A)"),score:(home?hs+"–"+as:as+"–"+hs),
+        detail:/pause|halvleg|half/i.test(st)?"Half-time":min?min+"'":"Live",mid:g.mid};
+      g.hs=null; // not a result yet
+    }catch(e){console.log("    handball live check: "+e.message);}
+  }
+  const done=mine.filter(g=>g.hs!=null&&g.d.getTime()<now&&(!live||g.mid!==live.mid)).sort((a,b)=>b.d-a.d);
   const next=mine.filter(g=>g.hs==null&&g.d.getTime()>now-3*3600e3).sort((a,b)=>a.d-b.d)[0];
   const view=g=>{const home=isMe(g.home),ms=home?g.hs:g.as,os=home?g.as:g.hs;return{opp:(home?g.away:g.home)+(home?" (H)":" (A)"),ms,os};};
   const fmtS=d=>d.toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:"Europe/Copenhagen"});
-  return{
+  return{liveGame:live,
     recentResults:done.slice(0,5).map(g=>{const v=view(g);return{opponent:v.opp,score:v.ms+"–"+v.os,result:v.ms>v.os?"W":v.ms<v.os?"L":"D",date:fmtS(g.d),ts:g.d.getTime(),hbm:g.mid||undefined,home:isMe(g.home)?1:0};}),
     nextGame:next?{opponent:view(next).opp,date:next.d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",timeZone:"Europe/Copenhagen"}),
       time:next.d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"}),tv:next.tv||"–",ts:next.d.getTime()}:null,
@@ -514,8 +539,10 @@ async function rolexStanding(team){
 }
 
 const teams={},seen=new Set();let ok=0,failed=0;
+let skipped=0;
 for(const t of Object.values(api.DB)){
   if(seen.has(t.name))continue;seen.add(t.name);
+  if(LIVE&&!needsLive(prev[t.name])){if(prev[t.name]){teams[t.name]=prev[t.name];ok++;}skipped++;continue;}
   api._liveLog.length=0;
   try{
     let data=await api.fetchTeamLive(t);
@@ -545,6 +572,8 @@ for(const t of Object.values(api.DB)){
           // keep a sooner non-league game (e.g. European cup from TheSportsDB) if there is one
           if(pg.nextGame&&!(data.nextGame&&data.nextGame.ts&&data.nextGame.ts<pg.nextGame.ts))data.nextGame=pg.nextGame;
           if(!/Top Håndbold/.test(data.source))data.source+=" + Top Håndbold";
+          if(pg.liveGame)data.liveGame=pg.liveGame;
+          data.preferSnapshot=true; // the app's own handball source (TheSportsDB) has far less: use this file
         }
       }
     }
@@ -592,10 +621,14 @@ for(const t of Object.values(api.DB)){
       teams[t.name]={ts:Date.now(),data:{newsOnly:true,source:"News",news:nw.news,newsTs:nw.ts,newsV:NEWS_V}};
       console.log("·",t.name,"· news only");
     }
-  }catch(e){failed++;console.error("✗",t.name,"-",e.message);}
+  }catch(e){failed++;console.error("✗",t.name,"-",e.message);if(prev[t.name])teams[t.name]=prev[t.name]; /* keep the last good data */}
   api._liveLog.forEach(m=>console.log("   ",m));
 }
 mkdirSync("out",{recursive:true});
 writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams}));
-console.log(`${ok} teams updated, ${failed} failed, ${seen.size-ok-failed} without a live source`);
+// Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
+const liveNow=Object.entries(teams).filter(([,e])=>needsLive(e)).map(([n,e])=>n+(e.data.liveGame?" "+e.data.liveGame.score:" (kick-off soon)"));
+if(liveNow.length){writeFileSync("out/live-needed",liveNow.join("\n"));console.log("live: "+liveNow.join(" · "));}
+else if(existsSync("out/live-needed"))rmSync("out/live-needed");
+console.log(LIVE?`live run: ${seen.size-skipped} teams refreshed, ${failed} failed`:`${ok} teams updated, ${failed} failed, ${seen.size-ok-failed} without a live source`);
 if(ok===0)process.exit(1);

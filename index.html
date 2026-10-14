@@ -365,10 +365,10 @@ function liveLog(m){_liveLog.push(m);if(_liveLog.length>200)_liveLog.shift();}
 
 function lsGet(k){try{const v=localStorage.getItem(k);return v?JSON.parse(v):null;}catch(e){return null;}}
 function lsSet(k,v){try{localStorage.setItem(k,JSON.stringify(v));}catch(e){}}
-async function fetchJSON(url){
+async function fetchJSON(url,headers){
   const ctl=typeof AbortController!=="undefined"?new AbortController():null;
   const t=ctl&&setTimeout(()=>ctl.abort(),10000);
-  try{const r=await fetch(url,ctl?{signal:ctl.signal}:{});if(!r.ok)throw new Error("HTTP "+r.status);return await r.json();}
+  try{const r=await fetch(url,{...(ctl?{signal:ctl.signal}:{}),...(headers?{headers}:{})});if(!r.ok)throw new Error("HTTP "+r.status);return await r.json();}
   catch(e){throw new Error(e.name==="AbortError"?"timeout":e.message==="Failed to fetch"||e.name==="TypeError"?"blocked":e.message);}
   finally{if(t)clearTimeout(t);}
 }
@@ -915,10 +915,17 @@ async function fetchTeamLive(team){
 // Snapshot written every ~15 min by .github/workflows/update-live-data.yml; used when the
 // browser can't reach the APIs itself.
 const SNAPSHOT_URL="https://raw.githubusercontent.com/tinerc2-jpg/My-Sports-Hub/live-data/live.json";
-let _snap=null,_snapTs=0;
-async function getSnapshot(){
-  if(_snap&&Date.now()-_snapTs<5*60*1000)return _snap;
-  const j=await fetchJSON(SNAPSHOT_URL+"?t="+Math.floor(Date.now()/300000));
+let _snap=null,_snapTs=0,_snapApiBlocked=0;
+const SNAPSHOT_API="https://api.github.com/repos/tinerc2-jpg/My-Sports-Hub/contents/live.json?ref=live-data";
+// A game is on (or about to start) for this cached entry: refresh fast and read the freshest snapshot.
+function liveWindow(e){const d=e&&e.data,k=d&&d.nextGame&&d.nextGame.ts,now=Date.now();return !!(d&&(d.liveGame||(k&&now>k-15*60e3&&now<k+150*60e3)));}
+async function getSnapshot(fresh){
+  if(_snap&&Date.now()-_snapTs<(fresh?75*1000:5*60*1000))return _snap;
+  // During live games the robot republishes every minute, but raw.githubusercontent caches for ~5 min,
+  // so read the file through the GitHub API (no cache; GitHub allows 60 requests/hour per visitor, so at most one per 75 s), else the raw file.
+  let j=null;
+  if(fresh&&!(_snapApiBlocked>Date.now()))j=await fetchJSON(SNAPSHOT_API,{Accept:"application/vnd.github.raw"}).catch(()=>{_snapApiBlocked=Date.now()+10*60*1000;return null;});
+  if(!j)j=await fetchJSON(SNAPSHOT_URL+"?t="+Math.floor(Date.now()/300000));
   _snap=j.teams||{};_snapTs=Date.now();
   return _snap;
 }
@@ -1563,7 +1570,13 @@ function App(){
     const cur=liveRef.current[t.name];
     if(!force&&!liveIsStale(cur,t.id===selRef.current))return;
     _inflight[t.name]=true;setBusy(b=>({...b,[t.name]:true}));
+    const fresh=liveWindow(cur);
     try{
+      // Handball (and anything the robot marks so) is richer in the snapshot than from the browser's own sources.
+      const snap0=await getSnapshot(fresh).catch(()=>null),s0=snap0&&snap0[t.name];
+      if(s0&&s0.data&&s0.data.preferSnapshot&&Date.now()-s0.ts<45*60e3){
+        saveLive(t.name,{ts:s0.ts,data:{...s0.data,source:s0.data.source+" via GitHub"}});return;
+      }
       let data=await fetchTeamLive(t);
       // Some things only exist in the GitHub snapshot (handball table, news): merge them in.
       if(!data||!data.standing||!data.news){
@@ -1576,7 +1589,7 @@ function App(){
       }
       saveLive(t.name,{ts:Date.now(),data});
     }catch(e){
-      const snap=await getSnapshot().catch(()=>null),s=snap&&snap[t.name];
+      const snap=await getSnapshot(fresh).catch(()=>null),s=snap&&snap[t.name];
       if(s&&s.data&&(!cur||!cur.data||!cur.ts||s.ts>=cur.ts))
         saveLive(t.name,{ts:s.ts,data:{...s.data,source:s.data.source+" via GitHub"}});
       else saveLive(t.name,{...(cur||{}),errTs:Date.now(),err:String(e&&e.message||e)});
