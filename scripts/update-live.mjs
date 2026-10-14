@@ -206,7 +206,7 @@ async function teamNews(team){
   const p=prev[team.name]&&prev[team.name].data,now=Date.now();
   if(p&&p.newsV===NEWS_V&&p.news&&p.news.length&&now-(p.newsTs||0)<NEWS_TTL)return{news:p.news,ts:p.newsTs};
   const dk=team.country==="🇩🇰",w=SPORT_WORDS[team.sport]||["",""];
-  let names=[...new Set([team.name,team.shortName])].filter(n=>!/\./.test(n)); // skip "N. Hojgaard"-style short names
+  let names=[...new Set([team.name,team.shortName])].filter(n=>!/\./.test(n)); // skip "N. Højgaard"-style short names
   if(!names.length)names=[team.name];
   const who=names.length>1?"("+names.map(n=>`"${n}"`).join(" OR ")+")":`"${names[0]}"`;
   let items=[];
