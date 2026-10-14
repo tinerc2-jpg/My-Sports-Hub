@@ -343,7 +343,12 @@ async function pcsCycling(team){
       if(!race)continue;
       if(raw.length<8)raw.push((di>=0?cells[di]:"-")+"|"+(ri>=0?cells[ri]:"-")+"|"+race.slice(0,40));
       const d=di>=0?toDate(cells[di]):null;
-      if(/^\d*\s*(Stage\s*\d|Prologue)/i.test(race))continue;                 // a stage
+      if(/^\d*\s*(Stage\s*\d|Prologue)/i.test(race)){                          // a stage:
+        // abandoning means no GC row, so show the race as DNF/DNS/OTL (once per race)
+        if(ri>=0&&/^(DNF|DNS|OTL|DSQ)$/.test(cells[ri])&&curRace&&!rows.some(r=>r.race.startsWith(curRace)))
+          rows.push({d:d||curDate,res:cells[ri],race:curRace});
+        continue;
+      }
       if(/(points|mountains?|youth|teams?|young rider|kom|sprint)\s+classification/i.test(race))continue;
       if(/general classification/i.test(race)){
         if(ri>=0&&curRace)rows.push({d:d||curDate,res:cells[ri],race:curRace+" · GC"});
