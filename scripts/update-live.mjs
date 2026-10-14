@@ -580,6 +580,18 @@ async function rolexStanding(team){
 // skipped; the rest are added as plain entries, fetched like DB teams and listed in live.json's
 // leagueTeams, which the app uses for searching / adding.
 const LEAGUE_TEAMS=[{sp:"soccer",lg:"den.1",league:"Superliga",country:"🇩🇰"}];
+// ESPN gives many clubs black/white (or no) colours and some names in another form: club colours / names here.
+const CLUB_STYLE={
+  "F.C. København":{name:"FC København",color:"#1c3f94",accent:"#9fb8e8"},"Brøndby IF":{color:"#f2c500",accent:"#1d3c8f"},
+  "FC Midtjylland":{color:"#c8102e",accent:"#111111"},"AGF":{color:"#1e5fa8",accent:"#9cc3ef"},"AC Horsens":{color:"#e8b400",accent:"#111111"},
+  "Lyngby Boldklub":{color:"#004b9b",accent:"#7fb2ea"},"Odense Boldklub":{shortName:"OB",color:"#0055a5",accent:"#8ec0f0"},
+  "Randers FC":{color:"#1f78c8",accent:"#81c0ff"},"Silkeborg IF":{color:"#d71920",accent:"#7a0f14"},"Sønderjyske Fodbold":{color:"#3a8fd6",accent:"#0d2f63"},
+  "Viborg FF":{color:"#00843d",accent:"#0b3d22"},"FC Nordsjælland":{color:"#cf010e",accent:"#ff9f1a"},
+  "Vejle Boldklub":{color:"#c8102e",accent:"#111111"},"FC Fredericia":{color:"#c8102e",accent:"#1d3360"},"Aalborg BK":{shortName:"AaB",color:"#c8102e",accent:"#ffffff"},
+};
+// the app appends alpha to colours ("#rrggbbcc"), so they must be #rrggbb
+function hslHex(h,sat,l){sat/=100;l/=100;const k=n=>(n+h/30)%12,a=sat*Math.min(l,1-l),f=n=>l-a*Math.max(-1,Math.min(k(n)-3,9-k(n),1));
+  return "#"+[f(0),f(8),f(4)].map(x=>Math.round(x*255).toString(16).padStart(2,"0")).join("");}
 async function leagueTeams(){
   const out=[],dbNames=Object.values(api.DB).map(d=>d.name);
   for(const L of LEAGUE_TEAMS){
@@ -592,9 +604,11 @@ async function leagueTeams(){
         if(!t||!t.displayName)continue;
         const al=[t.displayName,t.shortDisplayName,t.name].filter(Boolean).map(api.norm);
         if(dbNames.some(n=>api.nameMatch(al,[n])===2))continue;
-        const hex=c=>/^[0-9a-f]{6}$/i.test(c||"")?"#"+c:null;
-        out.push({name:t.displayName,shortName:t.shortDisplayName||t.name||t.displayName,sport:"Football",league:L.league,country:L.country,
-          color:hex(t.color)||"#1d3360",accent:hex(t.alternateColor)||"#e8409a",emoji:"⚽",
+        // no colour, or black/white (unreadable as a card background): a colour made from the name
+        const hex=c=>/^[0-9a-f]{6}$/i.test(c||"")&&!/^(000000|ffffff)$/i.test(c)?"#"+c:null;
+        const hue=[...t.displayName].reduce((a,ch)=>(a*31+ch.charCodeAt(0))%360,7),st=CLUB_STYLE[t.displayName]||{};
+        out.push({name:st.name||t.displayName,shortName:st.shortName||(st.name?st.name.replace(/^FC /,""):null)||t.shortDisplayName||t.name||t.displayName,sport:"Football",league:L.league,country:L.country,
+          color:st.color||hex(t.color)||hslHex(hue,60,40),accent:st.accent||hex(t.alternateColor)||hslHex((hue+40)%360,60,25),emoji:"⚽",
           standing:{rank:null,points:null,wins:null,draws:null,losses:null},recentResults:[],nextGame:null,news:[]});
         added++;
       }
