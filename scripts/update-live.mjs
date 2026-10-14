@@ -28,7 +28,8 @@ const LIVE=process.argv.includes("--live");
 const NOW=Date.now();
 function needsLive(e){const d=e&&e.data,k=d&&d.nextGame&&d.nextGame.ts;return !!(d&&(d.liveGame||(k&&NOW>k-15*60e3&&NOW<k+150*60e3)));}
 let prev={};
-if(LIVE&&existsSync("out/live.json"))prev=JSON.parse(readFileSync("out/live.json","utf8")).teams||{};
+let prevExtra=null;
+if(LIVE&&existsSync("out/live.json")){const j=JSON.parse(readFileSync("out/live.json","utf8"));prev=j.teams||{};prevExtra=j.leagueTeams||[];}
 else try{
   // the API has no CDN cache (raw.githubusercontent can be ~5 min old); raw file as fallback
   const repo=process.env.GITHUB_REPOSITORY||"tinerc2-jpg/My-Sports-Hub";
@@ -575,9 +576,37 @@ async function rolexStanding(team){
   return null;
 }
 
+// Whole leagues from ESPN's team list (so promoted clubs appear by themselves). Clubs already in DB are
+// skipped; the rest are added as plain entries, fetched like DB teams and listed in live.json's
+// leagueTeams, which the app uses for searching / adding.
+const LEAGUE_TEAMS=[{sp:"soccer",lg:"den.1",league:"Superliga",country:"🇩🇰"}];
+async function leagueTeams(){
+  const out=[],dbNames=Object.values(api.DB).map(d=>d.name);
+  for(const L of LEAGUE_TEAMS){
+    try{
+      const r=await fetch(`https://site.api.espn.com/apis/site/v2/sports/${L.sp}/${L.lg}/teams?limit=200`);
+      if(!r.ok)throw new Error("HTTP "+r.status);
+      const raw=((((await r.json()).sports||[])[0]||{}).leagues||[])[0]?.teams||[];
+      let added=0;
+      for(const {team:t} of raw){
+        if(!t||!t.displayName)continue;
+        const al=[t.displayName,t.shortDisplayName,t.name].filter(Boolean).map(api.norm);
+        if(dbNames.some(n=>api.nameMatch(al,[n])===2))continue;
+        const hex=c=>/^[0-9a-f]{6}$/i.test(c||"")?"#"+c:null;
+        out.push({name:t.displayName,shortName:t.shortDisplayName||t.name||t.displayName,sport:"Football",league:L.league,country:L.country,
+          color:hex(t.color)||"#1d3360",accent:hex(t.alternateColor)||"#e8409a",emoji:"⚽",
+          standing:{rank:null,points:null,wins:null,draws:null,losses:null},recentResults:[],nextGame:null,news:[]});
+        added++;
+      }
+      console.log(`league ${L.league}: ${raw.length} clubs, ${added} added (${out.slice(-added).map(t=>t.shortName).join(", ")})`);
+    }catch(e){console.log(`league ${L.league}: ${e.message}`);}
+  }
+  return out;
+}
+const extraTeams=LIVE?Object.values(prevExtra||{}):await leagueTeams();
 const teams={},seen=new Set();let ok=0,failed=0;
 let skipped=0;
-for(const t of Object.values(api.DB)){
+for(const t of [...Object.values(api.DB),...extraTeams]){
   if(seen.has(t.name))continue;seen.add(t.name);
   if(LIVE&&!needsLive(prev[t.name])){if(prev[t.name]){teams[t.name]=prev[t.name];ok++;}skipped++;continue;}
   api._liveLog.length=0;
@@ -675,7 +704,7 @@ for(const t of Object.values(api.DB)){
   api._liveLog.forEach(m=>console.log("   ",m));
 }
 mkdirSync("out",{recursive:true});
-writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams}));
+writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
 const liveNow=Object.entries(teams).filter(([,e])=>needsLive(e)).map(([n,e])=>n+(e.data.liveGame?" "+e.data.liveGame.score:" (kick-off soon)"));
 if(liveNow.length){writeFileSync("out/live-needed",liveNow.join("\n"));console.log("live: "+liveNow.join(" · "));}

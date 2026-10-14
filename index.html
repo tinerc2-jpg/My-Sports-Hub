@@ -916,6 +916,8 @@ async function fetchTeamLive(team){
 // browser can't reach the APIs itself.
 const SNAPSHOT_URL="https://raw.githubusercontent.com/tinerc2-jpg/My-Sports-Hub/live-data/live.json";
 let _snap=null,_snapTs=0,_snapApiBlocked=0;
+// Whole-league clubs that aren't in DB (e.g. every Superliga club), listed by the robot in live.json.
+let EXTRA=lsGet("msh-extra")||[];
 const SNAPSHOT_API="https://api.github.com/repos/tinerc2-jpg/My-Sports-Hub/contents/live.json?ref=live-data";
 // A game is on (or about to start) for this cached entry: refresh fast and read the freshest snapshot.
 function liveWindow(e){const d=e&&e.data,k=d&&d.nextGame&&d.nextGame.ts,now=Date.now();return !!(d&&(d.liveGame||(k&&now>k-15*60e3&&now<k+150*60e3)));}
@@ -927,6 +929,7 @@ async function getSnapshot(fresh){
   if(fresh&&!(_snapApiBlocked>Date.now()))j=await fetchJSON(SNAPSHOT_API,{Accept:"application/vnd.github.raw"}).catch(()=>{_snapApiBlocked=Date.now()+10*60*1000;return null;});
   if(!j)j=await fetchJSON(SNAPSHOT_URL+"?t="+Math.floor(Date.now()/300000));
   _snap=j.teams||{};_snapTs=Date.now();
+  if(Array.isArray(j.leagueTeams)&&j.leagueTeams.length){EXTRA=j.leagueTeams;lsSet("msh-extra",EXTRA);}
   return _snap;
 }
 
@@ -1050,7 +1053,7 @@ add(["alexander bjork","alexander björk","bjork","björk"],{name:"Alexander Bj�
 add(["sebastian soderberg","sebastian söderberg","soderberg","söderberg"],{name:"Sebastian Söderberg",shortName:"Söderberg",sport:"Golf",league:"DP World Tour",country:"🇸🇪",color:"#0D5C9E",accent:"#FFCD00",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
 add(["jesper svensson"],{name:"Jesper Svensson",shortName:"Svensson",sport:"Golf",league:"DP World Tour",country:"🇸🇪",color:"#08518F",accent:"#FFCD00",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
 const HINTS={
-  Football:["Arsenal","Liverpool","Man City","Chelsea","Barcelona","Real Madrid","Atletico Madrid","Bayern Munich","PSG","Inter Milan"],
+  Football:["FC København","Brøndby IF","FC Midtjylland","AGF","Arsenal","Liverpool","Man City","Chelsea","Barcelona","Real Madrid","Atletico Madrid","Bayern Munich","PSG","Inter Milan"],
   Handball:["GOG","Aalborg","THW Kiel"],
   Tennis:["Holger Rune","Djokovic","Alcaraz","Sinner"],
   Basketball:["Lakers","Celtics"],
@@ -1070,6 +1073,8 @@ function lookup(name,sport){
   const k=q&&(Object.keys(DB).find(k=>norm(k)===q||norm(DB[k].name)===q)
     ||Object.keys(DB).find(k=>{const nk=norm(k);return nk.length>=3&&(q.includes(nk)||nk.includes(q));}));
   if(k)return{...DB[k]};
+  const x=q&&(EXTRA.find(e=>norm(e.name)===q||norm(e.shortName)===q)||EXTRA.find(e=>{const n=norm(e.name);return q.length>=3&&(n.includes(q)||q.includes(norm(e.shortName)));}));
+  if(x)return{...x};
   const pal=tColor(name);
   return{name:name.trim().split(" ").map(w=>w[0].toUpperCase()+w.slice(1)).join(" "),shortName:name.trim().split(" ").slice(-1)[0].slice(0,10),sport,league:sport+" League",country:"🏳️",color:pal.color,accent:pal.accent,emoji:sEmoji(sport),standing:{rank:null,points:null,wins:null,draws:null,losses:null},recentResults:[],nextGame:{opponent:"Check official site",date:"TBD",time:"–",tv:"–"},news:[{title:"Added as custom favourite",time:"now",hot:false}],_unknown:true};
 }
@@ -1084,8 +1089,8 @@ function editDist(a,b){
 function suggest(name,sport,max=6,minScore=40){
   const q=norm(name).trim();if(q.length<2)return[];
   const best=new Map();
-  for(const k of Object.keys(DB)){
-    const e=DB[k];let sc=0;
+  for(const [k,e] of [...Object.keys(DB).map(k=>[k,DB[k]]),...EXTRA.map(e=>[e.name,e])]){
+    let sc=0;
     for(const a of [norm(k),norm(e.name),norm(e.shortName)]){
       if(!a)continue;
       if(a===q)sc=Math.max(sc,100);
@@ -1385,6 +1390,9 @@ function AddModal({onClose,onAdd}){
   const [sel,setSel]=useState(null);
   const [q,setQ]=useState("");
   const [preview,setPreview]=useState(null);
+  // load the robot's list of whole-league clubs (Superliga …) so search knows them
+  const [,setTick]=useState(0);
+  useEffect(()=>{getSnapshot().then(()=>setTick(x=>x+1)).catch(()=>{});},[]);
   const ref=useRef(),stepRef=useRef(step);
   stepRef.current=step;
   useEffect(()=>{if(step==="search")setTimeout(()=>ref.current&&ref.current.focus(),100);},[step]);
@@ -1465,7 +1473,7 @@ function AddModal({onClose,onAdd}){
         h("div",{style:{display:"flex",flexWrap:"wrap",gap:7}},
           (sel&&HINTS[sel.label]||[]).map(hn=>{
             const hk=Object.keys(DB).find(k=>norm(k)===norm(hn)||norm(DB[k].name)===norm(hn)||norm(DB[k].shortName)===norm(hn));
-            const inDB=!!hk,dbEntry=hk&&DB[hk];
+            const dbEntry=hk?DB[hk]:EXTRA.find(e=>norm(e.name)===norm(hn)||norm(e.shortName)===norm(hn)),inDB=!!dbEntry;
             return h("button",{key:hn,onClick:()=>go(hn),style:{background:inDB?"rgba(232,64,154,0.08)":"rgba(255,255,255,0.08)",border:inDB?"1px solid rgba(232,64,154,0.3)":"1px solid rgba(255,255,255,0.1)",borderRadius:20,padding:"7px 12px",color:inDB?"#ff9fd0":"#eef2f8",fontSize:"0.8rem",cursor:"pointer",fontFamily:font,display:"flex",alignItems:"center",gap:6}},
               dbEntry&&h(TeamLogo,{name:hn,size:20,color:dbEntry.color,accent:dbEntry.accent}),
               hn
