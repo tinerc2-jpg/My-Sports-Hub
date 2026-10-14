@@ -981,7 +981,7 @@ function StatBox({label,value,sub}){
   return h("div",{style:{background:"rgba(255,255,255,0.08)",borderRadius:12,padding:"12px 8px",flex:"1 1 0",minWidth:0,textAlign:"center"}},
     h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:String(value??"").length>6?"1.05rem":"1.5rem",fontWeight:800,color:"#fff",lineHeight:1,whiteSpace:"nowrap"}},value??"-"),
     h("div",{style:{fontSize:"0.55rem",opacity:0.8,marginTop:4,letterSpacing:"1px",textTransform:"uppercase",fontFamily:"Inter,sans-serif"}},label),
-    sub&&h("div",{style:{fontSize:"0.6rem",opacity:0.7,marginTop:2,color:"#e8409a"}},sub)
+    sub&&h("div",{style:{fontSize:"0.6rem",marginTop:2,color:"#ff9fd0"}},sub)
   );
 }
 
@@ -1076,11 +1076,11 @@ function NextGame({team}){
     h("div",{style:{display:"flex",gap:12,flexWrap:"wrap",marginBottom:10}},
       h("span",{style:{fontSize:"0.7rem",color:"#d5deee",fontFamily:"Inter,sans-serif"}},"🗓️ "+g.date),
       h("span",{style:{fontSize:"0.7rem",color:"#d5deee",fontFamily:"Inter,sans-serif"}},"🕐 "+g.time),
-      h("span",{style:{fontSize:"0.7rem",color:"#e8409a",fontFamily:"Inter,sans-serif",fontWeight:600}},"📺 "+g.tv)
+      h("span",{style:{fontSize:"0.7rem",color:"#ff9fd0",fontFamily:"Inter,sans-serif",fontWeight:600}},"📺 "+g.tv)
     ),
     h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",borderTop:"1px solid rgba(255,255,255,0.08)",paddingTop:8}},
       h("span",{style:{fontSize:"0.55rem",color:"rgba(255,255,255,0.6)",fontFamily:"Inter,sans-serif"}},team._live?"Auto-updated \xB7 "+team._live:"Data: May 2026"),
-      h("a",{href:getLiveUrl(),target:"_blank",rel:"noopener noreferrer",style:{fontSize:"0.65rem",fontWeight:600,color:"#e8409a",fontFamily:"Inter,sans-serif",textDecoration:"none",background:"rgba(232,64,154,0.1)",border:"1px solid rgba(232,64,154,0.25)",borderRadius:5,padding:"3px 9px"}},getLiveLabel())
+      h("a",{href:getLiveUrl(),target:"_blank",rel:"noopener noreferrer",style:{fontSize:"0.65rem",fontWeight:600,color:"#ff9fd0",fontFamily:"Inter,sans-serif",textDecoration:"none",background:"rgba(232,64,154,0.1)",border:"1px solid rgba(232,64,154,0.25)",borderRadius:5,padding:"3px 9px"}},getLiveLabel())
     )
   );
 }
@@ -1103,7 +1103,7 @@ function LiveStatus({entry,busy,sport,onRefresh}){
   if(busy)txt="Updating results…";
   else if(entry&&entry.errTs&&(!entry.ts||entry.errTs>entry.ts))txt=(d?"Couldn't update \xB7 showing results from "+timeAgo(entry.ts):"Couldn't reach live results \xB7 showing saved data")+(entry.err?" ("+entry.err+")":""),col="#fbbf24";
   else if(d&&d.newsOnly)txt="News auto-updating \xB7 results for "+sport+" not available yet";
-  else if(d)txt="Auto-updating \xB7 "+d.source+" \xB7 updated "+timeAgo(entry.ts),col="#e8409a";
+  else if(d)txt="Auto-updating \xB7 "+d.source+" \xB7 updated "+timeAgo(entry.ts),col="#ff9fd0";
   else if(entry)txt="Auto-update not available for "+sport+" yet \xB7 showing saved data";
   else txt="Checking for live results…";
   return h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8,marginBottom:12,fontSize:"0.62rem",fontFamily:"Inter,sans-serif",color:col}},
@@ -1143,7 +1143,7 @@ function AddModal({onClose,onAdd}){
       ),
 
       step==="search"&&h("div",null,
-        h("button",{onClick:()=>{setStep("sport");setQ("");},style:{background:"none",border:"none",color:"#e8409a",fontSize:"0.76rem",cursor:"pointer",marginBottom:10,padding:0,fontFamily:"Inter,sans-serif"}},"← Back"),
+        h("button",{onClick:()=>{setStep("sport");setQ("");},style:{background:"none",border:"none",color:"#ff9fd0",fontSize:"0.76rem",cursor:"pointer",marginBottom:10,padding:0,fontFamily:"Inter,sans-serif"}},"← Back"),
         h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.2rem",fontWeight:800,color:"#fff",marginBottom:10}},sel&&sel.emoji+" "+sel.label),
         h("div",{style:{display:"flex",gap:8,marginBottom:14}},
           h("input",{ref,value:q,onChange:e=>setQ(e.target.value),onKeyDown:e=>e.key==="Enter"&&go(),placeholder:sel&&"e.g. "+sel.ex,style:{flex:1,background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.15)",borderRadius:10,padding:"12px 14px",color:"#fff",fontSize:"0.9rem",fontFamily:"Inter,sans-serif",outline:"none"}}),
@@ -1154,7 +1154,7 @@ function AddModal({onClose,onAdd}){
           (sel&&HINTS[sel.label]||[]).map(hn=>{
             const inDB=Object.keys(DB).some(k=>DB[k].name===hn||DB[k].shortName===hn);
             const dbEntry=DB[Object.keys(DB).find(k=>DB[k].name===hn||DB[k].shortName===hn)];
-            return h("button",{key:hn,onClick:()=>go(hn),style:{background:inDB?"rgba(232,64,154,0.08)":"rgba(255,255,255,0.08)",border:inDB?"1px solid rgba(232,64,154,0.3)":"1px solid rgba(255,255,255,0.1)",borderRadius:20,padding:"5px 12px",color:inDB?"#e8409a":"#eef2f8",fontSize:"0.74rem",cursor:"pointer",fontFamily:"Inter,sans-serif",display:"flex",alignItems:"center",gap:6}},
+            return h("button",{key:hn,onClick:()=>go(hn),style:{background:inDB?"rgba(232,64,154,0.08)":"rgba(255,255,255,0.08)",border:inDB?"1px solid rgba(232,64,154,0.3)":"1px solid rgba(255,255,255,0.1)",borderRadius:20,padding:"5px 12px",color:inDB?"#ff9fd0":"#eef2f8",fontSize:"0.74rem",cursor:"pointer",fontFamily:"Inter,sans-serif",display:"flex",alignItems:"center",gap:6}},
               dbEntry&&h(TeamLogo,{name:hn,size:20,color:dbEntry.color,accent:dbEntry.accent}),
               hn
             );
@@ -1204,7 +1204,7 @@ function FavBar({teams,selected,onSelect,onAdd,liveNames}){
         liveNames&&liveNames[t.name]&&h("span",{className:"live-dot",title:"Live now"})
       );
     }),
-    h("button",{onClick:onAdd,style:{display:"flex",alignItems:"center",gap:5,background:"rgba(232,64,154,0.09)",border:"2px dashed rgba(232,64,154,0.35)",borderRadius:40,padding:"6px 14px",cursor:"pointer",color:"#e8409a",fontFamily:"Inter,sans-serif",fontWeight:600,fontSize:"0.78rem",whiteSpace:"nowrap"}},
+    h("button",{onClick:onAdd,style:{display:"flex",alignItems:"center",gap:5,background:"rgba(232,64,154,0.09)",border:"2px dashed rgba(232,64,154,0.35)",borderRadius:40,padding:"6px 14px",cursor:"pointer",color:"#ff9fd0",fontFamily:"Inter,sans-serif",fontWeight:600,fontSize:"0.78rem",whiteSpace:"nowrap"}},
       h("span",{style:{fontSize:"1rem",lineHeight:1}},"＋"),
       " Add"
     )
@@ -1361,7 +1361,7 @@ function App(){
           h("div",{style:{fontSize:"0.68rem",opacity:0.8,marginTop:3}},team.sport+" \xB7 "+team.league+" \xB7 "+team.country)
         ),
         h("div",{style:{display:"flex",gap:6}},
-        h("button",{onClick:handleShare,style:{background:"rgba(232,64,154,0.1)",border:"1px solid rgba(232,64,154,0.25)",borderRadius:8,padding:"5px 10px",color:"#e8409a",cursor:"pointer",fontSize:"0.65rem",fontFamily:"Inter,sans-serif"}},
+        h("button",{onClick:handleShare,style:{background:"rgba(232,64,154,0.1)",border:"1px solid rgba(232,64,154,0.25)",borderRadius:8,padding:"5px 10px",color:"#ff9fd0",cursor:"pointer",fontSize:"0.65rem",fontFamily:"Inter,sans-serif"}},
           "📤 Share"
         ),
         teams.length>1&&h("button",{onClick:()=>setRemoving(team.id),style:{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:8,padding:"5px 12px",color:"#f87171",cursor:"pointer",fontSize:"0.68rem",fontWeight:500,fontFamily:"Inter,sans-serif"}},"✕ Remove")
