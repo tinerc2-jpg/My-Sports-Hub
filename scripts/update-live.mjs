@@ -170,6 +170,27 @@ function hbTableFromTokens(tokens,al){
   const list=Object.values(rows).sort((a,b)=>a.r-b.r);
   return list.length>=8&&list.some(r=>r.me)?list:null;
 }
+// Diagnostic (temporary): where does tophaandbold.dk list match results? Logs result-ish links and
+// a snippet around "GOG" on candidate pages, so a results parser can be written from the real HTML.
+let _hbProbed=false;
+async function hbResultsProbe(){
+  if(_hbProbed)return;_hbProbed=true;
+  try{
+    const html=await (await fetch("https://tophaandbold.dk/stillinger/herreligaen")).text();
+    const links=[...new Set([...html.matchAll(/href="([^"]+)"/g)].map(m=>m[1]).filter(u=>/kamp|result|program|match|hold|klub|team/i.test(u)))].slice(0,30);
+    console.log("    HB probe links: "+links.join(" "));
+    const cands=[...new Set(links.filter(u=>/kamp|result|program/i.test(u)).map(u=>u.startsWith("http")?u:"https://tophaandbold.dk"+u)
+      .concat(["https://tophaandbold.dk/kampprogram/herreligaen","https://tophaandbold.dk/resultater/herreligaen"]))].slice(0,4);
+    for(const u of cands){
+      try{
+        const r=await fetch(u),t=await r.text(),txt=t.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g," ").replace(/<[^>]+>/g," ").replace(/\s+/g," ");
+        const i=txt.indexOf("GOG"),j=t.indexOf("GOG");
+        console.log(`    HB probe ${u}: HTTP ${r.status}, ${t.length} bytes · text: «${i>=0?txt.slice(Math.max(0,i-150),i+250):txt.slice(0,200)}»`);
+        if(i<0&&j>=0)console.log(`    HB probe raw: «${t.slice(Math.max(0,j-200),j+300).replace(/\s+/g," ")}»`);
+      }catch(e){console.log("    HB probe "+u+": "+e.message);}
+    }
+  }catch(e){console.log("    HB probe: "+e.message);}
+}
 // Returns {standing, from} from the first page with a valid row, or null.
 async function tv2Standing(team){
   const al=api.teamAliases(team);
@@ -429,6 +450,7 @@ for(const t of Object.values(api.DB)){
           }
         }
       }
+      if(t.league===TV2_LEAGUE)await hbResultsProbe();
       if(!data.standing&&t.league===TV2_LEAGUE){
         const s=await tv2Standing(t);
         if(s){data.standing=s.standing;data.standingFrom=s.from;data.standingTs=Date.now();data.source=data.source.replace(" + Wikipedia","")+" + "+s.from;}
