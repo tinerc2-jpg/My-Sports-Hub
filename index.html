@@ -1503,24 +1503,24 @@ function RemoveConfirm({teamName,onCancel,onConfirm}){
   );
 }
 
-function FavBar({teams,selected,onSelect,onAdd,liveNames}){
-  // One swipeable row (keeps the sticky header small on phones); "+ Add" stays visible on the right.
-  const rowRef=useRef();
-  useEffect(()=>{const el=rowRef.current&&rowRef.current.querySelector("[data-on]");if(el&&el.scrollIntoView)el.scrollIntoView({block:"nearest",inline:"nearest",behavior:"smooth"});},[selected]);
-  return h("div",{style:{display:"flex",gap:8,alignItems:"center"}},
-    h("div",{ref:rowRef,className:"msh-hscroll",style:{display:"flex",gap:8,overflowX:"auto",flex:1,minWidth:0,paddingBottom:2}},
-    teams.map(t=>{
-      const on=selected===t.id;
-      return h("button",{key:t.id,"data-on":on?"1":undefined,onClick:()=>onSelect(t.id),style:{display:"flex",alignItems:"center",gap:7,background:on?"linear-gradient(135deg,"+t.color+","+t.accent+")":"rgba(255,255,255,0.08)",border:on?"2px solid "+t.color:"2px solid rgba(255,255,255,0.1)",borderRadius:40,padding:"6px 14px 6px 8px",cursor:"pointer",color:"#fff",transition:"all 0.2s",whiteSpace:"nowrap",flexShrink:0}},
-        h(TeamLogo,{name:t.name,size:26,color:t.color,accent:t.accent}),
-        h("span",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"0.9rem",fontWeight:700}},t.shortName),
-        liveNames&&liveNames[t.name]&&h("span",{className:"live-dot",title:"Live now"})
-      );
-    })),
-    h("button",{onClick:onAdd,style:{flexShrink:0,display:"flex",alignItems:"center",gap:5,background:"rgba(232,64,154,0.09)",border:"2px dashed rgba(232,64,154,0.35)",borderRadius:40,padding:"6px 14px",cursor:"pointer",color:"#ff9fd0",fontFamily:"Inter,sans-serif",fontWeight:600,fontSize:"0.78rem",whiteSpace:"nowrap"}},
-      h("span",{style:{fontSize:"1rem",lineHeight:1}},"＋"),
-      " Add"
-    )
+// Home screen tile: one favourite with its table place, last result (or live score) and next game.
+function TeamTile({t,onClick}){
+  const s=t.standing||{},r=(t.recentResults||[])[0],g=t.nextGame,lg=t.liveGame;
+  const clean=x=>String(x||"").replace(/\s*\((H|A)\)/g,"").replace(/\s*\([^)]*\)/g,"").trim();
+  const line={fontSize:"0.78rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"};
+  const next=g&&g.ts&&g.ts>Date.now()-3*3600e3?(()=>{const d=new Date(g.ts);return d.toLocaleDateString("en-GB",{weekday:"short"})+" "+(g.time!=="–"?fmtTime(d):fmtShort(d))+" \xB7 "+clean(g.opponent);})():null;
+  return h("button",{onClick,style:{display:"flex",flexDirection:"column",gap:5,minWidth:0,minHeight:122,padding:12,borderRadius:16,cursor:"pointer",textAlign:"left",color:"#fff",font:"inherit",
+      background:"linear-gradient(135deg,"+t.color+"cc,#1d3360)",border:lg?"2px solid #ef4444":"1px solid rgba(255,255,255,0.14)",textShadow:"0 1px 2px rgba(0,0,0,0.45)"}},
+    h("div",{style:{display:"flex",alignItems:"center",gap:8,minWidth:0}},
+      h(TeamLogo,{name:t.name,size:34,color:t.color,accent:t.accent}),
+      h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.12rem",fontWeight:800,lineHeight:1.05,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},t.shortName)
+    ),
+    h("div",{style:{...line,color:"#eef2f8",fontSize:"0.72rem"}},t.emoji+" "+(s.rank?"#"+s.rank+(s.points!=null&&s.points!==""?" \xB7 "+(+s.points).toLocaleString()+" pts":""):t.league)),
+    lg?h("div",{style:{...line,fontWeight:700}},h("span",{className:"live-dot",style:{marginRight:5}}),"LIVE "+lg.score+" "+clean(lg.opponent))
+      :r?h("div",{style:line},h("b",{style:{color:RC[r.result]||"#fff",marginRight:5}},r.label||r.result),r.score&&r.score!==r.label?r.score+" ":"",clean(r.opponent))
+      :h("div",{style:{...line,opacity:0.7}},"No results yet"),
+    lg?h("div",{style:{...line,color:"#ffd0e6",fontSize:"0.72rem"}},lg.detail||"Live")
+      :next&&h("div",{style:{...line,color:"#ffd0e6",fontSize:"0.72rem"}},next)
   );
 }
 
@@ -1541,6 +1541,10 @@ function App(){
   const [showModal,setShowModal]=useState(false);
   const [removing,setRemoving]=useState(null);
   const [match,setMatch]=useState(null),[showTable,setShowTable]=useState(false);
+  // "home" = grid of all favourites, "team" = one team's page
+  const [view,setView]=useState("home");
+  const viewRef=useRef(view),overlayRef=useRef(false);viewRef.current=view;
+  overlayRef.current=showModal||!!match||showTable||!!removing;
   const [ready,setReady]=useState(false);
   const [live,setLive]=useState(()=>lsGet("msh-live")||{});
   const [busy,setBusy]=useState({});
@@ -1600,9 +1604,14 @@ function App(){
   },[]);
   useEffect(()=>{refreshTeam(baseTeam);},[selected,teams.length]);
   const lf=team._liveFields||{};
-  const liveNames={};teams.forEach(t=>{const e=live[t.name];if(e&&e.data&&e.data.liveGame)liveNames[t.name]=true;});
 
-  function handleSelect(id){setSelected(id);persist(teams,id);}
+  function handleSelect(id){setSelected(id);persist(teams,id);setView("team");window.scrollTo(0,0);history.pushState({msh:"team"},"");}
+  function goHome(){if(history.state&&history.state.msh==="team")history.back();else{setView("home");window.scrollTo(0,0);}}
+  // The phone's back button / swipe on a team page goes to the home grid (sheets handle their own back).
+  useEffect(()=>{
+    const pop=()=>{if(!overlayRef.current&&viewRef.current==="team"){setView("home");window.scrollTo(0,0);}};
+    window.addEventListener("popstate",pop);return()=>window.removeEventListener("popstate",pop);
+  },[]);
 
   function handleShare(){
     const g=team.nextGame;
@@ -1639,12 +1648,15 @@ function App(){
     const updated=[...teams,nt];
     setTeams(updated);setSelected(nt.id);setShowModal(false);
     persist(updated,nt.id);
+    // open the new team; replace the Add dialog's history entry so "back" returns to the home grid
+    setView("team");window.scrollTo(0,0);history.replaceState({msh:"team"},"");
   }
   function handleRemove(id){
     const updated=teams.filter(t=>t.id!==id);
     const newSel=updated.find(t=>t.id!==id)?.id||updated[0]?.id||"s-gog";
     setTeams(updated);setSelected(newSel);setRemoving(null);
     persist(updated,newSel);
+    goHome();
   }
 
   if(!ready) return h("div",{style:{minHeight:"100vh",background:"#0f1b33",padding:14}},
@@ -1670,16 +1682,25 @@ function App(){
   return h("div",{style:{minHeight:"100vh",background:"#0f1b33",color:"#f1f5f9",fontFamily:"Inter,sans-serif"}},
     // top padding clears the iPhone status bar in the home-screen app (black-translucent)
     h("div",{style:{background:"#0a1326",borderBottom:"1px solid rgba(255,255,255,0.06)",padding:"calc(14px + env(safe-area-inset-top)) 14px 12px",position:"sticky",top:0,zIndex:10}},
-      h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:10}},
-        h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.25rem",fontWeight:900,letterSpacing:"2px",color:"#fff"}},
-          "MY SPORTS HUB",
-          window.innerWidth>=460&&h("span",{style:{fontSize:"0.5rem",marginLeft:8,opacity:0.65,letterSpacing:"3px",fontFamily:"Inter,sans-serif",fontWeight:400,whiteSpace:"nowrap"}},"FAN DASHBOARD")
-        ),
+      h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
+        view==="team"
+          ?h("button",{onClick:goHome,style:{background:"rgba(255,255,255,0.09)",border:"none",borderRadius:20,color:"#fff",fontSize:"0.9rem",fontWeight:700,cursor:"pointer",padding:"8px 14px",fontFamily:"Inter,sans-serif",whiteSpace:"nowrap"}},"← My teams")
+          :h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.25rem",fontWeight:900,letterSpacing:"2px",color:"#fff"}},
+            "MY SPORTS HUB",
+            window.innerWidth>=460&&h("span",{style:{fontSize:"0.5rem",marginLeft:8,opacity:0.65,letterSpacing:"3px",fontFamily:"Inter,sans-serif",fontWeight:400,whiteSpace:"nowrap"}},"FAN DASHBOARD")
+          ),
         h("button",{onClick:handleShareApp,title:"Share My Sports Hub",style:{flexShrink:0,background:"#e8409a",color:"#ffffff",border:"none",borderRadius:20,padding:"6px 12px",fontSize:"0.72rem",fontWeight:700,fontFamily:"Inter,sans-serif",cursor:"pointer",whiteSpace:"nowrap"}},"📲 Share app")
-      ),
-      h(FavBar,{teams,selected,onSelect:handleSelect,onAdd:()=>setShowModal(true),liveNames})
+      )
     ),
-    h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
+    view==="home"&&h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
+      h(Lbl,{c:"My teams \xB7 "+teams.length}),
+      h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}},
+        teams.map(t=>h(TeamTile,{key:t.id,t:mergeLive(t,live[t.name]),onClick:()=>handleSelect(t.id)})),
+        h("button",{onClick:()=>setShowModal(true),style:{minHeight:122,borderRadius:16,border:"2px dashed rgba(232,64,154,0.5)",background:"rgba(232,64,154,0.07)",color:"#ff9fd0",fontWeight:700,fontSize:"0.95rem",cursor:"pointer",fontFamily:"Inter,sans-serif"}},"＋ Add team")
+      ),
+      h("div",{style:{height:30}})
+    ),
+    view==="team"&&h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
       // Wraps on phones: the buttons drop below the name instead of squeezing it to "GO…"
       h("div",{style:{background:"linear-gradient(135deg,"+team.color+"33,"+team.accent+"55)",borderRadius:16,padding:"14px 16px",marginBottom:12,border:"1px solid "+team.color+"44",display:"flex",alignItems:"center",flexWrap:"wrap",gap:"10px 14px"}},
         h(TeamLogo,{name:team.name,size:56,color:team.color,accent:team.accent}),
