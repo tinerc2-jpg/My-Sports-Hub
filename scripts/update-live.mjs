@@ -297,17 +297,42 @@ async function hbProgramFor(team,tableNames){
       time:next.d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"}),tv:next.tv||"–",ts:next.d.getTime()}:null,
   };
 }
-// Diagnostic (temporary): eurohandball.com JSON endpoints (live scores, match details).
-let _ehfProbed=false;
-async function ehfProbe(){
-  if(_ehfProbed)return;_ehfProbed=true;
-  const E="https://www.eurohandball.com/umbraco/api/";
-  for(const u of [E+"livescoreapi/GetLiveScoreMatches/1069",E+"livescoreapi/GetTournaments/1069",E+"matchdetailapi/GetMatchDetails?matchId=202711020101047",E+"matchdetailapi/GetMatchDetails?id=202711020101047"]){
-    try{const r=await fetch(u,{headers:{Accept:"application/json"}}),t=await r.text();
-      const i=t.indexOf("GOG");
-      console.log(`    EHF3 ${u}: HTTP ${r.status}, ${t.length} bytes · head «${t.slice(0,700).replace(/\s+/g," ")}»`+(i>=0?` · GOG «${t.slice(Math.max(0,i-700),i+700).replace(/\s+/g," ")}»`:" · no GOG"));
-    }catch(e){console.log("    EHF3 "+u+": "+e.message);}
+// ── EHF (eurohandball.com): European club games — live score, results, next game ──
+// The site's live-score feed lists the EHF competitions' games for the days around today:
+// days[].liveScoreMatches[] = {match:{matchID,competitionShortName,homeTeam,guestTeam,url}, homeStats:{totalGoals},
+// guestStats:{totalGoals}, matchStats:{time,startTime (CET/CEST),phase,state,isLive}}.
+const EHF_FEED="https://www.eurohandball.com/umbraco/api/livescoreapi/GetLiveScoreMatches/1069";
+let _ehfFeed=null,_ehfLogged=0;
+function ehfFeed(){
+  return _ehfFeed||(_ehfFeed=fetch(EHF_FEED,{headers:{Accept:"application/json"}})
+    .then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);return r.json();})
+    .then(j=>{const ms=[];(j.days||[]).forEach(d=>(d.liveScoreMatches||[]).forEach(x=>ms.push({...x,day:d.dayDatumFormatted||String(d.date).slice(0,10)})));
+      console.log(`    EHF feed: days ${(j.days||[]).map(d=>d.dayDatumFormatted).join(",")} · ${ms.length} games`);return ms;})
+    .catch(e=>{console.log("    EHF feed: "+e.message);return [];}));
+}
+const fmtDK=(d,o)=>d.toLocaleDateString("en-GB",{...o,timeZone:"Europe/Copenhagen"});
+async function ehfFor(team){
+  const ms=await ehfFeed(),al=api.teamAliases(team);
+  const isMe=t=>!!t&&api.nameMatch(al,[t.fullName,t.shortName,t.name].filter(Boolean))===2;
+  const out={live:null,results:[],next:null},now=Date.now();
+  for(const x of ms){
+    const m=x.match||{},h=m.homeTeam,g=m.guestTeam||m.awayTeam;
+    if(!(isMe(h)||isMe(g)))continue;
+    const home=isMe(h),opp=home?g:h,st=x.matchStats||{};
+    const [y,mo,d]=String(x.day).split("-").map(Number),[hh,mi]=String(st.startTime||"12:00").split(":").map(Number);
+    const when=cphDate(d,mo,y,hh||0,mi||0);
+    const hg=(x.homeStats||{}).totalGoals,gg=(x.guestStats||{}).totalGoals,me=home?hg:gg,op=home?gg:hg;
+    const tag=String(m.competitionShortName||"EHF").replace(/\s*-\s*[MW]$/,"");
+    const name=((opp&&opp.fullName)||"?")+(home?" (H)":" (A)")+" \xB7 "+tag;
+    if(_ehfLogged++<4)console.log("    EHF game: "+JSON.stringify({day:x.day,matchStats:st,hg,gg,home:h&&h.fullName,guest:g&&g.fullName}));
+    if(st.isLive){
+      const min=parseInt(String(st.time||""),10);
+      out.live={opponent:name,score:(me??0)+"–"+(op??0),detail:/half.?time|pause|^ht$/i.test(String(st.phase||""))?"Half-time":min?min+"'":String(st.phase||"Live")};
+    }else if(me!=null&&op!=null&&when.getTime()<now)
+      out.results.push({opponent:name,score:me+"–"+op,result:me>op?"W":me<op?"L":"D",date:fmtDK(when,{day:"numeric",month:"short"}),ts:when.getTime()});
+    else if(when.getTime()>now-3*3600e3&&(!out.next||when<out.next.d))out.next={d:when,name};
   }
+  return out;
 }
 // Returns {standing, from} from the first page with a valid row, or null.
 async function tv2Standing(team){
@@ -576,7 +601,6 @@ for(const t of Object.values(api.DB)){
       }
       // League results and next game from the match programme (TheSportsDB's free key has only a few games).
       const tbl=data.standing&&data.standing.table;
-      if(t.league===TV2_LEAGUE)await ehfProbe();
       if(t.league===TV2_LEAGUE&&tbl){
         const pg=await hbProgramFor(t,tbl.map(r=>r.n));
         if(pg){
@@ -589,6 +613,19 @@ for(const t of Object.values(api.DB)){
           data.preferSnapshot=true; // the app's own handball source (TheSportsDB) has far less: use this file
         }
       }
+    }
+    if(data&&t.sport==="Handball"){
+      // European club games (EHF Champions/European League): live score, results, next game.
+      const eh=await ehfFor(t);
+      if(eh.live){data.liveGame=eh.live;console.log("    EHF live: "+eh.live.score+" "+eh.live.detail);}
+      if(eh.results.length)data.recentResults=[...eh.results,...(data.recentResults||[])].sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,5);
+      if(eh.next){
+        const n=data.nextGame,ts=eh.next.d.getTime();
+        // the EHF's own date beats TheSportsDB's; keep a sooner league game
+        if(!n||!n.ts||ts<=n.ts+6*3600e3)data.nextGame={opponent:eh.next.name,date:fmtDK(eh.next.d,{weekday:"short",day:"numeric",month:"short"}),
+          time:eh.next.d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"}),tv:"–",ts};
+      }
+      data.preferSnapshot=true;
     }
     if(data&&(t.sport==="Tennis"||t.sport==="Golf"||t.sport==="Handball")){
       // ESPN only shows this week's events (TheSportsDB's free key only the latest handball game):
