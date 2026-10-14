@@ -170,26 +170,58 @@ function hbTableFromTokens(tokens,al){
   const list=Object.values(rows).sort((a,b)=>a.r-b.r);
   return list.length>=8&&list.some(r=>r.me)?list:null;
 }
-// Diagnostic (temporary): where does tophaandbold.dk list match results? Logs result-ish links and
-// a snippet around "GOG" on candidate pages, so a results parser can be written from the real HTML.
-let _hbProbed=false;
-async function hbResultsProbe(){
-  if(_hbProbed)return;_hbProbed=true;
-  try{
-    const html=await (await fetch("https://tophaandbold.dk/stillinger/herreligaen")).text();
-    const links=[...new Set([...html.matchAll(/href="([^"]+)"/g)].map(m=>m[1]).filter(u=>/kamp|result|program|match|hold|klub|team/i.test(u)))].slice(0,30);
-    console.log("    HB probe links: "+links.join(" "));
-    const cands=[...new Set(links.filter(u=>/kamp|result|program/i.test(u)).map(u=>u.startsWith("http")?u:"https://tophaandbold.dk"+u)
-      .concat(["https://tophaandbold.dk/kampprogram/herreligaen","https://tophaandbold.dk/resultater/herreligaen"]))].slice(0,4);
-    for(const u of cands){
-      try{
-        const r=await fetch(u),t=await r.text(),txt=t.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g," ").replace(/<[^>]+>/g," ").replace(/\s+/g," ");
-        const i=txt.indexOf("GOG"),j=t.indexOf("GOG");
-        console.log(`    HB probe ${u}: HTTP ${r.status}, ${t.length} bytes · text: «${i>=0?txt.slice(Math.max(0,i-150),i+250):txt.slice(0,200)}»`);
-        if(i<0&&j>=0)console.log(`    HB probe raw: «${t.slice(Math.max(0,j-200),j+300).replace(/\s+/g," ")}»`);
-      }catch(e){console.log("    HB probe "+u+": "+e.message);}
-    }
-  }catch(e){console.log("    HB probe: "+e.message);}
+// Results + next game from the league's match programme (tophaandbold.dk/kampprogram/herreligaen).
+// The page text has rows like "25-08-26 19:30 Skjern Håndbold 29-35 GOG … Livescore Hent Kamprapport";
+// future games have no score. Team names are matched against the names in the league table
+// (same site), so "GOG" vs "GOG Dame Elite" etc. can't be confused.
+const HB_PROGRAM="https://tophaandbold.dk/kampprogram/herreligaen";
+let _hbProgram=null;
+function hbProgramText(){
+  return _hbProgram||(_hbProgram=fetch(HB_PROGRAM,{headers:{"Accept":"text/html","Accept-Language":"da-DK,da;q=0.9"}})
+    .then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);return r.text();})
+    .then(h=>h.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g," ").replace(/<[^>]+>/g," ").replace(/&nbsp;|&#160;/g," ").replace(/&amp;/g,"&").replace(/\s+/g," "))
+    .catch(e=>{console.log("    programme: "+e.message);return "";}));
+}
+// Danish wall-clock time → Date (CET/CEST).
+function cphDate(d,mo,y,hh,mm){
+  const guess=Date.UTC(y,mo-1,d,hh,mm);
+  const f=new Intl.DateTimeFormat("en-GB",{timeZone:"Europe/Copenhagen",hour:"2-digit",minute:"2-digit",hourCycle:"h23",day:"2-digit"});
+  const parts=Object.fromEntries(f.formatToParts(new Date(guess)).map(p=>[p.type,p.value]));
+  let off=(+parts.hour*60+ +parts.minute)-(hh*60+mm);if(+parts.day!==d)off+=off<0?1440:-1440;
+  return new Date(guess-off*60000);
+}
+async function hbProgramFor(team,tableNames){
+  const text=await hbProgramText();if(!text)return null;
+  const names=[...new Set(tableNames)].sort((a,b)=>b.length-a.length);
+  const al=api.teamAliases(team),isMe=n=>api.nameMatch(al,[n])===2;
+  const re=/(\d\d)-(\d\d)-(\d\d) (\d\d):(\d\d) /g,starts=[];let m;
+  while((m=re.exec(text)))starts.push({i:m.index,end:re.lastIndex,m});
+  const games=[];
+  starts.forEach((st,k)=>{
+    const seg=text.slice(st.end,k+1<starts.length?starts[k+1].i:st.end+300);
+    // the two team names in order of appearance
+    const found=[];names.forEach(n=>{let p=seg.indexOf(n);while(p>=0){if(!found.some(f=>p<f.p+f.n.length&&f.p<p+n.length))found.push({n,p});p=seg.indexOf(n,p+1);}});
+    found.sort((a,b)=>a.p-b.p);
+    if(found.length<2)return;
+    const [hm,aw]=found;
+    const between=seg.slice(hm.p+hm.n.length,aw.p),sc=/(\d{1,2})\s*[-–]\s*(\d{1,2})/.exec(between);
+    const after=seg.slice(aw.p+aw.n.length).replace(/Livescore|Hent|Kamprapport|Download|Billetter|Se kampen|\bSe\b/g," ").replace(/\s+/g," ").trim();
+    const [,dd,mo,yy,hh,mi]=st.m;
+    games.push({d:cphDate(+dd,+mo,2000+ +yy,+hh,+mi),home:hm.n,away:aw.n,hs:sc?+sc[1]:null,as:sc?+sc[2]:null,tv:after.slice(0,24)});
+  });
+  const mine=games.filter(g=>isMe(g.home)||isMe(g.away));
+  console.log(`    programme: ${games.length} games, ${mine.length} for ${team.shortName}`+(mine[0]?" · e.g. "+JSON.stringify(mine[0]):""));
+  if(!mine.length)return null;
+  const now=Date.now();
+  const done=mine.filter(g=>g.hs!=null&&g.d.getTime()<now).sort((a,b)=>b.d-a.d);
+  const next=mine.filter(g=>g.hs==null&&g.d.getTime()>now-3*3600e3).sort((a,b)=>a.d-b.d)[0];
+  const view=g=>{const home=isMe(g.home),ms=home?g.hs:g.as,os=home?g.as:g.hs;return{opp:(home?g.away:g.home)+(home?" (H)":" (A)"),ms,os};};
+  const fmtS=d=>d.toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:"Europe/Copenhagen"});
+  return{
+    recentResults:done.slice(0,5).map(g=>{const v=view(g);return{opponent:v.opp,score:v.ms+"–"+v.os,result:v.ms>v.os?"W":v.ms<v.os?"L":"D",date:fmtS(g.d),ts:g.d.getTime()};}),
+    nextGame:next?{opponent:view(next).opp,date:next.d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",timeZone:"Europe/Copenhagen"}),
+      time:next.d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"}),tv:next.tv||"–",ts:next.d.getTime()}:null,
+  };
 }
 // Returns {standing, from} from the first page with a valid row, or null.
 async function tv2Standing(team){
@@ -450,18 +482,31 @@ for(const t of Object.values(api.DB)){
           }
         }
       }
-      if(t.league===TV2_LEAGUE)await hbResultsProbe();
       if(!data.standing&&t.league===TV2_LEAGUE){
         const s=await tv2Standing(t);
         if(s){data.standing=s.standing;data.standingFrom=s.from;data.standingTs=Date.now();data.source=data.source.replace(" + Wikipedia","")+" + "+s.from;}
+      }
+      // League results and next game from the match programme (TheSportsDB's free key has only a few games).
+      const tbl=data.standing&&data.standing.table;
+      if(t.league===TV2_LEAGUE&&tbl){
+        const pg=await hbProgramFor(t,tbl.map(r=>r.n));
+        if(pg){
+          const seenR=new Set();
+          data.recentResults=[...pg.recentResults,...(data.recentResults||[])].filter(r=>{const k=r.date+"|"+(r.opponent||"").split(" (")[0].slice(0,4);return !seenR.has(k)&&seenR.add(k);}).sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,5);
+          // keep a sooner non-league game (e.g. European cup from TheSportsDB) if there is one
+          if(pg.nextGame&&!(data.nextGame&&data.nextGame.ts&&data.nextGame.ts<pg.nextGame.ts))data.nextGame=pg.nextGame;
+          if(!/Top Håndbold/.test(data.source))data.source+=" + Top Håndbold";
+        }
       }
     }
     if(data&&(t.sport==="Tennis"||t.sport==="Golf"||t.sport==="Handball")){
       // ESPN only shows this week's events (TheSportsDB's free key only the latest handball game):
       // keep earlier results from the previous snapshot.
       const pr=(prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[];
+      // handball: TheSportsDB and the league site spell clubs differently, so compare date + start of the name
+      const key=r=>t.sport==="Handball"?r.date+"|"+(r.opponent||"").split(" (")[0].slice(0,4):r.opponent+"|"+r.date;
       const seenR=new Set(),merged=[...(data.recentResults||[]),...pr.filter(r=>r.ts)]
-        .filter(r=>{const k=r.opponent+"|"+r.date;return !seenR.has(k)&&seenR.add(k);}).sort((a,b)=>b.ts-a.ts).slice(0,5);
+        .filter(r=>{const k=key(r);return !seenR.has(k)&&seenR.add(k);}).sort((a,b)=>b.ts-a.ts).slice(0,5);
       if(merged.length)data.recentResults=merged;
       if(t.sport==="Tennis"){
         const pd=prev[t.name]&&prev[t.name].data;
