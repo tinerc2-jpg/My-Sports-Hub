@@ -193,18 +193,40 @@ function cphDate(d,mo,y,hh,mm){
   let off=(+parts.hour*60+ +parts.minute)-(hh*60+mm);if(+parts.day!==d)off+=off<0?1440:-1440;
   return new Date(guess-off*60000);
 }
-// Diagnostic (temporary): shape of a match's JSON (tophaandbold.dk/match/<id>.json), to add handball match stats.
-let _hbMatchProbed=false;
-async function hbMatchProbe(id){
-  if(_hbMatchProbed||!id)return;_hbMatchProbed=true;
-  try{
-    const r=await fetch("https://tophaandbold.dk/match/"+id+".json"),t=await r.text();
-    let j=null;try{j=JSON.parse(t);}catch(e){}
-    const shape=(o,d=0)=>o&&typeof o==="object"?(Array.isArray(o)?"["+o.length+"]"+(o.length?shape(o[0],d+1):""):"{"+Object.keys(o).slice(0,25).map(k=>k+(d<2?":"+shape(o[k],d+1):"")).join(",")+"}"):typeof o;
-    console.log(`    HBM json ${id}: HTTP ${r.status}, ${t.length} bytes · ${j?shape(j):"not JSON: "+t.slice(0,200)}`);
-    console.log("    HBM json sample: "+t.slice(0,2500).replace(/\s+/g," "));
-  }catch(e){console.log("    HBM probe: "+e.message);}
+// Handball match statistics from tophaandbold.dk/match/<id>.json: score, halftime, arena, spectators,
+// top scorers and per-team event counts (goals, saves, 2-min suspensions …) from the event list.
+const HB_EVENT_ORDER=[/goal|m[aå]l$|^m[aå]l/i,/save|redning/i,/7m|straf|penalty/i,/assist/i,/suspen|udvis|two.?min|2 ?min/i,/fault|fejl|turnover/i,/yellow|gul/i,/red|r[oø]d/i];
+async function hbMatchStats(id,team){
+  const r=await fetch("https://tophaandbold.dk/match/"+id+".json");
+  if(!r.ok)throw new Error("HTTP "+r.status);
+  const j=await r.json(),al=api.teamAliases(team);
+  const ts=j.teams||[],me=ts.find(t=>api.nameMatch(al,[t.name,t.short_name])===2),op=ts.find(t=>t!==me);
+  if(!me||!op)return null;
+  const idOf=x=>x&&typeof x==="object"?x.id:x,players={};(j.players||[]).forEach(p=>{players[p.id]=p;});
+  const typeName=e=>{const t=e.event_type;return t&&typeof t==="object"?(t.name||t.title||t.key||String(t.id)):String(t||"");};
+  const pretty=t=>{const x=t.replace(/[_-]+/g," ").trim();return x.charAt(0).toUpperCase()+x.slice(1);};
+  const counts={},scorers={};
+  (j.events||[]).forEach(e=>{
+    const tm=idOf(e.team),side=tm==me.id?"me":tm==op.id?"op":null,ty=typeName(e);
+    if(!side||!ty)return;
+    (counts[ty]=counts[ty]||{me:0,op:0})[side]++;
+    if(HB_EVENT_ORDER[0].test(ty)&&!/miss|forbi|bom/i.test(ty)){
+      const p=players[idOf(e.player)]||(typeof e.player==="object"?e.player:null),who=p&&p.name;
+      if(who){const k=side+"|"+who;scorers[k]=(scorers[k]||0)+1;}
+    }
+  });
+  const types=Object.keys(counts);
+  const rank=t=>{const i=HB_EVENT_ORDER.findIndex(re=>re.test(t));return i<0?99:i;};
+  const stats=types.sort((a,b)=>rank(a)-rank(b)||(counts[b].me+counts[b].op)-(counts[a].me+counts[a].op)).slice(0,8)
+    .map(t=>({label:pretty(t),me:String(counts[t].me),op:String(counts[t].op)}));
+  const top=Object.entries(scorers).map(([k,n])=>{const [side,who]=k.split("|");return{who,n,me:side==="me"?1:0};})
+    .sort((a,b)=>b.n-a.n).filter((x,i,arr)=>arr.filter(y=>y.me===x.me).indexOf(x)<4);
+  const [hh,ha]=String(j.halftime_score||"").split("-"),meHome=ts.indexOf(me)===0;
+  const info=[j.halftime_score?"Half-time "+(meHome?hh+"–"+ha:ha+"–"+hh):"",j.arena&&j.arena.name,j.spectators?j.spectators.toLocaleString("en-GB")+" spectators":""].filter(Boolean).join(" \xB7 ");
+  if(!_hbTypesLogged){_hbTypesLogged=true;console.log("    handball event types: "+types.map(t=>t+"="+(counts[t].me+counts[t].op)).join(", "));}
+  return{meName:me.name,opName:op.name,stats,top,info,goals:[]};
 }
+let _hbTypesLogged=false;
 async function hbProgramFor(team,tableNames){
   const text=await hbProgramText();if(!text)return null;
   const names=[...new Set(tableNames)].sort((a,b)=>b.length-a.length);
@@ -227,7 +249,6 @@ async function hbProgramFor(team,tableNames){
   const mine=games.filter(g=>isMe(g.home)||isMe(g.away));
   console.log(`    programme: ${games.length} games, ${mine.length} for ${team.shortName}`+(mine[0]?" · e.g. "+JSON.stringify(mine[0]):""));
   if(!mine.length)return null;
-  await hbMatchProbe((mine.filter(g=>g.hs!=null&&g.mid).sort((a,b)=>b.d-a.d)[0]||{}).mid);
   const now=Date.now();
   const done=mine.filter(g=>g.hs!=null&&g.d.getTime()<now).sort((a,b)=>b.d-a.d);
   const next=mine.filter(g=>g.hs==null&&g.d.getTime()>now-3*3600e3).sort((a,b)=>a.d-b.d)[0];
@@ -538,13 +559,14 @@ for(const t of Object.values(api.DB)){
     if(!data&&t.sport==="Cycling")data=await pcsCycling(t);
     // Match statistics per result. Finished games don't change, so stats from the previous snapshot are reused.
     if(data&&data.recentResults){
-      const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{if(r.ev&&r.stats)old[r.ev]=r.stats;});
+      const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{const k=r.ev||(r.hbm&&"hb"+r.hbm);if(k&&r.stats)old[k]=r.stats;});
       let got=0,reused=0,none=0;
       for(const r of data.recentResults){
-        if(!r.ev||!r.sp||r.stats)continue;
-        if(old[r.ev]){r.stats=old[r.ev];reused++;continue;}
-        try{const st=await api.fetchEspnSummary(r.sp,r.lg,r.ev,r.tid);if(st){r.stats=st;got++;}else none++;}
-        catch(e){none++;console.log(`    summary ${r.ev}:`,e.message);}
+        const key=r.ev||(r.hbm&&"hb"+r.hbm);
+        if(!key||r.stats||!(r.sp||r.hbm))continue;
+        if(old[key]){r.stats=old[key];reused++;continue;}
+        try{const st=r.hbm?await hbMatchStats(r.hbm,t):await api.fetchEspnSummary(r.sp,r.lg,r.ev,r.tid);if(st){r.stats=st;got++;}else none++;}
+        catch(e){none++;console.log(`    match stats ${key}:`,e.message);}
       }
       if(got+reused+none)console.log(`    match stats: ${got} new, ${reused} reused, ${none} without stats`+(got?" · e.g. "+JSON.stringify(data.recentResults.find(r=>r.stats).stats).slice(0,160):""));
     }

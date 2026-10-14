@@ -1185,6 +1185,7 @@ function MatchSheet({r,team,onClose}){
       h("div",{style:{fontFamily:cond,fontSize:"2rem",fontWeight:900,color:"#fff",whiteSpace:"nowrap"}},(L.s||"–")+" – "+(R.s||"–")),
       h("div",{style:{flex:1,fontFamily:cond,fontSize:"1.1rem",fontWeight:700,color:R.me?"#ff9fd0":"#fff"}},R.n)
     ),
+    st&&st.info&&h("div",{style:{textAlign:"center",color:"#d5deee",fontSize:"0.74rem",margin:"-6px 0 14px"}},st.info),
     !st&&!err&&h("div",{style:{textAlign:"center",color:"#d5deee",fontSize:"0.8rem",padding:20}},"Loading match statistics…"),
     err&&h("div",{style:{textAlign:"center",color:"#d5deee",fontSize:"0.8rem",padding:20}},"No statistics available for this match yet."),
     st&&st.goals&&st.goals.length>0&&h("div",{style:{marginBottom:14}},
@@ -1195,6 +1196,14 @@ function MatchSheet({r,team,onClose}){
           h("span",{style:{background:"rgba(255,255,255,0.06)",borderRadius:8,padding:"5px 10px"}},
             h("b",{style:{color:"#ff9fd0",marginRight:6}},g.min),g.who+(g.pen?" (pen)":"")+(g.og?" (og)":"")));
       }))
+    ),
+    // Handball: top scorers per team, home team on the left
+    st&&st.top&&st.top.length>0&&h("div",{style:{marginBottom:14}},
+      h(Lbl,{c:"🤾 Top scorers"}),
+      h("div",{style:{display:"flex",gap:10}},[L,R].map((side,i)=>h("div",{key:i,style:{flex:1,minWidth:0}},
+        st.top.filter(x=>!!x.me===!!side.me).map((x,k)=>h("div",{key:k,style:{display:"flex",justifyContent:"space-between",gap:6,fontSize:"0.8rem",color:"#fff",background:"rgba(255,255,255,0.06)",borderRadius:8,padding:"5px 9px",marginBottom:4}},
+          h("span",{style:{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},x.who),h("b",{style:{color:side.me?"#ff9fd0":"#fff"}},x.n)))
+      )))
     ),
     st&&st.periods&&h("div",{style:{marginBottom:14,overflowX:"auto"}},
       h(Lbl,{c:"Score by period"}),
