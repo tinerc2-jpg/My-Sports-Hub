@@ -197,7 +197,7 @@ function cphDate(d,mo,y,hh,mm){
 // top scorers and per-team event counts (goals, saves, 2-min suspensions …) from the event list.
 // tophaandbold.dk event names (Danish) → shown stats. A shot event belongs to the shooting team;
 // a saved shot counts as a save for the keeper's team.
-const HB_V=2; // bump when hbMatchStats changes, so stats in the previous snapshot are recomputed
+const HB_V=3; // bump when hbMatchStats changes, so stats in the previous snapshot are recomputed
 const HB_GOAL=/^(Mål|Straffemål)$/,HB_SAVED=/^(Skud reddet|Straffe reddet)$/,HB_MISS=/^(Skud på stolpe|Skud forbi|Skud blokeret)$/;
 async function hbMatchStats(id,team){
   const r=await fetch("https://tophaandbold.dk/match/"+id+".json");
@@ -229,8 +229,9 @@ async function hbMatchStats(id,team){
     row("2-min suspensions","susp"),row("Turnovers & faults","turn"),row("Yellow cards","warn")].filter(x=>x.me!=="0"||x.op!=="0");
   const top=Object.entries(scorers).map(([k,n])=>{const [side,who]=k.split("|");return{who,n,me:side==="me"?1:0};})
     .sort((a,b)=>b.n-a.n).filter((x,i,arr)=>arr.filter(y=>y.me===x.me).indexOf(x)<4);
-  const [hh,ha]=String(j.halftime_score||"").split("-"),meHome=ts.indexOf(me)===0;
-  const info=[j.halftime_score?"Half-time "+(meHome?hh+"–"+ha:ha+"–"+hh):"",j.arena&&j.arena.name,j.spectators?j.spectators.toLocaleString("en-GB")+" spectators":""].filter(Boolean).join(" \xB7 ");
+  const meHome=ts.indexOf(me)===0;
+  // home–away order, like the score line in the app's match view
+  const info=[j.halftime_score?"Half-time "+String(j.halftime_score).replace("-","–"):"",j.arena&&j.arena.name,j.spectators?j.spectators.toLocaleString("en-GB")+" spectators":""].filter(Boolean).join(" \xB7 ");
   // sanity check against the official score
   const [sh,sa]=String(j.score||"").split("-").map(Number),want=meHome?[sh,sa]:[sa,sh];
   if(!_hbTypesLogged){_hbTypesLogged=true;console.log("    handball event types: "+Object.entries(types).map(([t,n])=>t+"="+n).join(", "));}
