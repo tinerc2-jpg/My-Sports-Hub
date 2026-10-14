@@ -722,9 +722,32 @@ async function fetchTennis(team,src){
 // ── Golf (ESPN): this week's tournament on the player's tour(s) ──
 const GOLF_TOURS={"PGA Tour":["pga"],"DP World Tour":["eur"],"PGA Tour / DP World Tour":["pga","eur"],"LET / LPGA Tour":["lpga"]};
 const toPar=s=>{s=String(s==null?"":s).trim();if(/^e(ven)?$/i.test(s))return 0;const n=parseInt(s.replace("+",""),10);return isNaN(n)?null:n;};
+// Finishing position on a leaderboard: ESPN's own position if given, else from the order/to-par.
+function golfPlacing(cs,me){
+  const sc=espnScore(me.score),p=toPar(sc);
+  const stTxt=JSON.stringify(me.status||{});
+  const flag=re=>re.test(stTxt.replace(/MADE[_ ]?CUT/gi,"")); // "STATUS_CUT" etc., but not "made cut"
+  if(flag(/(^|[^A-Z])(CUT|MC)([^A-Z]|$)/i))return{pos:"MC",rank:999,sc};
+  if(flag(/(^|[^A-Z])(WD|DQ)([^A-Z]|$)/i))return{pos:/DQ/i.test(stTxt)?"DQ":"WD",rank:999,sc};
+  let pos=me.status&&me.status.position&&me.status.position.displayName;
+  if(!pos&&p!=null){
+    const better=cs.filter(x=>{const q=toPar(espnScore(x.score));return q!=null&&q<p&&(x.order==null||me.order==null||x.order<me.order);}).length;
+    const tie=cs.filter(x=>toPar(espnScore(x.score))===p).length>1;pos=(tie?"T":"")+(better+1);
+  }
+  return{pos:pos||null,rank:parseInt(String(pos||"").replace(/\D/g,""),10)||999,sc};
+}
+// ESPN's golf scoreboard only lists the current week; ?dates=YYYYMMDD returns an earlier week's event(s).
+// Cached per tour+week so all players on a tour share one request.
+const _golfWeek={};
+function golfWeek(tour,d){
+  const ymd=d.toISOString().slice(0,10).replace(/-/g,"");
+  return _golfWeek[tour+ymd]||(_golfWeek[tour+ymd]=getJSON(ESPN+"/site/v2/sports/golf/"+tour+"/scoreboard?dates="+ymd).catch(()=>null));
+}
+const GOLF_WEEKS_BACK=8;
 async function fetchGolf(team,src){
   const al=teamAliases(team),now=Date.now();
   let hit=null,cal=null,sawEvent=false;
+  const isMe=x=>nameMatch(al,[athleteName(x)])===2;
   for(const tour of src.tours){
     const j=await getJSON(ESPN+"/site/v2/sports/golf/"+tour+"/scoreboard").catch(e=>{liveLog("golf "+tour+": "+e.message);return null;});
     if(!j)continue;
@@ -733,28 +756,44 @@ async function fetchGolf(team,src){
       sawEvent=true;
       const c=(ev.competitions||[])[0];if(!c)continue;
       const cs=c.competitors||[];
-      const me=cs.find(x=>nameMatch(al,[athleteName(x)])===2);
+      const me=cs.find(isMe);
       liveLog(`golf ${tour}: ${ev.name} · ${cs.length} players · ${me?"in field":"not in field"}`);
       if(me&&!hit)hit={ev,c,cs,me};
     }
   }
   if(!sawEvent&&!cal)throw new Error("no golf data");
-  const out={source:"ESPN"};
+  const out={source:"ESPN"},results=[],seenEv={};
+  const addResult=(ev,c,cs,me)=>{
+    const k=norm(ev.name||ev.id);if(seenEv[k])return;seenEv[k]=1; // same event can come from this week and from history
+    const {pos,rank,sc}=golfPlacing(cs,me),d=new Date(ev.endDate||c.endDate||ev.date);
+    results.push({opponent:ev.name,score:sc||"–",label:pos,result:rank===1?"W":rank<=10?"D":"L",date:fmtShort(d),ts:d.getTime()});
+  };
   if(hit){
     const {ev,c,cs,me}=hit,st=((c.status||ev.status||{}).type)||{};
-    const sc=espnScore(me.score),p=toPar(sc);
-    let pos=me.status&&me.status.position&&me.status.position.displayName;
-    if(!pos&&p!=null){const better=cs.filter(x=>{const q=toPar(espnScore(x.score));return q!=null&&q<p;}).length;
-      const tie=cs.filter(x=>toPar(espnScore(x.score))===p).length>1;pos=(tie?"T":"")+(better+1);}
-    const rank=parseInt(String(pos||"").replace(/\D/g,""),10);
-    const line=[pos,sc].filter(Boolean).join(" · ");
-    const d=new Date(ev.endDate||c.endDate||ev.date);
-    if(st.completed||st.state==="post")
-      out.recentResults=[{opponent:ev.name,score:sc||"–",label:pos||null,result:rank===1?"W":rank<=10?"D":"L",date:fmtShort(d),ts:d.getTime()}];
-    else if(st.state==="in")
-      out.liveGame={opponent:ev.name,score:line||"–",detail:st.shortDetail||st.detail||"In progress"};
+    const {pos,sc}=golfPlacing(cs,me);
+    if(st.completed||st.state==="post")addResult(ev,c,cs,me);
+    else if(st.state==="in")out.liveGame={opponent:ev.name,score:[pos,sc].filter(Boolean).join(" · ")||"–",detail:st.shortDetail||st.detail||"In progress"};
     else{const s=new Date(ev.date||c.date);out.nextGame={opponent:ev.name,date:fmtDay(s),time:fmtTime(s),tv:"–",ts:s.getTime()};}
   }
+  // Recent weeks: Saturdays going back, which fall inside Thu–Sun events.
+  const sat=new Date(now);sat.setUTCDate(sat.getUTCDate()-((sat.getUTCDay()+1)%7));
+  let looked=0,found=0;
+  for(const tour of src.tours){
+    for(let w=0;w<GOLF_WEEKS_BACK;w++){
+      const d=new Date(sat);d.setUTCDate(d.getUTCDate()-7*w);
+      if(d.getTime()>now)continue;
+      const j=await golfWeek(tour,d);if(!j)continue;looked++;
+      for(const ev of j.events||[]){
+        const c=(ev.competitions||[])[0];if(!c)continue;
+        const st=((c.status||ev.status||{}).type)||{};
+        if(!(st.completed||st.state==="post"))continue;
+        const cs=c.competitors||[],me=cs.find(isMe);
+        if(me){addResult(ev,c,cs,me);found++;}
+      }
+    }
+  }
+  liveLog(`golf history: ${looked} past weeks checked, ${found} events played`+(results[0]?" · latest "+results.sort((a,b)=>b.ts-a.ts)[0].label+" "+results[0].opponent:""));
+  if(results.length)out.recentResults=results.sort((a,b)=>b.ts-a.ts).slice(0,5);
   if(!out.nextGame)out.nextGame=cal?{opponent:"Next tour event"+(cal.label?": "+cal.label:""),date:fmtDay(new Date(cal.ts)),time:"–",tv:"–",ts:cal.ts}:NO_MATCH(null);
   return out;
 }
