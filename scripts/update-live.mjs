@@ -176,12 +176,15 @@ function hbTableFromTokens(tokens,al){
 // (same site), so "GOG" vs "GOG Dame Elite" etc. can't be confused.
 const HB_PROGRAM="https://tophaandbold.dk/kampprogram/herreligaen";
 let _hbProgram=null;
+// Page text, with " #M<id># " markers where a row links to /match/<id>, so each game keeps its id.
 function hbProgramText(){
   return _hbProgram||(_hbProgram=fetch(HB_PROGRAM,{headers:{"Accept":"text/html","Accept-Language":"da-DK,da;q=0.9"}})
     .then(r=>{if(!r.ok)throw new Error("HTTP "+r.status);return r.text();})
-    .then(h=>h.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g," ").replace(/<[^>]+>/g," ").replace(/&nbsp;|&#160;/g," ").replace(/&amp;/g,"&").replace(/\s+/g," "))
+    .then(h=>h.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g," ").replace(/<a[^>]*href="[^"]*\/match\/(\d+)[^"]*"[^>]*>/g," #M$1# ")
+      .replace(/<[^>]+>/g," ").replace(/&nbsp;|&#160;/g," ").replace(/&amp;/g,"&").replace(/\s+/g," "))
     .catch(e=>{console.log("    programme: "+e.message);return "";}));
 }
+const TV_RE=/TV ?2(?: Sport| Play| News)?|TV3(?: Sport| MAX|\+)?|Viaplay|DR ?[12]?(?:TV)?|HBO Max|Max|Discovery\+|Kanal \d/;
 // Danish wall-clock time → Date (CET/CEST).
 function cphDate(d,mo,y,hh,mm){
   const guess=Date.UTC(y,mo-1,d,hh,mm);
@@ -190,26 +193,19 @@ function cphDate(d,mo,y,hh,mm){
   let off=(+parts.hour*60+ +parts.minute)-(hh*60+mm);if(+parts.day!==d)off+=off<0?1440:-1440;
   return new Date(guess-off*60000);
 }
-// Diagnostic (temporary): what a match page looks like, to add handball match stats.
+// Diagnostic (temporary): shape of a match's JSON (tophaandbold.dk/match/<id>.json), to add handball match stats.
 let _hbMatchProbed=false;
-async function hbMatchProbe(){
-  if(_hbMatchProbed)return;_hbMatchProbed=true;
+async function hbMatchProbe(id){
+  if(_hbMatchProbed||!id)return;_hbMatchProbed=true;
   try{
-    const raw=await (await fetch(HB_PROGRAM)).text();
-    const j=raw.indexOf("Skive fH");
-    console.log("    HBM programme raw row: «"+raw.slice(Math.max(0,j-900),j+500).replace(/\s+/g," ")+"»");
-    const ids=[...new Set([...raw.matchAll(/\/match\/(\d+)/g)].map(m=>m[1]))];
-    console.log("    HBM match ids: "+ids.length+" e.g. "+ids.slice(0,5).join(","));
-    const u="https://tophaandbold.dk/match/"+(ids[0]||"8025"),r=await fetch(u),h=await r.text();
-    const txt=h.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>/g," ").replace(/<[^>]+>/g," ").replace(/&nbsp;/g," ").replace(/\s+/g," ");
-    const k=Math.max(0,txt.search(/Kampfakta|Statistik|Mål|Topscorer|Spiller/));
-    console.log(`    HBM ${u}: HTTP ${r.status}, ${h.length} bytes · text: «${txt.slice(k,k+1500)}»`);
-    const api=[...new Set([...h.matchAll(/["'](\/[^"']*(?:api|json|stat|match)[^"']*)["']/gi)].map(m=>m[1]))].slice(0,15);
-    console.log("    HBM urls in page: "+api.join(" "));
+    const r=await fetch("https://tophaandbold.dk/match/"+id+".json"),t=await r.text();
+    let j=null;try{j=JSON.parse(t);}catch(e){}
+    const shape=(o,d=0)=>o&&typeof o==="object"?(Array.isArray(o)?"["+o.length+"]"+(o.length?shape(o[0],d+1):""):"{"+Object.keys(o).slice(0,25).map(k=>k+(d<2?":"+shape(o[k],d+1):"")).join(",")+"}"):typeof o;
+    console.log(`    HBM json ${id}: HTTP ${r.status}, ${t.length} bytes · ${j?shape(j):"not JSON: "+t.slice(0,200)}`);
+    console.log("    HBM json sample: "+t.slice(0,2500).replace(/\s+/g," "));
   }catch(e){console.log("    HBM probe: "+e.message);}
 }
 async function hbProgramFor(team,tableNames){
-  await hbMatchProbe();
   const text=await hbProgramText();if(!text)return null;
   const names=[...new Set(tableNames)].sort((a,b)=>b.length-a.length);
   const al=api.teamAliases(team),isMe=n=>api.nameMatch(al,[n])===2;
@@ -224,20 +220,21 @@ async function hbProgramFor(team,tableNames){
     if(found.length<2)return;
     const [hm,aw]=found;
     const between=seg.slice(hm.p+hm.n.length,aw.p),sc=/(\d{1,2})\s*[-–]\s*(\d{1,2})/.exec(between);
-    const after=seg.slice(aw.p+aw.n.length).replace(/Livescore|Hent|Kamprapport|Download|Billetter|Se kampen|\bSe\b/g," ").replace(/\s+/g," ").trim();
+    const after=seg.slice(aw.p+aw.n.length),tv=TV_RE.exec(after),mid=/#M(\d+)#/.exec(seg);
     const [,dd,mo,yy,hh,mi]=st.m;
-    games.push({d:cphDate(+dd,+mo,2000+ +yy,+hh,+mi),home:hm.n,away:aw.n,hs:sc?+sc[1]:null,as:sc?+sc[2]:null,tv:after.slice(0,24)});
+    games.push({d:cphDate(+dd,+mo,2000+ +yy,+hh,+mi),home:hm.n,away:aw.n,hs:sc?+sc[1]:null,as:sc?+sc[2]:null,tv:tv?tv[0]:"",mid:mid?mid[1]:null});
   });
   const mine=games.filter(g=>isMe(g.home)||isMe(g.away));
   console.log(`    programme: ${games.length} games, ${mine.length} for ${team.shortName}`+(mine[0]?" · e.g. "+JSON.stringify(mine[0]):""));
   if(!mine.length)return null;
+  await hbMatchProbe((mine.filter(g=>g.hs!=null&&g.mid).sort((a,b)=>b.d-a.d)[0]||{}).mid);
   const now=Date.now();
   const done=mine.filter(g=>g.hs!=null&&g.d.getTime()<now).sort((a,b)=>b.d-a.d);
   const next=mine.filter(g=>g.hs==null&&g.d.getTime()>now-3*3600e3).sort((a,b)=>a.d-b.d)[0];
   const view=g=>{const home=isMe(g.home),ms=home?g.hs:g.as,os=home?g.as:g.hs;return{opp:(home?g.away:g.home)+(home?" (H)":" (A)"),ms,os};};
   const fmtS=d=>d.toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:"Europe/Copenhagen"});
   return{
-    recentResults:done.slice(0,5).map(g=>{const v=view(g);return{opponent:v.opp,score:v.ms+"–"+v.os,result:v.ms>v.os?"W":v.ms<v.os?"L":"D",date:fmtS(g.d),ts:g.d.getTime()};}),
+    recentResults:done.slice(0,5).map(g=>{const v=view(g);return{opponent:v.opp,score:v.ms+"–"+v.os,result:v.ms>v.os?"W":v.ms<v.os?"L":"D",date:fmtS(g.d),ts:g.d.getTime(),hbm:g.mid||undefined,home:isMe(g.home)?1:0};}),
     nextGame:next?{opponent:view(next).opp,date:next.d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",timeZone:"Europe/Copenhagen"}),
       time:next.d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"}),tv:next.tv||"–",ts:next.d.getTime()}:null,
   };
