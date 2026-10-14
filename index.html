@@ -124,6 +124,8 @@ footer{padding:24px 48px;border-top:1px solid var(--border);display:flex;align-i
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 <meta name="apple-mobile-web-app-title" content="SportsHub">
+<!-- Visitor counter (owner's GoatCounter account, no cookies): counts page views, no personal data -->
+<script data-goatcounter="https://mysportshub.goatcounter.com/count" async src="https://gc.zgo.at/count.js"></script>
 </head>
 <body>
 <div id="landing">
@@ -231,7 +233,7 @@ footer{padding:24px 48px;border-top:1px solid var(--border);display:flex;align-i
 </div>
 <script>
 var _appMounted=false;
-function showApp(){document.getElementById('landing').classList.add('hidden');document.getElementById('app-view').classList.add('active');window.scrollTo(0,0);if(!_appMounted){_appMounted=true;mountApp();}}
+function showApp(){document.getElementById('landing').classList.add('hidden');document.getElementById('app-view').classList.add('active');window.scrollTo(0,0);if(!_appMounted){_appMounted=true;mountApp();try{window.goatcounter&&window.goatcounter.count&&window.goatcounter.count({path:'/app',title:'Opened dashboard',event:true});}catch(e){}}}
 
 function dismissBanner(){
   document.getElementById('install-banner').classList.remove('show');
