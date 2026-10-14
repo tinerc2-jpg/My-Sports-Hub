@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>My Sports Hub</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Barlow+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet">
@@ -90,7 +90,7 @@ footer{padding:24px 48px;border-top:1px solid var(--border);display:flex;align-i
 #landing.hidden{display:none}
 #app-view{display:none;min-height:100vh;background:#0f1b33}
 #app-view.active{display:block}
-#app-topbar{display:flex;align-items:center;justify-content:space-between;padding:14px 22px;background:#0a1326;border-bottom:1px solid rgba(255,255,255,0.08);position:sticky;top:0;z-index:10}
+#app-topbar{display:flex;align-items:center;justify-content:space-between;padding:calc(14px + env(safe-area-inset-top)) 22px 14px;background:#0a1326;border-bottom:1px solid rgba(255,255,255,0.08);position:sticky;top:0;z-index:10}
 .a-logo{font-size:0.9rem;font-weight:600;color:#fff}.a-logo b{color:#e8409a}
 #back-btn{background:rgba(255,255,255,0.07);border:1px solid rgba(255,255,255,0.1);color:#fff;border-radius:6px;padding:7px 16px;cursor:pointer;font-size:0.78rem;font-weight:500;font-family:'Inter',sans-serif}
 #app-root{min-height:calc(100vh - 53px)}
@@ -621,7 +621,7 @@ function tsdbEvent(e,id){
   const home=String(e.idHomeTeam)===id;
   const ts=e.strTimestamp?(/Z|[+-]\d\d:?\d\d$/.test(e.strTimestamp)?e.strTimestamp:e.strTimestamp+"Z"):(e.dateEvent+"T"+(e.strTime||"12:00:00"));
   const d=new Date(ts),ms=home?e.intHomeScore:e.intAwayScore,os=home?e.intAwayScore:e.intHomeScore;
-  return{d,opponent:(home?e.strAwayTeam:e.strHomeTeam)+(home?" (H)":" (A)"),ms,os,tv:e.strTVStation||""};
+  return{id:e.idEvent,d,opponent:(home?e.strAwayTeam:e.strHomeTeam)+(home?" (H)":" (A)"),ms,os,tv:e.strTVStation||""};
 }
 // Seasons run Aug–Jun and are named like "2026-2027".
 function tsdbSeason(d){const y=d.getFullYear();return d.getMonth()>=6?y+"-"+(y+1):(y-1)+"-"+y;}
@@ -716,13 +716,18 @@ async function wikiStanding(team){
 
 async function fetchTSDB(src,team){
   const standingP=tsdbStanding(src).catch(()=>null).then(s=>s?{s,from:""}:wikiStanding(team).then(w=>w?{s:w,from:" + Wikipedia"}:null).catch(e=>{liveLog("wiki: "+e.message);return null;}));
-  const [last,next,st]=await Promise.all([getJSON(TSDB+"/eventslast.php?id="+src.id).catch(()=>null),getJSON(TSDB+"/eventsnext.php?id="+src.id).catch(()=>null),standingP]);
+  // eventslast gives only the latest game on the free key, so the league's season list is read too.
+  const seasonP=src.league?getJSON(TSDB+"/eventsseason.php?id="+src.league+"&s="+tsdbSeason(new Date())).catch(e=>{liveLog("tsdb season: "+e.message);return null;}):Promise.resolve(null);
+  const [last,next,st,season]=await Promise.all([getJSON(TSDB+"/eventslast.php?id="+src.id).catch(()=>null),getJSON(TSDB+"/eventsnext.php?id="+src.id).catch(()=>null),standingP,seasonP]);
   const standing=st&&st.s;
   if(!last&&!next)throw new Error("offline");
-  const done=((last&&last.results)||[]).map(e=>tsdbEvent(e,src.id)).filter(e=>e.ms!=null&&e.ms!==""&&e.os!=null&&e.os!=="").sort((a,b)=>b.d-a.d);
+  const mine=((season&&season.events)||[]).filter(e=>String(e.idHomeTeam)===src.id||String(e.idAwayTeam)===src.id);
+  if(season)liveLog("tsdb season: "+((season.events||[]).length)+" league games, "+mine.length+" for this team");
+  const seenE={},done=[...((last&&last.results)||[]),...mine].filter(e=>!seenE[e.idEvent]&&(seenE[e.idEvent]=1))
+    .map(e=>tsdbEvent(e,src.id)).filter(e=>e.ms!=null&&e.ms!==""&&e.os!=null&&e.os!==""&&e.d.getTime()<Date.now()).sort((a,b)=>b.d-a.d);
   const up=((next&&next.events)||[]).map(e=>tsdbEvent(e,src.id)).filter(e=>e.d.getTime()>Date.now()-3*3600e3).sort((a,b)=>a.d-b.d)[0];
   return{source:"TheSportsDB"+(st?st.from:""),
-    recentResults:done.slice(0,5).map(e=>({opponent:e.opponent,score:e.ms+"–"+e.os,result:+e.ms>+e.os?"W":+e.ms<+e.os?"L":"D",date:fmtShort(e.d)})),
+    recentResults:done.slice(0,5).map(e=>({opponent:e.opponent,score:e.ms+"–"+e.os,result:+e.ms>+e.os?"W":+e.ms<+e.os?"L":"D",date:fmtShort(e.d),ts:e.d.getTime()})),
     nextGame:up?{opponent:up.opponent,date:fmtDay(up.d),time:fmtTime(up.d),tv:up.tv||"–",ts:up.d.getTime()}:next?OFF_SEASON:null,
     standing};
 }
@@ -1255,12 +1260,12 @@ function NewsItem({n,color}){
 }
 
 function StandingDisplay({team,onTable}){
-  const s=team.standing,tap=s.table&&s.table.length&&onTable?onTable:undefined;
+  const s=team.standing||{},tap=s.table&&s.table.length&&onTable?onTable:undefined;
   if(s.careerHigh!=null||team.sport==="Golf"||team.sport==="Tennis")return h("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
     h(StatBox,{label:"Ranking",value:s.rank?"#"+s.rank:"–",onClick:tap}),
     h(StatBox,{label:"Points",value:s.points?s.points.toLocaleString():"–"}),
-    h(StatBox,{label:"Career High",value:s.careerHigh?"#"+s.careerHigh:"–"}),
-    h(StatBox,{label:"Prize",value:s.prize||"–"})
+    s.careerHigh&&h(StatBox,{label:"Career High",value:"#"+s.careerHigh}),
+    s.prize&&h(StatBox,{label:"Prize",value:s.prize})
   );
   if(s.note&&s.wins==null)return h("div",{style:{display:"flex",gap:8,flexWrap:"wrap"}},
     h(StatBox,{label:"Rank",value:s.rank?"#"+s.rank:"–",sub:s.note,onClick:tap}),
@@ -1601,7 +1606,7 @@ function App(){
       ?team.recentResults.slice(0,3).map(r=>(r.result==="W"?"✅":r.result==="L"?"❌":"➖")+" "+r.opponent+" "+r.score).join("\n"):"";
     const text=
       team.emoji+" "+team.name+" — "+team.league+"\n"+
-      (team.standing.rank?"#"+team.standing.rank+(team.standing.points?" • "+team.standing.points+"pts":"")+"\n":"")+
+      (team.standing&&team.standing.rank?"#"+team.standing.rank+(team.standing.points?" • "+team.standing.points+"pts":"")+"\n":"")+
       nextLine+"\n\n"+
       (recent?"Recent:\n"+recent+"\n\n":"")+
       "📲 My Sports Hub: "+appUrl();
@@ -1654,7 +1659,8 @@ function App(){
   );
 
   return h("div",{style:{minHeight:"100vh",background:"#0f1b33",color:"#f1f5f9",fontFamily:"Inter,sans-serif"}},
-    h("div",{style:{background:"#0a1326",borderBottom:"1px solid rgba(255,255,255,0.06)",padding:"14px 14px 12px",position:"sticky",top:0,zIndex:10}},
+    // top padding clears the iPhone status bar in the home-screen app (black-translucent)
+    h("div",{style:{background:"#0a1326",borderBottom:"1px solid rgba(255,255,255,0.06)",padding:"calc(14px + env(safe-area-inset-top)) 14px 12px",position:"sticky",top:0,zIndex:10}},
       h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:10}},
         h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.25rem",fontWeight:900,letterSpacing:"2px",color:"#fff"}},
           "MY SPORTS HUB",
@@ -1696,7 +1702,7 @@ function App(){
       h("div",{style:{height:30}})
     ),
     match&&h(MatchSheet,{r:match,team,onClose:()=>setMatch(null)}),
-    showTable&&team.standing.table&&h(TableSheet,{team,onClose:()=>setShowTable(false)}),
+    showTable&&team.standing&&team.standing.table&&h(TableSheet,{team,onClose:()=>setShowTable(false)}),
     showModal&&h(AddModal,{onClose:()=>setShowModal(false),onAdd:handleAdd}),
     removing&&h(RemoveConfirm,{teamName:teams.find(t=>t.id===removing)&&teams.find(t=>t.id===removing).name,onCancel:()=>setRemoving(null),onConfirm:()=>handleRemove(removing)})
   );
@@ -1711,7 +1717,8 @@ window._reactRoot.render(h(App));
 (function(){
   var standalone=window.navigator.standalone===true||(window.matchMedia&&window.matchMedia('(display-mode: standalone)').matches);
   if(standalone||/[?&]app\b/.test(location.search)||location.hash==='#app'){
-    if(standalone){var b=document.getElementById('back-btn');if(b)b.style.display='none';}
+    // As a home-screen app the landing page's top bar (logo + "Back") only takes space.
+    if(standalone){var b=document.getElementById('app-topbar');if(b)b.style.display='none';}
     showApp();
   }
 })();

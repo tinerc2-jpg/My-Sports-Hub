@@ -434,8 +434,9 @@ for(const t of Object.values(api.DB)){
         if(s){data.standing=s.standing;data.standingFrom=s.from;data.standingTs=Date.now();data.source=data.source.replace(" + Wikipedia","")+" + "+s.from;}
       }
     }
-    if(data&&(t.sport==="Tennis"||t.sport==="Golf")){
-      // ESPN only shows this week's events: keep earlier results from the previous snapshot.
+    if(data&&(t.sport==="Tennis"||t.sport==="Golf"||t.sport==="Handball")){
+      // ESPN only shows this week's events (TheSportsDB's free key only the latest handball game):
+      // keep earlier results from the previous snapshot.
       const pr=(prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[];
       const seenR=new Set(),merged=[...(data.recentResults||[]),...pr.filter(r=>r.ts)]
         .filter(r=>{const k=r.opponent+"|"+r.date;return !seenR.has(k)&&seenR.add(k);}).sort((a,b)=>b.ts-a.ts).slice(0,5);
