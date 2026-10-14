@@ -303,7 +303,7 @@ async function ehfProbe(){
   if(_ehfProbed)return;_ehfProbed=true;
   const H={"Accept":"application/json"}; // the global fetch wrapper sends our own User-Agent
   for(const u of ["https://api.sofascore.com/api/v1/search/all?q=GOG","https://www.sofascore.com/api/v1/search/all?q=GOG",
-    "https://www.eurohandball.com/umbraco/api/search/search?query=GOG","https://www.eurohandball.com/en/ehf-champions-league/"]){
+    "https://ehfcl.eurohandball.com/","https://ehfcl.eurohandball.com/men/2026-27/","https://tophaandbold.dk/livescore","https://www.eurohandball.com/"]){
     try{const r=await fetch(u,{headers:H}),t=await r.text();
       const i=t.indexOf("GOG");console.log(`    EHF probe ${u}: HTTP ${r.status}, ${t.length} bytes · «${(i>=0?t.slice(Math.max(0,i-300),i+500):t.slice(0,300)).replace(/\s+/g," ")}»`);
       const apis=[...new Set([...t.matchAll(/https?:\/\/[^"' ]*(?:api|match|livescore)[^"' ]*/gi)].map(m=>m[0]))].slice(0,12);if(apis.length)console.log("    EHF probe urls: "+apis.join(" "));
