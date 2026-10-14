@@ -753,7 +753,11 @@ const GOLF_WEEKS_BACK=8;
 async function fetchGolf(team,src){
   const al=teamAliases(team),now=Date.now();
   let hit=null,cal=null,sawEvent=false;
-  const isMe=x=>nameMatch(al,[athleteName(x)])===2;
+  // Exact name, or a spelling variant: same last name and first name starting with the same 2 letters
+  // (ESPN writes "Niklas Norgaard" for our "Nicklas Nørgaard").
+  const [first,...rest]=norm(team.name).split(" "),last=rest.join(" ");
+  const isMe=x=>{const n=athleteName(x);if(nameMatch(al,[n])===2)return true;
+    const w=norm(n).split(" ");return !!last&&w.slice(1).join(" ")===last&&w[0].slice(0,2)===first.slice(0,2);};
   for(const tour of src.tours){
     const j=await getJSON(ESPN+"/site/v2/sports/golf/"+tour+"/scoreboard").catch(e=>{liveLog("golf "+tour+": "+e.message);return null;});
     if(!j)continue;
@@ -1304,13 +1308,21 @@ function App(){
       (team.standing.rank?"#"+team.standing.rank+(team.standing.points?" • "+team.standing.points+"pts":"")+"\n":"")+
       nextLine+"\n\n"+
       (recent?"Recent:\n"+recent+"\n\n":"")+
-      "📲 My Sports Hub";
+      "📲 My Sports Hub: "+appUrl();
     if(navigator.share){
       navigator.share({title:team.name,text}).catch(()=>{});
     }else{
       try{navigator.clipboard.writeText(text).then(()=>alert("Copied!"));}
       catch(e){alert(text);}
     }
+  }
+  // The public address (the live Netlify site), also when the file is opened locally.
+  function appUrl(){return /^https?:/.test(location.protocol)&&!/^(localhost|127\.)/.test(location.hostname)?location.origin+location.pathname.replace(/index\.html$/,""):"https://mysportspage.netlify.app/";}
+  function handleShareApp(){
+    const url=appUrl(),text="Follow your teams with My Sports Hub: live scores, standings, TV fixtures and news. Add it to your home screen!";
+    if(navigator.share){navigator.share({title:"My Sports Hub",text,url}).catch(()=>{});return;}
+    try{navigator.clipboard.writeText(text+" "+url).then(()=>alert("Link copied: "+url+"\nPaste it into a message to share the app."));}
+    catch(e){prompt("Copy this link to share the app:",url);}
   }
   function handleAdd(nt){
     if(teams.find(x=>x.name===nt.name))return setShowModal(false);
@@ -1347,9 +1359,12 @@ function App(){
 
   return h("div",{style:{minHeight:"100vh",background:"#0f1b33",color:"#f1f5f9",fontFamily:"Inter,sans-serif"}},
     h("div",{style:{background:"#0a1326",borderBottom:"1px solid rgba(255,255,255,0.06)",padding:"14px 14px 12px",position:"sticky",top:0,zIndex:10}},
-      h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.25rem",fontWeight:900,letterSpacing:"2px",color:"#fff",marginBottom:10}},
-        "MY SPORTS HUB",
-        h("span",{style:{fontSize:"0.5rem",marginLeft:8,opacity:0.65,letterSpacing:"3px",fontFamily:"Inter,sans-serif",fontWeight:400}},"FAN DASHBOARD")
+      h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:10}},
+        h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.25rem",fontWeight:900,letterSpacing:"2px",color:"#fff"}},
+          "MY SPORTS HUB",
+          window.innerWidth>=460&&h("span",{style:{fontSize:"0.5rem",marginLeft:8,opacity:0.65,letterSpacing:"3px",fontFamily:"Inter,sans-serif",fontWeight:400,whiteSpace:"nowrap"}},"FAN DASHBOARD")
+        ),
+        h("button",{onClick:handleShareApp,title:"Share My Sports Hub",style:{flexShrink:0,background:"#e8409a",color:"#ffffff",border:"none",borderRadius:20,padding:"6px 12px",fontSize:"0.72rem",fontWeight:700,fontFamily:"Inter,sans-serif",cursor:"pointer",whiteSpace:"nowrap"}},"📲 Share app")
       ),
       h(FavBar,{teams,selected,onSelect:handleSelect,onAdd:()=>setShowModal(true),liveNames})
     ),
