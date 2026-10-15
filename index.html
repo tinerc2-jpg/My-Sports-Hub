@@ -590,6 +590,16 @@ async function fetchEspnSummary(sp,lg,ev,tid){
     (comp.details||[]).filter(d=>d.scoringPlay).forEach(d=>{const a=((d.athletesInvolved||[])[0]||{});
       out.goals.push({min:(d.clock&&d.clock.displayValue)||"",who:a.displayName||"",me:isMe(d.team)?1:0,pen:d.penaltyKick?1:0,og:d.ownGoal?1:0});});
   }
+  // Player stats (football): rosters[].roster[].stats → goals, assists, shots, on target, cards, saves.
+  if(sp==="soccer"){
+    const PS=[["G",/^totalGoals$|^goals$/],["A",/^goalAssists$|^assists$/],["SH",/^totalShots$/],["ST",/^shotsOnTarget$/],["YC",/^yellowCards$/],["RC",/^redCards$/],["SV",/^saves$/]];
+    out.players=((j.rosters||[]).map(ro=>({me:isMe(ro.team)?1:0,list:(ro.roster||[]).map(p=>{
+      const o={who:(p.athlete&&(p.athlete.shortName||p.athlete.displayName))||""};
+      (p.stats||[]).forEach(st=>{const m=PS.find(([,re])=>re.test(st.name||""));if(m&&+st.value)o[m[0]]=+st.value;});
+      return o;}).filter(o=>o.who&&PS.some(([k])=>o[k]))
+      .sort((a,b)=>(b.G||0)-(a.G||0)||(b.A||0)-(a.A||0)||(b.SH||0)-(a.SH||0)).slice(0,10)})));
+  }
+  out.sv=2; // bump when the summary parsing changes, so the robot recomputes stored stats
   if(!out.stats.length&&!out.goals.length&&!out.periods)return null;
   return out;
 }
@@ -1251,6 +1261,16 @@ function MatchSheet({r,team,onClose}){
           ps.map((p,k)=>h("td",{key:k,style:{padding:"4px 6px"}},p))
         )))
       )
+    ),
+    st&&st.players&&st.players.some(t=>t.list.length)&&h("div",{style:{marginBottom:14}},
+      h(Lbl,{c:"👟 Players"}),
+      [...st.players].sort((a,b)=>(home?b.me-a.me:a.me-b.me)).map((t,i)=>h("div",{key:i,style:{marginBottom:8}},
+        h("div",{style:{fontSize:"0.72rem",color:t.me?"#ff9fd0":"#d5deee",fontWeight:700,marginBottom:4}},t.me?me:op),
+        t.list.map((p,k)=>h("div",{key:k,style:{display:"flex",justifyContent:"space-between",gap:8,fontSize:"0.78rem",color:"#fff",background:"rgba(255,255,255,0.05)",borderRadius:8,padding:"5px 9px",marginBottom:3}},
+          h("span",{style:{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}},p.who),
+          h("span",{style:{whiteSpace:"nowrap",color:"#eef2f8"}},[p.G&&"⚽"+p.G,p.A&&"🅰️"+p.A,p.SH&&"🎯"+(p.ST||0)+"/"+p.SH,p.SV&&"🧤"+p.SV,p.YC&&"🟨",p.RC&&"🟥"].filter(Boolean).join("  "))))
+      )),
+      h("div",{style:{fontSize:"0.64rem",color:"#d5deee",marginTop:2}},"⚽ goals · 🅰️ assists · 🎯 on target/shots · 🧤 saves")
     ),
     st&&st.stats&&st.stats.length>0&&h("div",null,
       h(Lbl,{c:"📊 Match stats"}),
