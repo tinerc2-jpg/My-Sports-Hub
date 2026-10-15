@@ -1707,6 +1707,19 @@ function App(){
   },[]);
   useEffect(()=>{refreshTeam(baseTeam);},[selected,teams.length]);
   const lf=(team&&team._liveFields)||{};
+  // While any favourite is playing, listen to the robot's live push (ntfy.sh server-sent events) and update
+  // the score at once; the regular refresh keeps running underneath.
+  const anyLive=teams.some(t=>liveWindow(live[t.name]));
+  useEffect(()=>{
+    if(!anyLive||typeof EventSource==="undefined")return;
+    const es=new EventSource("https://ntfy.sh/msh-live-7f3k/sse");
+    es.onmessage=ev=>{try{
+      const m=JSON.parse(JSON.parse(ev.data).message||"{}");if(!m.n)return;
+      setLive(prev=>{const cur=prev[m.n];if(!cur||!cur.data)return prev;
+        const n={...prev,[m.n]:{...cur,data:{...cur.data,liveGame:{opponent:m.o,score:m.s,detail:m.d}}}};lsSet("msh-live",n);return n;});
+    }catch(e){}};
+    return()=>es.close();
+  },[anyLive]);
   // the robot's whole-league club list (for quick picks / search) arrives with the snapshot
   useEffect(()=>{getSnapshot().then(()=>setClock(Date.now())).catch(()=>{});},[]);
 

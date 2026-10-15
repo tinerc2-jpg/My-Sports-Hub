@@ -794,6 +794,14 @@ const prevRequests=prevFull&&prevFull.requests;
     }catch(e){console.log("requests (ntfy): "+e.message);requests={...(requests||{}),ntfy:pr};}
   }
 }
+// Live push to the app: every changed live score goes to one ntfy.sh topic the app listens to while a
+// game is on (EventSource), so the app updates within seconds instead of polling GitHub every 75 s.
+for(const [name,e] of Object.entries(teams)){
+  const g=e&&e.data&&e.data.liveGame,p=prev[name]&&prev[name].data&&prev[name].data.liveGame;
+  if(!g||(p&&p.score===g.score&&p.detail===g.detail))continue;
+  try{await fetch("https://ntfy.sh/",{method:"POST",headers:{"Content-Type":"application/json"},
+    body:JSON.stringify({topic:"msh-live-7f3k",message:JSON.stringify({n:name,o:g.opponent,s:g.score,d:g.detail})})});}catch(err){}
+}
 // Live notifications (football): compare with the previous run and post kick-off / goal / full-time to
 // the team's ntfy.sh topic (users subscribe in the free ntfy app; see NotifyCard in the app).
 for(const [name,e] of Object.entries(teams)){
