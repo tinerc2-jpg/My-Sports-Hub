@@ -339,10 +339,10 @@ async function ehfTv(id){
 async function ehfMatchStats(id,team){
   const r=await fetch("https://www.eurohandball.com/umbraco/api/matchdetailapi/GetMatchDetailStatistic?matchId="+id,{headers:{Accept:"application/json"}});
   const t=await r.text();let j=null;try{j=JSON.parse(t);}catch(e){}
-  if(!j){console.log(`    EHF stats ${id}: HTTP ${r.status}, not JSON «${t.slice(0,200)}»`);return null;}
+  if(!j){console.log(`    EHF stats ${id}: HTTP ${r.status}, not JSON «${t.slice(0,200)}»`);_debug.ehfStats={status:r.status,sample:t.slice(0,1000)};return null;}
   const al=api.teamAliases(team),isMe=n=>api.nameMatch(al,[String(n||"")])===2;
   const shape=(o,d=0)=>o&&typeof o==="object"?(Array.isArray(o)?"["+o.length+"]"+(o.length?shape(o[0],d+1):""):"{"+Object.keys(o).slice(0,30).map(k=>k+(d<3?":"+shape(o[k],d+1):"")).join(",")+"}"):typeof o;
-  if(!_ehfStatsLogged){_ehfStatsLogged=true;console.log(`    EHF stats shape: ${shape(j).slice(0,1500)}`);console.log(`    EHF stats sample: ${t.slice(0,1500).replace(/\s+/g," ")}`);}
+  if(!_ehfStatsLogged){_ehfStatsLogged=true;_debug.ehfStats={shape:shape(j).slice(0,3000),sample:t.slice(0,4000)};console.log(`    EHF stats shape: ${shape(j).slice(0,1500)}`);console.log(`    EHF stats sample: ${t.slice(0,1500).replace(/\s+/g," ")}`);}
   // find the two team blocks: objects that carry a team name and a list of players
   const teams=[];const walk=o=>{if(!o||typeof o!=="object")return;if(Array.isArray(o))return o.forEach(walk);
     const nm=(o.team&&(o.team.fullName||o.team.name))||o.teamName||o.fullName;
@@ -364,6 +364,7 @@ async function ehfMatchStats(id,team){
   return{v:HB_V,meName:me.nm,opName:op.nm,stats,top,goals:[]};
 }
 let _ehfStatsLogged=false;
+const _debug={}; // temporary: written to live.json so response shapes can be checked without waiting for the job log
 const fmtDK=(d,o)=>d.toLocaleDateString("en-GB",{...o,timeZone:"Europe/Copenhagen"});
 async function ehfFor(team){
   const ms=await ehfFeed(),al=api.teamAliases(team);
@@ -849,7 +850,7 @@ for(const [name,e] of Object.entries(teams)){
   catch(err){console.log("notify "+name+": "+err.message);}
 }
 mkdirSync("out",{recursive:true});
-writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests}));
+writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,debug:_debug}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
 const liveNow=Object.entries(teams).filter(([,e])=>needsLive(e)).map(([n,e])=>n+(e.data.liveGame?" "+e.data.liveGame.score:" (kick-off soon)"));
 if(liveNow.length){writeFileSync("out/live-needed",liveNow.join("\n"));console.log("live: "+liveNow.join(" · "));}
