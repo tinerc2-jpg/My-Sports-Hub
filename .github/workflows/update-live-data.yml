@@ -18,7 +18,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 16
+    timeout-minutes: 120
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -41,13 +41,13 @@ jobs:
           git commit -qm "Live data $(date -u +%Y-%m-%dT%H:%MZ)"
           git push -qf "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" live-data
       # While a favourite is playing (or kicks off within 15 min) the script leaves out/live-needed:
-      # re-run it every minute for up to 11 minutes, publishing each time, until the next scheduled run.
+      # re-run it every minute for as long as a game is on (up to 110 min per job; scheduled runs wait meanwhile).
       - name: Live updates every minute during games
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APISPORTS_KEY: ${{ secrets.APISPORTS_KEY }}
         run: |
-          end=$(( $(date +%s) + 11*60 ))
+          end=$(( $(date +%s) + 110*60 ))
           while [ -f out/live-needed ] && [ "$(date +%s)" -lt "$end" ]; do
             sleep 45
             node scripts/update-live.mjs --live || break
