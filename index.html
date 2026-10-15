@@ -1773,7 +1773,12 @@ function App(){
   // The public address (the live Netlify site), also when the file is opened locally.
   function appUrl(){return /^https?:/.test(location.protocol)&&!/^(localhost|127\.)/.test(location.hostname)?location.origin+location.pathname.replace(/index\.html$/,""):"https://tinerc2-jpg.github.io/My-Sports-Hub/";}
   function handleShareApp(){
-    const url=appUrl(),text="Follow your teams with My Sports Hub: live scores, standings, TV fixtures and news. Add it to your home screen!";
+    // Danish how-to for new users, sent with every app share (owner's request)
+    const url=appUrl(),text="Hej! 👋 Prøv My Sports Hub – så kan du følge dine yndlingshold ⚽🤾🎾\n\n"+
+      "Sådan får du den som app:\n"+
+      "📱 iPhone: Åbn linket i Safari → tryk på Del-knappen (firkanten med pil op) → \"Føj til hjemmeskærm\" → \"Tilføj\".\n"+
+      "🤖 Android: Åbn linket i Chrome → tryk på ⋮ øverst til højre → \"Installer app\" / \"Føj til startskærm\".\n\n"+
+      "Så har du et SH-ikon på telefonen 🎉 Vælg dine hold og se resultater, tabeller og live-stilling. Kan du ikke finde dit hold, så tryk \"Request this team\".\n\n";
     if(navigator.share){navigator.share({title:"My Sports Hub",text,url}).catch(()=>{});return;}
     try{navigator.clipboard.writeText(text+" "+url).then(()=>alert("Link copied: "+url+"\nPaste it into a message to share the app."));}
     catch(e){prompt("Copy this link to share the app:",url);}
