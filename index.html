@@ -351,7 +351,7 @@ const JOLPI="https://api.jolpi.ca/ergast/f1";
 const TSDB="https://www.thesportsdb.com/api/v1/json/3";
 const ESPN_LEAGUES={
   "Premier League":["soccer","eng.1"],"La Liga":["soccer","esp.1"],"Bundesliga":["soccer","ger.1"],
-  "Serie A":["soccer","ita.1"],"Ligue 1":["soccer","fra.1"],"Superliga":["soccer","den.1"],"1. division":["soccer","den.2"],"Allsvenskan":["soccer","swe.1"],
+  "Serie A":["soccer","ita.1"],"Ligue 1":["soccer","fra.1"],"Superliga":["soccer","den.1"],"Allsvenskan":["soccer","swe.1"],
   NBA:["basketball","nba"],NHL:["hockey","nhl"],NFL:["football","nfl"],MLB:["baseball","mlb"],
 };
 const ESPN_SPORT_LEAGUES={
@@ -427,7 +427,7 @@ async function resolveTSDB(team,al){
   let ok=false,lastErr=null;
   for(const q of [...new Set([team.shortName,team.name])]){
     let j;try{j=await getJSON(TSDB+"/searchteams.php?t="+encodeURIComponent(q));ok=true;}catch(e){lastErr=e;continue;}
-    const t=(j.teams||[]).filter(x=>x.strSport===team.sport)
+    const t=(j.teams||[]).filter(x=>x.strSport===(team.sport==="Football"?"Soccer":team.sport))
       .find(x=>nameMatch(al,[x.strTeam,x.strTeamShort].concat(String(x.strTeamAlternate||"").split(",")))>0);
     if(t)return{p:"tsdb",id:String(t.idTeam),league:t.idLeague?String(t.idLeague):null};
   }
@@ -436,6 +436,8 @@ async function resolveTSDB(team,al){
 }
 // Bump when new sports get a source, so browsers re-resolve teams cached as "no source".
 const SRC_KEY="msh-src-v2";
+// Football leagues ESPN doesn't cover: TheSportsDB instead.
+const TSDB_LEAGUES=["1. division"];
 async function resolveSource(team){
   const all=lsGet(SRC_KEY)||{},hit=all[team.name];
   if(hit&&Date.now()-hit.ts<7*864e5)return hit.src;
@@ -443,7 +445,7 @@ async function resolveSource(team){
   if(team.sport==="Formula 1")src={p:"f1"};
   else if(team.sport==="Tennis")src={p:"tennis",tour:/wta/i.test(team.league)?"wta":"atp"};
   else if(team.sport==="Golf")src={p:"golf",tours:GOLF_TOURS[team.league]||["pga"]};
-  else if(team.sport==="Handball")src=await resolveTSDB(team,al);
+  else if(team.sport==="Handball"||TSDB_LEAGUES.includes(team.league))src=await resolveTSDB(team,al);
   else if(ESPN_SPORT_LEAGUES[team.sport]){
     const cands=ESPN_LEAGUES[team.league]?[ESPN_LEAGUES[team.league]]:ESPN_SPORT_LEAGUES[team.sport];
     let best=null,ok=false,lastErr=null;
@@ -1037,6 +1039,7 @@ function persist(teams,sel){
   try{localStorage.setItem("msh-teams",JSON.stringify(toSave));
     localStorage.setItem("msh-sel",sel);}catch(e){}
 }
+add(["fc fredericia","fredericia fodbold"],{name:"FC Fredericia",shortName:"FC Fredericia",sport:"Football",league:"1. division",country:"🇩🇰",color:"#c8102e",accent:"#1d3360",emoji:"⚽",standing:{rank:null,points:null,wins:null,draws:null,losses:null},recentResults:[],nextGame:null,news:[]});
 add(["brentford","brentford fc"],{name:"Brentford FC",shortName:"Brentford",sport:"Football",league:"Premier League",country:"🇬🇧",color:"#E30613",accent:"#1C1C1C",emoji:"⚽",standing:{rank:9,points:49,wins:14,draws:7,losses:16},recentResults:[{opponent:"Liverpool (A)",score:"1-1",result:"D",date:"May 24"},{opponent:"Crystal Palace (H)",score:"2-2",result:"D",date:"May 17"},{opponent:"Man City (A)",score:"0-3",result:"L",date:"May 9"}],nextGame:{opponent:"Season complete - 9th place finish",date:"Season complete",time:"-",tv:"-"},news:[{title:"Brentford 9th - solid PL season done, drew 1-1 at Liverpool",time:"today",hot:false},{title:"Igor Thiago top scorer 21 PL goals - breakthrough season",time:"today",hot:true},{title:"Keith Andrews confirmed as permanent head coach",time:"today",hot:false}]});
 add(["warriors","golden state warriors"],{name:"Golden State Warriors",shortName:"Warriors",sport:"Basketball",league:"NBA",country:"🇺🇸",color:"#1D428A",accent:"#FFC72C",emoji:"🏀",standing:{rank:10,wins:42,losses:40},recentResults:[{opponent:"Suns (play-in)",score:"121-126",result:"L",date:"Apr 17"},{opponent:"Clippers (play-in)",score:"126-121",result:"W",date:"Apr 15"},{opponent:"Memphis",score:"118-112",result:"W",date:"Apr 12"}],nextGame:{opponent:"Season complete - eliminated in play-in",date:"Season complete",time:"-",tv:"-"},news:[{title:"Warriors eliminated in play-in by Suns",time:"5w ago",hot:false},{title:"NBA Finals start Jun 3: OKC vs winner of East",time:"today",hot:true},{title:"Curry: Will be back stronger next season",time:"5w ago",hot:false}]});
 add(["nuggets","denver nuggets"],{name:"Denver Nuggets",shortName:"Nuggets",sport:"Basketball",league:"NBA",country:"🇺🇸",color:"#0E2240",accent:"#FEC524",emoji:"🏀",standing:{rank:3,wins:54,losses:28},recentResults:[{opponent:"OKC G4 (R2)",score:"98-118",result:"L",date:"May 13"},{opponent:"OKC G3 (R2)",score:"112-119",result:"L",date:"May 11"},{opponent:"OKC G2 (R2)",score:"108-125",result:"L",date:"May 9"}],nextGame:{opponent:"Season complete - eliminated by OKC in R2",date:"Season complete",time:"-",tv:"-"},news:[{title:"Nuggets eliminated by OKC 4-1 in R2",time:"2w ago",hot:false},{title:"Jokic wins 4th MVP but no title this year",time:"1mo ago",hot:true},{title:"OKC vs Spurs in West Finals (tied 2-2)",time:"today",hot:true}]});
@@ -1408,10 +1411,13 @@ function LiveStatus({entry,busy,sport,onRefresh}){
 
 // "Request this team": counted as a GoatCounter event (path request/<sport>/<name>); the robot reads
 // the counts into live.json.requests and the owner is told about them.
+const REQUEST_TOPIC="mysportshub-team-requests-7f3k9q";
 function RequestTeam({name,sport}){
   const [sent,setSent]=useState(false);
   function send(){
     try{window.goatcounter&&window.goatcounter.count&&window.goatcounter.count({path:"request/"+sport+"/"+name.trim(),title:"Team request: "+name.trim()+" ("+sport+")",event:true});}catch(e){}
+    // also to a ntfy.sh topic the robot reads (no account or key needed)
+    try{fetch("https://ntfy.sh/"+REQUEST_TOPIC,{method:"POST",body:sport+" | "+name.trim()});}catch(e){}
     setSent(true);
   }
   return h("div",{style:{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"12px",marginBottom:12,fontFamily:"Inter,sans-serif"}},
