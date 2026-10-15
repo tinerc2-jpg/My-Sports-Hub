@@ -27,7 +27,7 @@ return {DB,fetchTeamLive,fetchEspnSummary,_liveLog,teamAliases,nameMatch,norm};`
 const LIVE=process.argv.includes("--live");
 const NOW=Date.now();
 function needsLive(e){const d=e&&e.data,k=d&&d.nextGame&&d.nextGame.ts;return !!(d&&(d.liveGame||(k&&NOW>k-15*60e3&&NOW<k+150*60e3)));}
-let prev={};
+let prev={},prevFull=null;
 let prevExtra=null;
 if(LIVE&&existsSync("out/live.json")){const j=JSON.parse(readFileSync("out/live.json","utf8"));prev=j.teams||{};prevExtra=j.leagueTeams||[];}
 else try{
@@ -35,7 +35,7 @@ else try{
   const repo=process.env.GITHUB_REPOSITORY||"tinerc2-jpg/My-Sports-Hub";
   let r=await fetch(`https://api.github.com/repos/${repo}/contents/live.json?ref=live-data`,{headers:{Accept:"application/vnd.github.raw"}});
   if(!r.ok)r=await fetch(`https://raw.githubusercontent.com/${repo}/live-data/live.json`);
-  if(r.ok)prev=(await r.json()).teams||{};
+  if(r.ok){prevFull=await r.json();prev=prevFull.teams||{};}
 }catch(e){}
 
 // ── API-Sports handball standings (key in the APISPORTS_KEY repo secret; never shipped to the app) ──
@@ -605,7 +605,7 @@ async function rolexStanding(team){
 // leagueTeams, which the app uses for searching / adding.
 const LEAGUE_TEAMS=[{sp:"soccer",lg:"den.1",league:"Superliga",country:"🇩🇰"},
   {sp:"soccer",lg:"eng.1",league:"Premier League",country:"🏴󠁧󠁢󠁥󠁮󠁧󠁿"},{sp:"soccer",lg:"ita.1",league:"Serie A",country:"🇮🇹"},
-  {sp:"soccer",lg:"swe.1",league:"Allsvenskan",country:"🇸🇪"},{sp:"soccer",lg:"den.2",league:"1. division",country:"🇩🇰"}];
+  {sp:"soccer",lg:"swe.1",league:"Allsvenskan",country:"🇸🇪"}];
 // ESPN gives many clubs black/white (or no) colours and some names in another form: club colours / names here.
 const CLUB_STYLE={
   "F.C. København":{name:"FC København",shortName:"FCK",color:"#1c3f94",accent:"#9fb8e8"},"Brøndby IF":{color:"#f2c500",accent:"#1d3c8f"},
@@ -766,6 +766,7 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
 // Team requests from the app's "Request this team" button (GoatCounter events "request/<sport>/<name>").
 // Needs the GOATCOUNTER_TOKEN repo secret (GoatCounter → Settings → API, read permission). Hourly at most.
 let requests=null;
+const prevRequests=prevFull&&prevFull.requests;
 {
   const pj=LIVE&&existsSync("out/live.json")?JSON.parse(readFileSync("out/live.json","utf8")):null;
   requests=pj&&pj.requests||null;
@@ -779,7 +780,19 @@ let requests=null;
       requests={ts:Date.now(),list};
       console.log(`requests: HTTP ${r.status} · ${list.length} requested teams`+(list.length?": "+list.map(x=>x.path+" ×"+x.count).join(", "):"")+(r.ok?"":" · "+JSON.stringify(j).slice(0,200)));
     }catch(e){console.log("requests: "+e.message);}
-  }else if(!LIVE)console.log("requests: no GOATCOUNTER_TOKEN secret yet");
+  }
+  // ntfy.sh topic the app posts to ("<sport> | <name>"); messages are kept ~12 h, so collect them every run.
+  if(!LIVE){
+    const pr=(prevRequests&&prevRequests.ntfy)||[];
+    try{
+      const r=await fetch("https://ntfy.sh/mysportshub-team-requests-7f3k9q/json?poll=1&since=24h");
+      const msgs=(await r.text()).split("\n").filter(Boolean).map(l=>{try{return JSON.parse(l);}catch(e){return null;}}).filter(m=>m&&m.event==="message");
+      const seenIds=new Set(pr.map(x=>x.id)),add=msgs.filter(m=>!seenIds.has(m.id)).map(m=>({id:m.id,ts:m.time*1000,text:String(m.message||"").slice(0,80)}));
+      const all=[...pr,...add].slice(-200);
+      requests={...(requests||{}),ntfy:all};
+      console.log(`requests (ntfy): ${msgs.length} recent, ${add.length} new, ${all.length} kept`+(add.length?": "+add.map(x=>x.text).join("; "):""));
+    }catch(e){console.log("requests (ntfy): "+e.message);requests={...(requests||{}),ntfy:pr};}
+  }
 }
 mkdirSync("out",{recursive:true});
 writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests}));
