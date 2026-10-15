@@ -754,7 +754,7 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
     if(!data&&t.sport==="Cycling")data=await pcsCycling(t);
     // Match statistics per result. Finished games don't change, so stats from the previous snapshot are reused.
     if(data&&data.recentResults){
-      const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{const k=r.ev||(r.hbm&&"hb"+r.hbm)||(r.ehm&&"ehf"+r.ehm);if(k&&r.stats&&((r.hbm||r.ehm)?r.stats.v===HB_V:r.stats.sv===2))old[k]=r.stats;});
+      const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{const k=r.ev||(r.hbm&&"hb"+r.hbm)||(r.ehm&&"ehf"+r.ehm);if(k&&r.stats&&((r.hbm||r.ehm)?r.stats.v===HB_V:r.stats.sv===3))old[k]=r.stats;});
       let got=0,reused=0,none=0;
       for(const r of data.recentResults){
         const key=r.ev||(r.hbm&&"hb"+r.hbm)||(r.ehm&&"ehf"+r.ehm);

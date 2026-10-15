@@ -599,7 +599,19 @@ async function fetchEspnSummary(sp,lg,ev,tid){
       return o;}).filter(o=>o.who&&PS.some(([k])=>o[k]))
       .sort((a,b)=>(b.G||0)-(a.G||0)||(b.A||0)-(a.A||0)||(b.SH||0)-(a.SH||0)).slice(0,10)})));
   }
-  out.sv=2; // bump when the summary parsing changes, so the robot recomputes stored stats
+  // Player box scores (NBA, NHL, NFL, MLB): boxscore.players[] = {team, statistics:[{name, labels, athletes:[{athlete, stats}]}]};
+  // per group the most telling columns and the top 5 players.
+  else{
+    const PREF=["PTS","REB","AST","G","A","SOG","SV","SV%","C/ATT","YDS","TD","INT","CAR","REC","H","R","HR","RBI","K","IP","ER"];
+    out.box=((j.boxscore&&j.boxscore.players)||[]).map(tp=>({me:isMe(tp.team)?1:0,groups:(tp.statistics||[]).map(g=>{
+      const labels=g.labels||g.names||[],cols=PREF.filter(l=>labels.includes(l)).slice(0,4).map(l=>[l,labels.indexOf(l)]);
+      if(!cols.length)return null;
+      const num=v=>parseFloat(String(v).split("/")[0])||0;
+      const rows=(g.athletes||[]).filter(a=>a.stats&&a.stats.length).map(a=>({who:(a.athlete&&(a.athlete.shortName||a.athlete.displayName))||"",v:cols.map(([,i])=>a.stats[i])}))
+        .sort((x,y)=>num(y.v[0])-num(x.v[0])).slice(0,5);
+      return rows.length?{name:g.name||g.text||"",cols:cols.map(([l])=>l),rows}:null;}).filter(Boolean)})).filter(t=>t.groups.length);
+  }
+  out.sv=3; // bump when the summary parsing changes, so the robot recomputes stored stats
   if(!out.stats.length&&!out.goals.length&&!out.periods)return null;
   return out;
 }
@@ -1271,6 +1283,16 @@ function MatchSheet({r,team,onClose}){
           h("span",{style:{whiteSpace:"nowrap",color:"#eef2f8"}},[p.G&&"⚽"+p.G,p.A&&"🅰️"+p.A,p.SH&&"🎯"+(p.ST||0)+"/"+p.SH,p.SV&&"🧤"+p.SV,p.YC&&"🟨",p.RC&&"🟥"].filter(Boolean).join("  "))))
       )),
       h("div",{style:{fontSize:"0.64rem",color:"#d5deee",marginTop:2}},"⚽ goals · 🅰️ assists · 🎯 on target/shots · 🧤 saves")
+    ),
+    st&&st.box&&st.box.length>0&&h("div",{style:{marginBottom:14}},
+      h(Lbl,{c:"👟 Players"}),
+      [...st.box].sort((a,b)=>(home?b.me-a.me:a.me-b.me)).map((t,i)=>h("div",{key:i,style:{marginBottom:10}},
+        h("div",{style:{fontSize:"0.72rem",color:t.me?"#ff9fd0":"#d5deee",fontWeight:700,marginBottom:4}},t.me?me:op),
+        t.groups.map((g,k)=>h("table",{key:k,style:{width:"100%",borderCollapse:"collapse",fontSize:"0.76rem",color:"#fff",marginBottom:6}},
+          h("thead",null,h("tr",{style:{color:"#d5deee",fontSize:"0.64rem"}},h("th",{style:{textAlign:"left",padding:"3px 6px",textTransform:"capitalize"}},g.name),g.cols.map(c=>h("th",{key:c,style:{textAlign:"right",padding:"3px 6px"}},c)))),
+          h("tbody",null,g.rows.map((r,m)=>h("tr",{key:m,style:{background:m%2?"transparent":"rgba(255,255,255,0.04)"}},
+            h("td",{style:{padding:"4px 6px",whiteSpace:"nowrap"}},r.who),r.v.map((v,n)=>h("td",{key:n,style:{textAlign:"right",padding:"4px 6px",fontWeight:n?400:700}},v))))))))
+      ))
     ),
     st&&st.stats&&st.stats.length>0&&h("div",null,
       h(Lbl,{c:"📊 Match stats"}),
