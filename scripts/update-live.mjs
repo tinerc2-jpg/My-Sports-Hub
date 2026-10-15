@@ -207,7 +207,7 @@ function cphDate(d,mo,y,hh,mm){
 // top scorers and per-team event counts (goals, saves, 2-min suspensions …) from the event list.
 // tophaandbold.dk event names (Danish) → shown stats. A shot event belongs to the shooting team;
 // a saved shot counts as a save for the keeper's team.
-const HB_V=3; // bump when hbMatchStats changes, so stats in the previous snapshot are recomputed
+const HB_V=4; // bump when hbMatchStats changes, so stats in the previous snapshot are recomputed
 const HB_GOAL=/^(Mål|Straffemål)$/,HB_SAVED=/^(Skud reddet|Straffe reddet)$/,HB_MISS=/^(Skud på stolpe|Skud forbi|Skud blokeret)$/;
 async function hbMatchStats(id,team){
   const r=await fetch("https://tophaandbold.dk/match/"+id+".json");
@@ -238,7 +238,7 @@ async function hbMatchStats(id,team){
   const stats=[row("Goals","goals"),row("Shots","shots"),{label:"Shooting %",me:pct("me"),op:pct("op")},row("7m goals","pen"),row("Saves","saves"),
     row("2-min suspensions","susp"),row("Turnovers & faults","turn"),row("Yellow cards","warn")].filter(x=>x.me!=="0"||x.op!=="0");
   const top=Object.entries(scorers).map(([k,n])=>{const [side,who]=k.split("|");return{who,n,me:side==="me"?1:0};})
-    .sort((a,b)=>b.n-a.n).filter((x,i,arr)=>arr.filter(y=>y.me===x.me).indexOf(x)<4);
+    .sort((a,b)=>b.n-a.n).filter((x,i,arr)=>arr.filter(y=>y.me===x.me).indexOf(x)<10);
   const meHome=ts.indexOf(me)===0;
   // home–away order, like the score line in the app's match view
   const info=[j.halftime_score?"Half-time "+String(j.halftime_score).replace("-","–"):"",j.arena&&j.arena.name,j.spectators?j.spectators.toLocaleString("en-GB")+" spectators":""].filter(Boolean).join(" \xB7 ");
@@ -754,7 +754,7 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
     if(!data&&t.sport==="Cycling")data=await pcsCycling(t);
     // Match statistics per result. Finished games don't change, so stats from the previous snapshot are reused.
     if(data&&data.recentResults){
-      const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{const k=r.ev||(r.hbm&&"hb"+r.hbm)||(r.ehm&&"ehf"+r.ehm);if(k&&r.stats&&(!(r.hbm||r.ehm)||r.stats.v===HB_V))old[k]=r.stats;});
+      const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{const k=r.ev||(r.hbm&&"hb"+r.hbm)||(r.ehm&&"ehf"+r.ehm);if(k&&r.stats&&((r.hbm||r.ehm)?r.stats.v===HB_V:r.stats.sv===2))old[k]=r.stats;});
       let got=0,reused=0,none=0;
       for(const r of data.recentResults){
         const key=r.ev||(r.hbm&&"hb"+r.hbm)||(r.ehm&&"ehf"+r.ehm);
