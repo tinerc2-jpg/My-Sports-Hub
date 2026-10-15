@@ -50,7 +50,9 @@ jobs:
           end=$(( $(date +%s) + 110*60 ))
           while [ -f out/live-needed ] && [ "$(date +%s)" -lt "$end" ]; do
             sleep 15
-            node scripts/update-live.mjs --live || break
+            # every 15 min also a full run, so the other teams keep updating during a long live loop
+            if [ $(( $(date +%s) - ${last_full:-$(date +%s)} )) -ge 900 ]; then last_full=$(date +%s); node scripts/update-live.mjs || break
+            else last_full=${last_full:-$(date +%s)}; node scripts/update-live.mjs --live || break; fi
             cd out
             git add live.json
             git commit -qm "Live data $(date -u +%Y-%m-%dT%H:%MZ)" || true
