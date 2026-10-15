@@ -19,7 +19,7 @@ globalThis.fetch=(url,opts={})=>rawFetch(url,{...opts,headers:{"User-Agent":UA,.
 const api=new Function(`const DB={};function add(keys,d){keys.forEach(k=>DB[k.toLowerCase()]=d);}
 ${adds}
 ${html.slice(start,end)}
-return {DB,fetchTeamLive,fetchEspnSummary,_liveLog,teamAliases,nameMatch,norm};`)();
+return {DB,notifyTopic,fetchTeamLive,fetchEspnSummary,_liveLog,teamAliases,nameMatch,norm};`)();
 
 // Previous snapshot: lets us reuse API-Sports standings so we stay within the free quota.
 // --live: quick re-run inside the same Actions job (see the workflow's live loop). It starts from this
@@ -793,6 +793,22 @@ const prevRequests=prevFull&&prevFull.requests;
       console.log(`requests (ntfy): ${msgs.length} recent, ${add.length} new, ${all.length} kept`+(add.length?": "+add.map(x=>x.text).join("; "):""));
     }catch(e){console.log("requests (ntfy): "+e.message);requests={...(requests||{}),ntfy:pr};}
   }
+}
+// Live notifications (football): compare with the previous run and post kick-off / goal / full-time to
+// the team's ntfy.sh topic (users subscribe in the free ntfy app; see NotifyCard in the app).
+for(const [name,e] of Object.entries(teams)){
+  const d=e&&e.data,p=prev[name]&&prev[name].data,t=api.DB[Object.keys(api.DB).find(k=>api.DB[k].name===name)]||extraTeams.find(x=>x.name===name);
+  if(!d||!t||t.sport!=="Football")continue;
+  const now=d.liveGame,was=p&&p.liveGame;let title=null,body=null,tags="soccer";
+  if(now&&!was){title="Kick-off: "+t.shortName;body=t.shortName+" vs "+now.opponent+" has started";}
+  else if(now&&was&&now.score!==was.score){title="⚽ GOAL – "+t.shortName+" "+now.score;body=t.shortName+" "+now.score+" "+now.opponent+" ("+now.detail+")";tags="soccer,tada";}
+  else if(!now&&was&&d.recentResults&&d.recentResults[0]){const r=d.recentResults[0];title="Full-time: "+t.shortName+" "+r.score;body=(r.result==="W"?"Win! ":r.result==="L"?"Loss. ":"Draw. ")+t.shortName+" "+r.score+" "+r.opponent;tags="checkered_flag";}
+  if(!title)continue;
+  // JSON publish: headers can't carry emoji / ø
+  try{const r=await fetch("https://ntfy.sh/",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({topic:api.notifyTopic(name),title,message:body,tags:tags.split(","),click:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"})});
+    console.log("notify "+name+": "+title+" (HTTP "+r.status+")");}
+  catch(err){console.log("notify "+name+": "+err.message);}
 }
 mkdirSync("out",{recursive:true});
 writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests}));
