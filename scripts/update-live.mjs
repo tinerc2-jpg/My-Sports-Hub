@@ -334,6 +334,36 @@ async function ehfTv(id){
   }catch(e){console.log("    EHF TV: "+e.message);}
   return _ehfTv[id]=tv;
 }
+// EHF match statistics (GetMatchDetailStatistic): team totals + top scorers. The shape is read defensively
+// (objects with a team name and numeric stat fields; player rows with goals) and logged.
+async function ehfMatchStats(id,team){
+  const r=await fetch("https://www.eurohandball.com/umbraco/api/matchdetailapi/GetMatchDetailStatistic?matchId="+id,{headers:{Accept:"application/json"}});
+  const t=await r.text();let j=null;try{j=JSON.parse(t);}catch(e){}
+  if(!j){console.log(`    EHF stats ${id}: HTTP ${r.status}, not JSON «${t.slice(0,200)}»`);return null;}
+  const al=api.teamAliases(team),isMe=n=>api.nameMatch(al,[String(n||"")])===2;
+  const shape=(o,d=0)=>o&&typeof o==="object"?(Array.isArray(o)?"["+o.length+"]"+(o.length?shape(o[0],d+1):""):"{"+Object.keys(o).slice(0,30).map(k=>k+(d<3?":"+shape(o[k],d+1):"")).join(",")+"}"):typeof o;
+  if(!_ehfStatsLogged){_ehfStatsLogged=true;console.log(`    EHF stats shape: ${shape(j).slice(0,1500)}`);console.log(`    EHF stats sample: ${t.slice(0,1500).replace(/\s+/g," ")}`);}
+  // find the two team blocks: objects that carry a team name and a list of players
+  const teams=[];const walk=o=>{if(!o||typeof o!=="object")return;if(Array.isArray(o))return o.forEach(walk);
+    const nm=(o.team&&(o.team.fullName||o.team.name))||o.teamName||o.fullName;
+    const pl=o.players||o.playerStatistics||o.playersStatistics||o.statistics&&o.statistics.players;
+    if(nm&&Array.isArray(pl))teams.push({nm,pl,o});Object.values(o).forEach(walk);};
+  walk(j);
+  const me=teams.find(x=>isMe(x.nm)),op=teams.find(x=>x!==me);
+  if(!me||!op)return null;
+  const num=v=>typeof v==="number"?v:typeof v==="string"&&/^\d+$/.test(v)?+v:null;
+  const pget=(p,re)=>{for(const[k,v] of Object.entries(p)){if(re.test(k)&&num(v)!=null)return num(v);if(v&&typeof v==="object"&&!Array.isArray(v))for(const[k2,v2] of Object.entries(v))if(re.test(k2)&&num(v2)!=null)return num(v2);}return null;};
+  const pname=p=>p.fullName||p.name||(p.person&&(p.person.fullName||p.person.name))||(p.player&&(p.player.fullName||p.player.name))||[p.firstName,p.lastName].filter(Boolean).join(" ");
+  const sum=(x,re)=>x.pl.reduce((a,p)=>a+(pget(p,re)||0),0);
+  const rows=[["Goals",/^goals?$|^g$/i],["Shots",/^shots?$|attempt/i],["7m goals",/7m.*goal|penalt.*goal/i],["Saves",/^saves?$/i],["2-min suspensions",/2.?min|suspension/i],["Assists",/^assists?$/i]];
+  const stats=rows.map(([l,re])=>({label:l,me:String(sum(me,re)),op:String(sum(op,re))})).filter(x=>x.me!=="0"||x.op!=="0");
+  const top=[me,op].flatMap((x,i)=>x.pl.map(p=>({who:pname(p),n:pget(p,/^goals?$|^g$/i)||0,me:i?0:1}))).filter(x=>x.who&&x.n>0)
+    .sort((a,b)=>b.n-a.n).filter((x,i,arr)=>arr.filter(y=>y.me===x.me).indexOf(x)<4);
+  console.log(`    EHF stats ${id}: ${stats.map(x=>x.label+" "+x.me+"-"+x.op).join(", ")||"no team stats"} · ${top.length} scorers`);
+  if(!stats.length&&!top.length)return null;
+  return{v:HB_V,meName:me.nm,opName:op.nm,stats,top,goals:[]};
+}
+let _ehfStatsLogged=false;
 const fmtDK=(d,o)=>d.toLocaleDateString("en-GB",{...o,timeZone:"Europe/Copenhagen"});
 async function ehfFor(team){
   const ms=await ehfFeed(),al=api.teamAliases(team);
@@ -353,7 +383,7 @@ async function ehfFor(team){
       const min=parseInt(String(st.time||""),10);
       out.live={opponent:name,score:(me??0)+"–"+(op??0),detail:/half.?time|pause|^ht$/i.test(String(st.phase||""))?"Half-time":min?min+"'":String(st.phase||"Live")};
     }else if(me!=null&&op!=null&&when.getTime()<now)
-      out.results.push({opponent:name,score:me+"–"+op,result:me>op?"W":me<op?"L":"D",date:fmtDK(when,{day:"numeric",month:"short"}),ts:when.getTime()});
+      out.results.push({opponent:name,score:me+"–"+op,result:me>op?"W":me<op?"L":"D",date:fmtDK(when,{day:"numeric",month:"short"}),ts:when.getTime(),ehm:m.matchID});
     else if(when.getTime()>now-3*3600e3&&(!out.next||when<out.next.d))out.next={d:when,name,id:m.matchID};
   }
   if(out.next&&out.next.id)out.next.tv=await ehfTv(out.next.id);
@@ -739,13 +769,13 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
     if(!data&&t.sport==="Cycling")data=await pcsCycling(t);
     // Match statistics per result. Finished games don't change, so stats from the previous snapshot are reused.
     if(data&&data.recentResults){
-      const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{const k=r.ev||(r.hbm&&"hb"+r.hbm);if(k&&r.stats&&(!r.hbm||r.stats.v===HB_V))old[k]=r.stats;});
+      const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{const k=r.ev||(r.hbm&&"hb"+r.hbm)||(r.ehm&&"ehf"+r.ehm);if(k&&r.stats&&(!(r.hbm||r.ehm)||r.stats.v===HB_V))old[k]=r.stats;});
       let got=0,reused=0,none=0;
       for(const r of data.recentResults){
-        const key=r.ev||(r.hbm&&"hb"+r.hbm);
-        if(!key||r.stats||!(r.sp||r.hbm))continue;
+        const key=r.ev||(r.hbm&&"hb"+r.hbm)||(r.ehm&&"ehf"+r.ehm);
+        if(!key||r.stats||!(r.sp||r.hbm||r.ehm))continue;
         if(old[key]){r.stats=old[key];reused++;continue;}
-        try{const st=r.hbm?await hbMatchStats(r.hbm,t):await api.fetchEspnSummary(r.sp,r.lg,r.ev,r.tid);if(st){r.stats=st;got++;}else none++;}
+        try{const st=r.hbm?await hbMatchStats(r.hbm,t):r.ehm?await ehfMatchStats(r.ehm,t):await api.fetchEspnSummary(r.sp,r.lg,r.ev,r.tid);if(st){r.stats=st;got++;}else none++;}
         catch(e){none++;console.log(`    match stats ${key}:`,e.message);}
       }
       if(got+reused+none)console.log(`    match stats: ${got} new, ${reused} reused, ${none} without stats`+(got?" · e.g. "+JSON.stringify(data.recentResults.find(r=>r.stats).stats).slice(0,160):""));
