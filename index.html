@@ -1434,12 +1434,29 @@ function NotifyCard({team}){
   );
 }
 
+// "🎉 X is now available": a team this visitor requested has since been added (found by lookup).
+function RequestDone({teams,onAdd}){
+  const [,tick]=useState(0);
+  let req=[];try{req=JSON.parse(localStorage.getItem("msh-requested")||"[]");}catch(e){}
+  const ready=req.map(r=>({r,e:lookup(r.name,r.sport)})).filter(x=>x.e&&!x.e._unknown);
+  if(!ready.length)return null;
+  const drop=r=>{try{localStorage.setItem("msh-requested",JSON.stringify(req.filter(x=>x!==r)));}catch(e){}tick(x=>x+1);};
+  return h("div",{style:{padding:"14px 14px 0",maxWidth:640,margin:"0 auto"}},ready.map(({r,e})=>
+    h("div",{key:r.name,style:{display:"flex",alignItems:"center",gap:10,background:"linear-gradient(135deg,#e8409a44,#1d3360)",border:"1px solid #e8409a",borderRadius:14,padding:"12px",marginBottom:8,fontFamily:"Inter,sans-serif"}},
+      h("div",{style:{flex:1,fontSize:"0.88rem",color:"#fff"}},"🎉 ",h("b",null,e.name)," is now available with live data!"),
+      !teams.some(t=>norm(t.name)===norm(e.name))&&h("button",{onClick:()=>{onAdd(e);drop(r);},style:{background:"#e8409a",color:"#fff",border:"none",borderRadius:10,padding:"8px 12px",fontWeight:700,cursor:"pointer"}},"Follow"),
+      h("button",{onClick:()=>drop(r),"aria-label":"Dismiss",style:{background:"none",border:"none",color:"#d5deee",fontSize:"1rem",cursor:"pointer"}},"✕")
+    )));
+}
+
 function RequestTeam({name,sport}){
   const [sent,setSent]=useState(false);
   function send(){
     try{window.goatcounter&&window.goatcounter.count&&window.goatcounter.count({path:"request/"+sport+"/"+name.trim(),title:"Team request: "+name.trim()+" ("+sport+")",event:true});}catch(e){}
     // also to a ntfy.sh topic the robot reads (no account or key needed)
     try{fetch("https://ntfy.sh/"+REQUEST_TOPIC,{method:"POST",body:sport+" | "+name.trim()});}catch(e){}
+    // remember it, so the home screen can say when the team has been added
+    try{const r=JSON.parse(localStorage.getItem("msh-requested")||"[]");r.push({name:name.trim(),sport});localStorage.setItem("msh-requested",JSON.stringify(r));}catch(e){}
     setSent(true);
   }
   return h("div",{style:{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"12px",marginBottom:12,fontFamily:"Inter,sans-serif"}},
@@ -1818,6 +1835,7 @@ function App(){
       )
     ),
     (welcome||teams.length===0)&&view==="home"&&h(Welcome,{teams,onAdd:()=>setShowModal(true),onPick:addQuick,onDone:()=>setWelcome(false)}),
+    view==="home"&&h(RequestDone,{teams,onAdd:addQuick}),
     !(welcome||teams.length===0)&&view==="home"&&h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
       h(Lbl,{c:"My teams \xB7 "+teams.length}),
       h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}},
