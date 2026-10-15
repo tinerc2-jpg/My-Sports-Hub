@@ -1009,6 +1009,22 @@ function loadTeams(){
   // First visit: no favourites; the welcome screen helps pick some.
   return [];
 }
+// Personal link: ?teams=GOG,Arsenal,… adds those favourites once (remembered, so removing one later sticks
+// even if the home-screen icon keeps the link).
+function teamsFromLink(teams){
+  try{
+    const raw=new URLSearchParams(location.search).get("teams");
+    if(!raw||localStorage.getItem("msh-link-applied")===raw)return teams;
+    localStorage.setItem("msh-link-applied",raw);
+    const out=[...teams];
+    raw.split(",").map(x=>x.trim()).filter(Boolean).forEach((n,i)=>{
+      const e=lookup(n,"");if(!e||e._unknown||out.some(t=>norm(t.name)===norm(e.name)))return;
+      out.push({...e,id:norm(e.name).replace(/\s+/g,"-")+"-"+Date.now()+i});
+    });
+    if(out.length!==teams.length){persist(out,out[0].id);}
+    return out;
+  }catch(e){return teams;}
+}
 function loadSel(){
   if(_cachedSel)return _cachedSel;
   try{return localStorage.getItem("msh-sel")||"s-gog";}catch(e){return "s-gog";}
@@ -1588,7 +1604,7 @@ function TeamTile({t,onClick}){
 
 // ── Persistence (module-level) ─────────────────────────────────────────────────
 function App(){
-  const [teams,setTeams]=useState(loadTeams);
+  const [teams,setTeams]=useState(()=>teamsFromLink(loadTeams()));
   const [selected,setSelected]=useState(loadSel);
   const [showModal,setShowModal]=useState(false);
   const [removing,setRemoving]=useState(null);
