@@ -1682,7 +1682,7 @@ function App(){
     }
   }
   // The public address (the live Netlify site), also when the file is opened locally.
-  function appUrl(){return /^https?:/.test(location.protocol)&&!/^(localhost|127\.)/.test(location.hostname)?location.origin+location.pathname.replace(/index\.html$/,""):"https://mysportspage.netlify.app/";}
+  function appUrl(){return /^https?:/.test(location.protocol)&&!/^(localhost|127\.)/.test(location.hostname)?location.origin+location.pathname.replace(/index\.html$/,""):"https://tinerc2-jpg.github.io/My-Sports-Hub/";}
   function handleShareApp(){
     const url=appUrl(),text="Follow your teams with My Sports Hub: live scores, standings, TV fixtures and news. Add it to your home screen!";
     if(navigator.share){navigator.share({title:"My Sports Hub",text,url}).catch(()=>{});return;}
