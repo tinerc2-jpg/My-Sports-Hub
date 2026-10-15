@@ -328,7 +328,8 @@ async function ehfTv(id){
       }
       Object.values(o).forEach(walk);};
     walk(j);
-    tv=[...new Set(hits.filter(Boolean))].join(" / ");
+    // channels only (the list can also hold the clubs' own streams, named after the club)
+    tv=[...new Set(hits.filter(h=>h&&/tv|viaplay|max|dr\b|sport|kanal|stream|play/i.test(h)))].join(" / ");
     console.log(`    EHF TV ${id}: HTTP ${r.status} · Denmark: ${tv||"none"}`+(tv?"":" · sample «"+t.slice(0,600).replace(/\s+/g," ")+"»"));
   }catch(e){console.log("    EHF TV: "+e.message);}
   return _ehfTv[id]=tv;
