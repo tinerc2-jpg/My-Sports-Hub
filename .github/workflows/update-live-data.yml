@@ -27,6 +27,7 @@ jobs:
       - run: node scripts/update-live.mjs
         env:
           APISPORTS_KEY: ${{ secrets.APISPORTS_KEY }}
+          GOATCOUNTER_TOKEN: ${{ secrets.GOATCOUNTER_TOKEN }}
       # Publish as a single commit on the live-data branch so main's history stays clean.
       - name: Publish to live-data branch
         env:

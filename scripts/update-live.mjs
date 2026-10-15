@@ -311,6 +311,28 @@ function ehfFeed(){
       console.log(`    EHF feed: days ${(j.days||[]).map(d=>d.dayDatumFormatted).join(",")} · ${ms.length} games`);return ms;})
     .catch(e=>{console.log("    EHF feed: "+e.message);return [];}));
 }
+// Where an EHF game is shown in Denmark: the match page's TV schedule (GetMatchTvSchedule).
+const _ehfTv={};
+async function ehfTv(id){
+  if(id in _ehfTv)return _ehfTv[id];
+  let tv="";
+  try{
+    const r=await fetch("https://www.eurohandball.com/umbraco/api/matchdetailapi/GetMatchTvSchedule?matchId="+id,{headers:{Accept:"application/json"}});
+    const t=await r.text();let j=null;try{j=JSON.parse(t);}catch(e){}
+    const hits=[];
+    const walk=(o)=>{if(!o||typeof o!=="object")return;if(Array.isArray(o))return o.forEach(walk);
+      const vals=Object.values(o).filter(v=>typeof v==="string");
+      if(vals.some(v=>/^(den|denmark|danmark|dk)$/i.test(v.trim()))){
+        const nm=o.tvStation||o.broadcaster||o.channel||o.channelName||o.stationName||o.name||o.title||vals.find(v=>/tv|sport|viaplay|max|dr/i.test(v));
+        if(nm&&typeof nm==="string")hits.push(nm);else if(nm&&typeof nm==="object")hits.push(nm.name||nm.title||"");
+      }
+      Object.values(o).forEach(walk);};
+    walk(j);
+    tv=[...new Set(hits.filter(Boolean))].join(" / ");
+    console.log(`    EHF TV ${id}: HTTP ${r.status} · Denmark: ${tv||"none"}`+(tv?"":" · sample «"+t.slice(0,600).replace(/\s+/g," ")+"»"));
+  }catch(e){console.log("    EHF TV: "+e.message);}
+  return _ehfTv[id]=tv;
+}
 const fmtDK=(d,o)=>d.toLocaleDateString("en-GB",{...o,timeZone:"Europe/Copenhagen"});
 async function ehfFor(team){
   const ms=await ehfFeed(),al=api.teamAliases(team);
@@ -331,8 +353,9 @@ async function ehfFor(team){
       out.live={opponent:name,score:(me??0)+"–"+(op??0),detail:/half.?time|pause|^ht$/i.test(String(st.phase||""))?"Half-time":min?min+"'":String(st.phase||"Live")};
     }else if(me!=null&&op!=null&&when.getTime()<now)
       out.results.push({opponent:name,score:me+"–"+op,result:me>op?"W":me<op?"L":"D",date:fmtDK(when,{day:"numeric",month:"short"}),ts:when.getTime()});
-    else if(when.getTime()>now-3*3600e3&&(!out.next||when<out.next.d))out.next={d:when,name};
+    else if(when.getTime()>now-3*3600e3&&(!out.next||when<out.next.d))out.next={d:when,name,id:m.matchID};
   }
+  if(out.next&&out.next.id)out.next.tv=await ehfTv(out.next.id);
   return out;
 }
 // Returns {standing, from} from the first page with a valid row, or null.
@@ -620,7 +643,23 @@ async function leagueTeams(){
   }
   return out;
 }
-const extraTeams=LIVE?Object.values(prevExtra||{}):await leagueTeams();
+// Every Håndboldligaen club, from the league table page (names as the league writes them).
+async function handballLeagueTeams(){
+  try{
+    const p=await tv2Load(TABLE_PAGES[0]),gog=Object.values(api.DB).find(d=>d.league===TV2_LEAGUE);
+    const rows=gog?hbTableFromTokens(p.tokens,api.teamAliases(gog)):null;
+    if(!rows)return [];
+    const have=Object.values(api.DB).filter(d=>d.sport==="Handball").map(d=>d.name);
+    const out=rows.filter(r=>!have.some(n=>api.nameMatch(api.teamAliases({name:n,shortName:n}),[r.n])>0||api.nameMatch([api.norm(r.n)],[n])>0)).map(r=>{
+      const hue=[...r.n].reduce((a,ch)=>(a*31+ch.charCodeAt(0))%360,7),st=CLUB_STYLE[r.n]||{};
+      return{name:r.n,shortName:st.shortName||r.n.replace(/ (Håndboldklub|Håndbold|Herrehåndbold|Herrer|HH)$/,""),sport:"Handball",league:TV2_LEAGUE,country:"🇩🇰",
+        color:st.color||hslHex(hue,60,40),accent:st.accent||hslHex((hue+40)%360,60,25),emoji:"🤾",standing:{rank:null,points:null},recentResults:[],nextGame:null,news:[]};
+    });
+    console.log(`league ${TV2_LEAGUE}: ${rows.length} clubs, ${out.length} added (${out.map(t=>t.shortName).join(", ")})`);
+    return out;
+  }catch(e){console.log("handball league clubs: "+e.message);return [];}
+}
+const extraTeams=LIVE?Object.values(prevExtra||{}):[...await leagueTeams(),...await handballLeagueTeams()];
 const teams={},seen=new Set();let ok=0,failed=0;
 let skipped=0;
 for(const t of [...Object.values(api.DB),...extraTeams]){
@@ -629,6 +668,8 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
   api._liveLog.length=0;
   try{
     let data=await api.fetchTeamLive(t);
+    // league clubs TheSportsDB doesn't know still get table, programme and EHF data below
+    if(!data&&t.sport==="Handball"&&t.league===TV2_LEAGUE)data={source:"Top Håndbold",recentResults:[],nextGame:null};
     if(data&&t.sport==="Handball"){
       if(!APISPORTS_KEY)console.log("    API-Sports: no APISPORTS_KEY secret set");
       else{
@@ -669,7 +710,7 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
         const n=data.nextGame,ts=eh.next.d.getTime();
         // the EHF's own date beats TheSportsDB's; keep a sooner league game
         if(!n||!n.ts||ts<=n.ts+6*3600e3)data.nextGame={opponent:eh.next.name,date:fmtDK(eh.next.d,{weekday:"short",day:"numeric",month:"short"}),
-          time:eh.next.d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"}),tv:"–",ts};
+          time:eh.next.d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"}),tv:eh.next.tv||"–",ts};
       }
       data.preferSnapshot=true;
     }
@@ -720,8 +761,26 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
   }catch(e){failed++;console.error("✗",t.name,"-",e.message);if(prev[t.name])teams[t.name]=prev[t.name]; /* keep the last good data */}
   api._liveLog.forEach(m=>console.log("   ",m));
 }
+// Team requests from the app's "Request this team" button (GoatCounter events "request/<sport>/<name>").
+// Needs the GOATCOUNTER_TOKEN repo secret (GoatCounter → Settings → API, read permission). Hourly at most.
+let requests=null;
+{
+  const pj=LIVE&&existsSync("out/live.json")?JSON.parse(readFileSync("out/live.json","utf8")):null;
+  requests=pj&&pj.requests||null;
+  const tok=process.env.GOATCOUNTER_TOKEN;
+  if(!LIVE&&tok){
+    try{
+      const start=new Date(Date.now()-60*864e5).toISOString().slice(0,10);
+      const r=await fetch(`https://mysportshub.goatcounter.com/api/v0/stats/hits?start=${start}&limit=100`,{headers:{Authorization:"Bearer "+tok,"Content-Type":"application/json"}});
+      const j=await r.json();
+      const list=(j.hits||[]).filter(x=>/^\/?request\//.test(x.path||"")).map(x=>({path:String(x.path).replace(/^\/?request\//,""),title:x.title||"",count:x.count||(x.stats||[]).reduce((a,d)=>a+(d.daily||0),0)}));
+      requests={ts:Date.now(),list};
+      console.log(`requests: HTTP ${r.status} · ${list.length} requested teams`+(list.length?": "+list.map(x=>x.path+" ×"+x.count).join(", "):"")+(r.ok?"":" · "+JSON.stringify(j).slice(0,200)));
+    }catch(e){console.log("requests: "+e.message);}
+  }else if(!LIVE)console.log("requests: no GOATCOUNTER_TOKEN secret yet");
+}
 mkdirSync("out",{recursive:true});
-writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams}));
+writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
 const liveNow=Object.entries(teams).filter(([,e])=>needsLive(e)).map(([n,e])=>n+(e.data.liveGame?" "+e.data.liveGame.score:" (kick-off soon)"));
 if(liveNow.length){writeFileSync("out/live-needed",liveNow.join("\n"));console.log("live: "+liveNow.join(" · "));}
