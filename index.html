@@ -436,6 +436,8 @@ async function resolveTSDB(team,al){
 }
 // Bump when new sports get a source, so browsers re-resolve teams cached as "no source".
 const SRC_KEY="msh-src-v2";
+// Live notifications: the robot posts kick-off / goal / full-time for football teams to this ntfy.sh topic.
+function notifyTopic(name){return "msh-"+norm(name).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+"-7f3k";}
 // Football leagues ESPN doesn't cover: TheSportsDB instead.
 const TSDB_LEAGUES=["1. division"];
 async function resolveSource(team){
@@ -1412,6 +1414,26 @@ function LiveStatus({entry,busy,sport,onRefresh}){
 // "Request this team": counted as a GoatCounter event (path request/<sport>/<name>); the robot reads
 // the counts into live.json.requests and the owner is told about them.
 const REQUEST_TOPIC="mysportshub-team-requests-7f3k9q";
+// Opt-in goal alerts via the free ntfy app (works on iPhone and Android, also when the app is closed).
+function NotifyCard({team}){
+  const key="msh-notify-"+team.name,[on,setOn]=useState(()=>{try{return localStorage.getItem(key)==="1";}catch(e){return false;}});
+  const [open,setOpen]=useState(false),topic=notifyTopic(team.name),url="https://ntfy.sh/"+topic;
+  const set=v=>{setOn(v);try{localStorage.setItem(key,v?"1":"0");}catch(e){}};
+  const btn={border:"none",borderRadius:10,padding:"9px 12px",fontWeight:700,fontSize:"0.8rem",cursor:"pointer",fontFamily:"Inter,sans-serif"};
+  return h("div",{style:{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px 12px",marginBottom:12,fontFamily:"Inter,sans-serif"}},
+    h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
+      h("div",{style:{fontSize:"0.85rem",color:"#fff"}},(on?"🔔 ":"🔕 ")+"Live notifications",h("div",{style:{fontSize:"0.7rem",color:"#d5deee"}},"Kick-off, goals and full-time")),
+      h("button",{onClick:()=>on?(set(false),setOpen(true)):(set(true),setOpen(true)),style:{...btn,background:on?"rgba(255,255,255,0.1)":"#e8409a",color:"#fff"}},on?"Turn off":"Turn on")
+    ),
+    open&&h("div",{style:{fontSize:"0.78rem",color:"#eef2f8",marginTop:10,lineHeight:1.5}},
+      on?[h("div",{key:1},"1. Install the free app ",h("b",null,"ntfy")," (App Store / Google Play)."),
+          h("div",{key:2},"2. Tap below – or in ntfy tap ＋ and type: ",h("b",{style:{color:"#ff9fd0"}},topic)),
+          h("a",{key:3,href:url,target:"_blank",rel:"noopener",style:{display:"inline-block",marginTop:8,...btn,background:"#e8409a",color:"#fff",textDecoration:"none"}},"Subscribe to "+team.shortName+" alerts ↗")]
+        :h("div",null,"To stop the alerts: open the ntfy app, swipe left on ",h("b",{style:{color:"#ff9fd0"}},topic)," and tap Unsubscribe.")
+    )
+  );
+}
+
 function RequestTeam({name,sport}){
   const [sent,setSent]=useState(false);
   function send(){
@@ -1806,6 +1828,7 @@ function App(){
         h("button",{onClick:()=>setRemoving(team.id),style:{background:"rgba(239,68,68,0.12)",border:"1px solid rgba(239,68,68,0.3)",borderRadius:10,padding:"8px 12px",minHeight:36,color:"#f87171",cursor:"pointer",fontSize:"0.75rem",fontWeight:500,fontFamily:"Inter,sans-serif"}},"✕ Remove")
       )
       ),
+      team.sport==="Football"&&h(NotifyCard,{team}),
       h(LiveStatus,{entry:live[baseTeam.name],busy:!!busy[baseTeam.name],sport:team.sport,onRefresh:()=>refreshTeam(baseTeam,true)}),
       team.liveGame&&h(LiveGame,{team}),
       h("div",{style:{marginBottom:12}},h(Lbl,{c:"📊 Ranking / Standing"+(lf.standing===true?"":lf.standing==="none"?" \xB7 not available yet":SAVED)}),h(StandingDisplay,{team,onTable:()=>setShowTable(true)})),
