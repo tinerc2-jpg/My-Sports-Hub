@@ -23,6 +23,8 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v4
+      # never deploy an app with a JavaScript syntax error
+      - run: node scripts/check-html.mjs
       # Publish only the app's own files (not scripts/ or notes)
       - run: mkdir site && cp index.html manifest.webmanifest icon.svg icon-192.png icon-512.png apple-touch-icon.png site/
       - uses: actions/configure-pages@v5
