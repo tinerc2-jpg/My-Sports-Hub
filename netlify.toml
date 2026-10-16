@@ -1,5 +1,0 @@
-# Netlify deploys this repo as-is: index.html + icons/manifest at the root, no build step.
-# (scripts/ and .github/ are only used by GitHub Actions.)
-[build]
-  publish = "."
-  command = ""
