@@ -26,7 +26,8 @@ return {DB,notifyTopic,fetchTeamLive,fetchEspnSummary,_liveLog,teamAliases,nameM
 // job's own out/live.json and only re-fetches teams that are playing or about to.
 const LIVE=process.argv.includes("--live");
 const NOW=Date.now();
-function needsLive(e){const d=e&&e.data,k=d&&d.nextGame&&d.nextGame.ts;return !!(d&&(d.liveGame||(k&&NOW>k-15*60e3&&NOW<k+150*60e3)));}
+// Trav: from 2 h before the first leg (odds and pool % move most then).
+function needsLive(e){const d=e&&e.data,k=d&&d.nextGame&&d.nextGame.ts;return !!(d&&(d.liveGame||(k&&NOW>k-(d.trot?120:15)*60e3&&NOW<k+150*60e3)));}
 let prev={},prevFull=null;
 let prevExtra=null;
 if(LIVE&&existsSync("out/live.json")){const j=JSON.parse(readFileSync("out/live.json","utf8"));prev=j.teams||{};prevExtra=j.leagueTeams||[];}
@@ -600,6 +601,8 @@ async function pcsCycling(team){
 const ATG="https://www.atg.se/services/racinginfo/v1/api/";
 const atgTs=t=>{const m=/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(t||"");return m?cphDate(+m[3],+m[2],+m[1],+m[4],+m[5]).getTime():0;}; // Swedish time = Copenhagen time
 const atgName=p=>p?[p.firstName,p.lastName].filter(Boolean).join(" ")||p.shortName||"":"";
+// Current win odds ("vinnare" pool). ATG sends them as an integer ×100 (254 = 2.54) or already decimal.
+const atgOdds=p=>{const o=p&&(p.odds??p.currentOdds);if(o==null||!(o>0))return null;return Number.isInteger(o)&&o>=100?o/100:o;};
 const atgKm=k=>k&&k.minutes!=null?`${k.minutes}.${String(k.seconds).padStart(2,"0")},${k.tenths??0}`:"";
 async function atgRound(t){
   try{
@@ -609,7 +612,7 @@ async function atgRound(t){
     const done=Object.entries(prods).flatMap(([bt,j])=>(j.results||[]).map(g=>({bt,...g}))).sort((a,b)=>atgTs(b.startTime)-atgTs(a.startTime)).slice(0,5);
     const legsOf=(g,bt)=>(g.races||[]).slice().sort((a,b)=>atgTs(a.startTime)-atgTs(b.startTime)||a.number-b.number).map((r,i)=>({leg:i+1,race:r.number,name:r.name,track:r.track&&r.track.name,ts:atgTs(r.startTime),dist:r.distance,start:r.startMethod==="auto"?"Autostart":r.startMethod==="volte"?"Voltstart":r.startMethod,
       horses:(r.starts||[]).map(s=>{const pl=s.pools&&s.pools[bt]||{},res=s.result||{};return{n:s.number,h:s.horse&&s.horse.name,d:atgName(s.driver),tr:atgName(s.horse&&s.horse.trainer),
-        pct:pl.betDistribution!=null?Math.round(pl.betDistribution/100):null,x:!!s.scratched,pl:res.place||null,km:atgKm(res.kmTime),odds:res.finalOdds||null};})}));
+        pct:pl.betDistribution!=null?Math.round(pl.betDistribution/100):null,wo:atgOdds(s.pools&&s.pools.vinnare),x:!!s.scratched,pl:res.place||null,km:atgKm(res.kmTime),odds:res.finalOdds||null};})}));
     const trot={};
     let nextGame={opponent:"No round scheduled yet",offTitle:"Next round",date:"–",time:"–",tv:"ATG"};
     if(up){
@@ -626,7 +629,7 @@ async function atgRound(t){
         var liveGame={opponent:`${up.bt} · ${track}`,score:`${fin.length}/${legs.length}`,
           detail:(cur?`${up.bt.slice(0,1)}-${cur.leg} kl. ${hm(cur.ts)}`:"")+(w?` · ${up.bt.slice(0,1)}-${pw.leg}: ${w.n} ${w.h}`:"")};
       }
-      if(legs[0]&&legs[0].horses[0])console.log(`    ATG ${up.id}: ${legs.length} legs · pool sample ${JSON.stringify((g.races[0].starts[0].pools||{})[up.bt]||{}).slice(0,160)}`);
+      if(legs[0]&&legs[0].horses[0])console.log(`    ATG ${up.id}: ${legs.length} legs · vinnare sample ${JSON.stringify((g.races[0].starts[0].pools||{}).vinnare||{}).slice(0,200)}`);
     }
     const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{if(r.atg)old[r.atg]=r;});
     const recentResults=[];
