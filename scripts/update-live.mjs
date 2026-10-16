@@ -398,7 +398,7 @@ async function tv2Standing(team){
 const NEWS_TTL=60*60*1000;
 const SPORT_WORDS={Football:["fodbold","football"],Handball:["håndbold","handball"],Tennis:["tennis","tennis"],Basketball:["basketball","NBA"],
   Golf:["golf","golf"],Cycling:["cykling","cycling"],"Formula 1":["Formel 1","F1"],"Ice Hockey":["ishockey","NHL"],"Am. Football":["NFL","NFL"],
-  Rugby:["rugby","rugby"],Baseball:["baseball","MLB"],Volleyball:["volleyball","volleyball"]};
+  Rugby:["rugby","rugby"],Baseball:["baseball","MLB"],Volleyball:["volleyball","volleyball"],Trotting:["trav","trotting"]};
 function xmlText(s){
   return String(s||"").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,"$1").replace(/<[^>]+>/g,"")
     .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'")
@@ -596,6 +596,51 @@ async function pcsCycling(team){
   }catch(e){console.log("    PCS:",e.message);return null;}
 }
 
+// ── Trotting: ATG's big Saturday pool (V75; V85 while ATG runs that instead). Public racinginfo JSON. ──
+const ATG="https://www.atg.se/services/racinginfo/v1/api/";
+const atgTs=t=>{const m=/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(t||"");return m?cphDate(+m[3],+m[2],+m[1],+m[4],+m[5]).getTime():0;}; // Swedish time = Copenhagen time
+const atgName=p=>p?[p.firstName,p.lastName].filter(Boolean).join(" ")||p.shortName||"":"";
+const atgKm=k=>k&&k.minutes!=null?`${k.minutes}.${String(k.seconds).padStart(2,"0")},${k.tenths??0}`:"";
+async function atgRound(t){
+  try{
+    const prods={};
+    for(const bt of ["V75","V85"]){try{prods[bt]=await (await fetch(ATG+"products/"+bt)).json();}catch(e){}}
+    const up=Object.entries(prods).flatMap(([bt,j])=>(j.upcoming||[]).map(g=>({bt,...g}))).sort((a,b)=>atgTs(a.startTime)-atgTs(b.startTime))[0];
+    const done=Object.entries(prods).flatMap(([bt,j])=>(j.results||[]).map(g=>({bt,...g}))).sort((a,b)=>atgTs(b.startTime)-atgTs(a.startTime)).slice(0,5);
+    const legsOf=(g,bt)=>(g.races||[]).slice().sort((a,b)=>atgTs(a.startTime)-atgTs(b.startTime)||a.number-b.number).map((r,i)=>({leg:i+1,race:r.number,name:r.name,track:r.track&&r.track.name,ts:atgTs(r.startTime),dist:r.distance,start:r.startMethod==="auto"?"Autostart":r.startMethod==="volte"?"Voltstart":r.startMethod,
+      horses:(r.starts||[]).map(s=>{const pl=s.pools&&s.pools[bt]||{},res=s.result||{};return{n:s.number,h:s.horse&&s.horse.name,d:atgName(s.driver),tr:atgName(s.horse&&s.horse.trainer),
+        pct:pl.betDistribution!=null?Math.round(pl.betDistribution/100):null,x:!!s.scratched,pl:res.place||null,km:atgKm(res.kmTime),odds:res.finalOdds?res.finalOdds/100:null};})}));
+    const trot={};
+    let nextGame={opponent:"No round scheduled yet",offTitle:"Next round",date:"–",time:"–",tv:"ATG"};
+    if(up){
+      const g=await (await fetch(ATG+"games/"+up.id)).json();
+      const pool=g.pools&&g.pools[up.bt]||{},legs=legsOf(g,up.bt),track=(up.tracks||[]).map(x=>x.name).join(" & ");
+      trot.next={bt:up.bt,id:up.id,track,ts:atgTs(up.startTime),turnover:pool.turnover?Math.round(pool.turnover/100):null,legs};
+      nextGame={opponent:`${up.bt} · ${track}`,date:"",time:"",ts:atgTs(up.startTime),tv:"ATG"};
+      if(legs[0]&&legs[0].horses[0])console.log(`    ATG ${up.id}: ${legs.length} legs · pool sample ${JSON.stringify((g.races[0].starts[0].pools||{})[up.bt]||{}).slice(0,160)}`);
+    }
+    const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{if(r.atg)old[r.atg]=r;});
+    const recentResults=[];
+    for(const x of done){
+      if(old[x.id]&&old[x.id].trot){recentResults.push(old[x.id]);continue;}
+      try{
+        const g=await (await fetch(ATG+"games/"+x.id)).json();
+        const pool=g.pools&&g.pools[x.bt]||{},res=pool.result||{},pay=res.payouts||{};
+        const legs=legsOf(g,x.bt),track=(x.tracks||[]).map(y=>y.name).join(" & "),top=Math.max(...Object.keys(pay).map(Number).filter(n=>n>0),0);
+        const kr=n=>pay[n]&&pay[n].payout!=null?Math.round(pay[n].payout/100):null;
+        const winners=legs.map(l=>{const w=l.horses.find(h=>h.pl===1);return w?{leg:l.leg,n:w.n,h:w.h,d:w.d,km:w.km,odds:w.odds}:{leg:l.leg};});
+        const ts=atgTs(x.startTime);
+        recentResults.push({atg:x.id,opponent:`${x.bt} · ${track}`,score:top&&kr(top)!=null?`${top} rätt: ${kr(top).toLocaleString("da-DK")} kr`:"Result",label:"🏁",result:"D",
+          date:new Date(ts).toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:"Europe/Copenhagen"}),ts,
+          trot:{bt:x.bt,track,ts,row:winners.map(w=>w.n||"–").join("-"),winners,payouts:Object.keys(pay).map(Number).filter(n=>n>0).sort((a,b)=>b-a).map(n=>({n,kr:kr(n),sys:pay[n].systems??null})),turnover:pool.turnover?Math.round(pool.turnover/100):null}});
+      }catch(e){console.log(`    ATG ${x.id}: ${e.message}`);}
+    }
+    console.log(`    ATG: next ${up?up.id:"none"} · ${recentResults.length} results`+(recentResults[0]?` · latest ${recentResults[0].opponent} ${recentResults[0].score} row ${recentResults[0].trot.row}`:""));
+    if(!up&&!recentResults.length)return null;
+    return{source:"ATG",standing:null,recentResults,nextGame,trot};
+  }catch(e){console.log("    ATG:",e.message);return null;}
+}
+
 // ── Rolex Women's World Golf Rankings (public page; read like the handball tables) ──
 const ROLEX_PAGE={name:"Rolex Rankings",url:"https://www.rolexrankings.com/rankings"};
 async function rolexStanding(team){
@@ -752,6 +797,7 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
       }
     }
     if(!data&&t.sport==="Cycling")data=await pcsCycling(t);
+    if(!data&&t.sport==="Trotting")data=await atgRound(t);
     // Match statistics per result. Finished games don't change, so stats from the previous snapshot are reused.
     if(data&&data.recentResults){
       const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{const k=r.ev||(r.hbm&&"hb"+r.hbm)||(r.ehm&&"ehf"+r.ehm);if(k&&r.stats&&((r.hbm||r.ehm)?r.stats.v===HB_V:r.stats.sv===3))old[k]=r.stats;});
@@ -849,18 +895,7 @@ for(const [name,e] of Object.entries(teams)){
   catch(err){console.log("notify "+name+": "+err.message);}
 }
 mkdirSync("out",{recursive:true});
-// TEMP probe: ATG (V75/V85) response shapes.
-let atgDebug=null;
-if(!LIVE){atgDebug={};
-  const sk=(o,d=0)=>o&&typeof o==="object"?(Array.isArray(o)?[o.length,sk(o[0],d+1)]:Object.fromEntries(Object.entries(o).slice(0,40).map(([k,v])=>[k,d>4?typeof v:sk(v,d+1)]))):o;
-  for(const bt of ["V75","V85"]){try{const r=await fetch("https://www.atg.se/services/racinginfo/v1/api/products/"+bt);const j=await r.json();atgDebug[bt]={status:r.status,shape:sk(j)};
-    const id=(j.upcoming&&j.upcoming[0]&&j.upcoming[0].id)||(j.results&&j.results[0]&&j.results[0].id);
-    if(id){const g=await (await fetch("https://www.atg.se/services/racinginfo/v1/api/games/"+id)).json();atgDebug[bt].game=sk(g);}
-    const rid=j.results&&j.results[0]&&j.results[0].id;
-    if(rid&&rid!==id){const g=await (await fetch("https://www.atg.se/services/racinginfo/v1/api/games/"+rid)).json();atgDebug[bt].resultGame=sk(g);}
-  }catch(e){atgDebug[bt]={err:e.message};}}
-}
-writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,atgDebug}));
+writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
 const liveNow=Object.entries(teams).filter(([,e])=>needsLive(e)).map(([n,e])=>n+(e.data.liveGame?" "+e.data.liveGame.score:" (kick-off soon)"));
 if(liveNow.length){writeFileSync("out/live-needed",liveNow.join("\n"));console.log("live: "+liveNow.join(" · "));}
