@@ -609,7 +609,7 @@ async function atgRound(t){
     const done=Object.entries(prods).flatMap(([bt,j])=>(j.results||[]).map(g=>({bt,...g}))).sort((a,b)=>atgTs(b.startTime)-atgTs(a.startTime)).slice(0,5);
     const legsOf=(g,bt)=>(g.races||[]).slice().sort((a,b)=>atgTs(a.startTime)-atgTs(b.startTime)||a.number-b.number).map((r,i)=>({leg:i+1,race:r.number,name:r.name,track:r.track&&r.track.name,ts:atgTs(r.startTime),dist:r.distance,start:r.startMethod==="auto"?"Autostart":r.startMethod==="volte"?"Voltstart":r.startMethod,
       horses:(r.starts||[]).map(s=>{const pl=s.pools&&s.pools[bt]||{},res=s.result||{};return{n:s.number,h:s.horse&&s.horse.name,d:atgName(s.driver),tr:atgName(s.horse&&s.horse.trainer),
-        pct:pl.betDistribution!=null?Math.round(pl.betDistribution/100):null,x:!!s.scratched,pl:res.place||null,km:atgKm(res.kmTime),odds:res.finalOdds?res.finalOdds/100:null};})}));
+        pct:pl.betDistribution!=null?Math.round(pl.betDistribution/100):null,x:!!s.scratched,pl:res.place||null,km:atgKm(res.kmTime),odds:res.finalOdds||null};})}));
     const trot={};
     let nextGame={opponent:"No round scheduled yet",offTitle:"Next round",date:"–",time:"–",tv:"ATG"};
     if(up){
@@ -622,7 +622,7 @@ async function atgRound(t){
     const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{if(r.atg)old[r.atg]=r;});
     const recentResults=[];
     for(const x of done){
-      if(old[x.id]&&old[x.id].trot){recentResults.push(old[x.id]);continue;}
+      if(old[x.id]&&old[x.id].trot&&old[x.id].trot.v===2){recentResults.push(old[x.id]);continue;}
       try{
         const g=await (await fetch(ATG+"games/"+x.id)).json();
         const pool=g.pools&&g.pools[x.bt]||{},res=pool.result||{},pay=res.payouts||{};
@@ -632,7 +632,7 @@ async function atgRound(t){
         const ts=atgTs(x.startTime);
         recentResults.push({atg:x.id,opponent:`${x.bt} · ${track}`,score:top&&kr(top)!=null?`${top} rätt: ${kr(top).toLocaleString("da-DK")} kr`:"Result",label:"🏁",result:"D",
           date:new Date(ts).toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:"Europe/Copenhagen"}),ts,
-          trot:{bt:x.bt,track,ts,row:winners.map(w=>w.n||"–").join("-"),winners,payouts:Object.keys(pay).map(Number).filter(n=>n>0).sort((a,b)=>b-a).map(n=>({n,kr:kr(n),sys:pay[n].systems??null})),turnover:pool.turnover?Math.round(pool.turnover/100):null}});
+          trot:{v:2,bt:x.bt,track,ts,row:winners.map(w=>w.n||"–").join("-"),winners,payouts:Object.keys(pay).map(Number).filter(n=>n>0).sort((a,b)=>b-a).map(n=>({n,kr:kr(n),sys:pay[n].systems??null})),turnover:pool.turnover?Math.round(pool.turnover/100):null}});
       }catch(e){console.log(`    ATG ${x.id}: ${e.message}`);}
     }
     console.log(`    ATG: next ${up?up.id:"none"} · ${recentResults.length} results`+(recentResults[0]?` · latest ${recentResults[0].opponent} ${recentResults[0].score} row ${recentResults[0].trot.row}`:""));
