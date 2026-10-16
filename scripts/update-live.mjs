@@ -849,7 +849,18 @@ for(const [name,e] of Object.entries(teams)){
   catch(err){console.log("notify "+name+": "+err.message);}
 }
 mkdirSync("out",{recursive:true});
-writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage}));
+// TEMP probe: ATG (V75/V85) response shapes.
+let atgDebug=null;
+if(!LIVE){atgDebug={};
+  const sk=(o,d=0)=>o&&typeof o==="object"?(Array.isArray(o)?[o.length,sk(o[0],d+1)]:Object.fromEntries(Object.entries(o).slice(0,40).map(([k,v])=>[k,d>4?typeof v:sk(v,d+1)]))):o;
+  for(const bt of ["V75","V85"]){try{const r=await fetch("https://www.atg.se/services/racinginfo/v1/api/products/"+bt);const j=await r.json();atgDebug[bt]={status:r.status,shape:sk(j)};
+    const id=(j.upcoming&&j.upcoming[0]&&j.upcoming[0].id)||(j.results&&j.results[0]&&j.results[0].id);
+    if(id){const g=await (await fetch("https://www.atg.se/services/racinginfo/v1/api/games/"+id)).json();atgDebug[bt].game=sk(g);}
+    const rid=j.results&&j.results[0]&&j.results[0].id;
+    if(rid&&rid!==id){const g=await (await fetch("https://www.atg.se/services/racinginfo/v1/api/games/"+rid)).json();atgDebug[bt].resultGame=sk(g);}
+  }catch(e){atgDebug[bt]={err:e.message};}}
+}
+writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,atgDebug}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
 const liveNow=Object.entries(teams).filter(([,e])=>needsLive(e)).map(([n,e])=>n+(e.data.liveGame?" "+e.data.liveGame.score:" (kick-off soon)"));
 if(liveNow.length){writeFileSync("out/live-needed",liveNow.join("\n"));console.log("live: "+liveNow.join(" · "));}
