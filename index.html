@@ -1529,7 +1529,7 @@ async function setPush(name,kind,on){
   const prefs=pushPrefs();prefs[name]={...(prefs[name]||{}),[kind]:on};lsSet("msh-push",prefs);
   const teams=Object.entries(prefs).map(([n,v])=>({n,start:!!v.start,live:!!v.live})).filter(t=>t.start||t.live);
   await fetch("https://ntfy.sh/"+PUSH_SUBS_TOPIC,{method:"POST",body:JSON.stringify({sub:sub.toJSON(),teams,ts:Date.now()})});
-  if(on)reg.showNotification("🔔 Notifications are on",{body:name+": "+(kind==="start"?"you'll get a reminder about 60 min before the start.":"kick-off, goals and full-time."),icon:"icon-192.png"});
+  if(on){const t="🔔 Notifications are on",b=name+": "+(kind==="start"?"you'll get a reminder about 60 min before the start.":"kick-off, goals and full-time.");reg.showNotification(t,{body:b,icon:"icon-192.png",data:{url:"./?app",title:t,body:b}});}
 }
 function NotifyRow({team,topic,icon,title,sub,kind}){
   const [on,setOn]=useState(()=>!!(pushPrefs()[team.name]||{})[kind]),[busy,setBusy]=useState(false),[msg,setMsg]=useState(null);
@@ -2033,7 +2033,21 @@ function App(){
 }
 
 if(!window._reactRoot){window._reactRoot=ReactDOM.createRoot(document.getElementById('app-root'));}
-window._reactRoot.render(h(App));
+// Tapping a notification opens the app and iOS removes it, so the app shows its text in a banner.
+function NoteBanner(){
+  const [note,setNote]=useState(()=>{try{const q=new URLSearchParams(location.search),t=q.get("nt");return t?{title:t,body:q.get("nb")||""}:null;}catch(e){return null;}});
+  useEffect(()=>{
+    if(note&&/[?&]nt=/.test(location.search)){const q=new URLSearchParams(location.search);q.delete("nt");q.delete("nb");history.replaceState(history.state,"",location.pathname+(q.toString()?"?"+q:"")+location.hash);}
+    if(!("serviceWorker" in navigator))return;
+    const on=e=>{if(e.data&&e.data.msh==="note")setNote({title:e.data.title,body:e.data.body});};
+    navigator.serviceWorker.addEventListener("message",on);return()=>navigator.serviceWorker.removeEventListener("message",on);
+  },[]);
+  if(!note)return null;
+  return h("div",{style:{position:"fixed",left:12,right:12,top:"calc(12px + env(safe-area-inset-top))",zIndex:300,background:"#16264a",border:"1px solid #e8409a",borderRadius:14,padding:"12px 14px",boxShadow:"0 8px 30px rgba(0,0,0,.5)",display:"flex",gap:10,alignItems:"flex-start",fontFamily:"Inter,sans-serif",maxWidth:540,margin:"0 auto"}},
+    h("div",{style:{flex:1,minWidth:0}},h("div",{style:{fontWeight:700,color:"#fff",fontSize:"0.9rem"}},note.title),note.body&&h("div",{style:{color:"#d5deee",fontSize:"0.8rem",marginTop:3,lineHeight:1.4}},note.body)),
+    h("button",{onClick:()=>setNote(null),"aria-label":"Close",style:{background:"rgba(255,255,255,0.1)",border:"none",color:"#fff",borderRadius:"50%",width:32,height:32,cursor:"pointer",flexShrink:0}},"✕"));
+}
+window._reactRoot.render(h(React.Fragment,null,h(App),h(NoteBanner)));
 })();
 
 }
