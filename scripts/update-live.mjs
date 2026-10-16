@@ -906,6 +906,22 @@ for(const [name,e] of Object.entries(teams)){
     console.log("notify "+name+": "+title+" (HTTP "+r.status+")");}
   catch(err){console.log("notify "+name+": "+err.message);}
 }
+// Start reminders (all sports): about 60 min before the next game / race / round, once per start time
+// (runs every 15 min and are often late, so anything 10–70 min ahead counts).
+for(const [name,e] of Object.entries(teams)){
+  const d=e&&e.data,p=prev[name]&&prev[name].data,t=api.DB[Object.keys(api.DB).find(k=>api.DB[k].name===name)]||extraTeams.find(x=>x.name===name);
+  if(!d||!t||d.newsOnly)continue;
+  if(p&&p.preNotified&&!d.preNotified)d.preNotified=p.preNotified;
+  const g=d.nextGame,ts=g&&g.ts,left=ts?(ts-Date.now())/60e3:null;
+  if(!ts||d.liveGame||d.preNotified===ts||left<10||left>70)continue;
+  d.preNotified=ts;
+  const hm=new Date(ts).toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"});
+  const what=t.sport==="Trav"?g.opponent:t.shortName+" vs "+g.opponent,tv=g.tv&&g.tv!=="–"&&g.tv!=="-"?" · TV: "+g.tv:"";
+  try{const r=await fetch("https://ntfy.sh/",{method:"POST",headers:{"Content-Type":"application/json"},
+      body:JSON.stringify({topic:api.notifyTopic(name),title:"⏰ "+t.shortName+" starter kl. "+hm,message:what+" starter om "+Math.round(left)+" min"+tv,tags:["alarm_clock"],click:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"})});
+    console.log("notify "+name+": start reminder "+hm+" (HTTP "+r.status+")");}
+  catch(err){console.log("notify "+name+": "+err.message);}
+}
 mkdirSync("out",{recursive:true});
 writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
