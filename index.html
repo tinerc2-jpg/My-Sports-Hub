@@ -439,6 +439,8 @@ async function resolveTSDB(team,al){
 const SRC_KEY="msh-src-v2";
 // Live notifications: the robot posts kick-off / goal / full-time for football teams to this ntfy.sh topic.
 function notifyTopic(name){return "msh-"+norm(name).replace(/[^a-z0-9]+/g,"-").replace(/^-|-$/g,"")+"-7f3k";}
+// Separate topic for the 60-min start reminder, so it can be followed without goal alerts.
+function startTopic(name){return notifyTopic(name).replace(/-7f3k$/,"-start-7f3k");}
 // Football leagues ESPN doesn't cover: TheSportsDB instead.
 const TSDB_LEAGUES=["1. division"];
 async function resolveSource(team){
@@ -1505,23 +1507,26 @@ function LiveStatus({entry,busy,sport,onRefresh}){
 // the counts into live.json.requests and the owner is told about them.
 const REQUEST_TOPIC="mysportshub-team-requests-7f3k9q";
 // Opt-in goal alerts via the free ntfy app (works on iPhone and Android, also when the app is closed).
-function NotifyCard({team}){
-  const key="msh-notify-"+team.name,[on,setOn]=useState(()=>{try{return localStorage.getItem(key)==="1";}catch(e){return false;}});
-  const [open,setOpen]=useState(false),topic=notifyTopic(team.name),url="https://ntfy.sh/"+topic;
-  const set=v=>{setOn(v);try{localStorage.setItem(key,v?"1":"0");}catch(e){}};
+function NotifyRow({team,topic,icon,title,sub,store}){
+  const key="msh-notify-"+store+team.name,[on,setOn]=useState(()=>{try{return localStorage.getItem(key)==="1";}catch(e){return false;}});
+  const [open,setOpen]=useState(false),url="https://ntfy.sh/"+topic;
+  const set=v=>{setOn(v);setOpen(true);try{localStorage.setItem(key,v?"1":"0");}catch(e){}};
   const btn={border:"none",borderRadius:10,padding:"9px 12px",fontWeight:700,fontSize:"0.8rem",cursor:"pointer",fontFamily:"Inter,sans-serif"};
-  return h("div",{style:{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"10px 12px",marginBottom:12,fontFamily:"Inter,sans-serif"}},
+  return h("div",{style:{padding:"8px 0"}},
     h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
-      h("div",{style:{fontSize:"0.85rem",color:"#fff"}},(on?"🔔 ":"🔕 ")+"Notifications",h("div",{style:{fontSize:"0.7rem",color:"#d5deee"}},team.sport==="Football"?"60 min before, kick-off, goals and full-time":"Reminder 60 min before the start")),
-      h("button",{onClick:()=>on?(set(false),setOpen(true)):(set(true),setOpen(true)),style:{...btn,background:on?"rgba(255,255,255,0.1)":"#e8409a",color:"#fff"}},on?"Turn off":"Turn on")
-    ),
-    open&&h("div",{style:{fontSize:"0.78rem",color:"#eef2f8",marginTop:10,lineHeight:1.5}},
+      h("div",{style:{fontSize:"0.85rem",color:"#fff"}},icon+" "+title,h("div",{style:{fontSize:"0.7rem",color:"#d5deee"}},sub)),
+      h("button",{onClick:()=>set(!on),style:{...btn,flexShrink:0,background:on?"rgba(255,255,255,0.1)":"#e8409a",color:"#fff"}},on?"Turn off":"Turn on")),
+    open&&h("div",{style:{fontSize:"0.78rem",color:"#eef2f8",marginTop:8,lineHeight:1.5}},
       on?[h("div",{key:1},"1. Install the free app ",h("b",null,"ntfy")," (App Store / Google Play)."),
-          h("div",{key:2},"2. Tap below – or in ntfy tap ＋ and type: ",h("b",{style:{color:"#ff9fd0"}},topic)),
-          h("a",{key:3,href:url,target:"_blank",rel:"noopener",style:{display:"inline-block",marginTop:8,...btn,background:"#e8409a",color:"#fff",textDecoration:"none"}},"Subscribe to "+team.shortName+" alerts ↗")]
-        :h("div",null,"To stop the alerts: open the ntfy app, swipe left on ",h("b",{style:{color:"#ff9fd0"}},topic)," and tap Unsubscribe.")
-    )
-  );
+          h("div",{key:2},"2. Tap below – or in ntfy tap ＋ and type: ",h("b",{style:{color:"#ff9fd0",wordBreak:"break-all"}},topic)),
+          h("a",{key:3,href:url,target:"_blank",rel:"noopener",style:{display:"inline-block",marginTop:8,...btn,background:"#e8409a",color:"#fff",textDecoration:"none"}},"Subscribe ↗")]
+        :h("div",null,"To stop: open the ntfy app, swipe left on ",h("b",{style:{color:"#ff9fd0",wordBreak:"break-all"}},topic)," and tap Unsubscribe.")));
+}
+function NotifyCard({team}){
+  return h("div",{style:{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"4px 12px",marginBottom:12,fontFamily:"Inter,sans-serif"}},
+    h(NotifyRow,{team,topic:startTopic(team.name),icon:"⏰",title:"Start reminder",sub:"About 60 min before the start",store:"start-"}),
+    team.sport==="Football"&&h("div",{style:{borderTop:"1px solid rgba(255,255,255,0.08)"}},
+      h(NotifyRow,{team,topic:notifyTopic(team.name),icon:"⚽",title:"Live alerts",sub:"Kick-off, goals and full-time",store:""})));
 }
 
 // "🎉 X is now available": a team this visitor requested has since been added (found by lookup).
