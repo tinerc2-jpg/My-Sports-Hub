@@ -398,7 +398,7 @@ async function tv2Standing(team){
 const NEWS_TTL=60*60*1000;
 const SPORT_WORDS={Football:["fodbold","football"],Handball:["håndbold","handball"],Tennis:["tennis","tennis"],Basketball:["basketball","NBA"],
   Golf:["golf","golf"],Cycling:["cykling","cycling"],"Formula 1":["Formel 1","F1"],"Ice Hockey":["ishockey","NHL"],"Am. Football":["NFL","NFL"],
-  Rugby:["rugby","rugby"],Baseball:["baseball","MLB"],Volleyball:["volleyball","volleyball"],Trotting:["trav","trotting"]};
+  Rugby:["rugby","rugby"],Baseball:["baseball","MLB"],Volleyball:["volleyball","volleyball"],Trav:["trav","trav"]};
 function xmlText(s){
   return String(s||"").replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g,"$1").replace(/<[^>]+>/g,"")
     .replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&quot;/g,'"').replace(/&#39;|&apos;/g,"'")
@@ -596,7 +596,7 @@ async function pcsCycling(team){
   }catch(e){console.log("    PCS:",e.message);return null;}
 }
 
-// ── Trotting: ATG's big Saturday pool (V75; V85 while ATG runs that instead). Public racinginfo JSON. ──
+// ── Trav (trotting): ATG's big Saturday pool (V75; V85 while ATG runs that instead). Public racinginfo JSON. ──
 const ATG="https://www.atg.se/services/racinginfo/v1/api/";
 const atgTs=t=>{const m=/^(\d{4})-(\d\d)-(\d\d)T(\d\d):(\d\d)/.exec(t||"");return m?cphDate(+m[3],+m[2],+m[1],+m[4],+m[5]).getTime():0;}; // Swedish time = Copenhagen time
 const atgName=p=>p?[p.firstName,p.lastName].filter(Boolean).join(" ")||p.shortName||"":"";
@@ -617,6 +617,15 @@ async function atgRound(t){
       const pool=g.pools&&g.pools[up.bt]||{},legs=legsOf(g,up.bt),track=(up.tracks||[]).map(x=>x.name).join(" & ");
       trot.next={bt:up.bt,id:up.id,track,ts:atgTs(up.startTime),turnover:pool.turnover?Math.round(pool.turnover/100):null,legs};
       nextGame={opponent:`${up.bt} · ${track}`,date:"",time:"",ts:atgTs(up.startTime),tv:"ATG"};
+      // Live while the round runs: legs get their winner as soon as ATG has the result.
+      const fin=legs.filter(l=>l.horses.some(x=>x.pl===1)),now=Date.now(),last=legs[legs.length-1];
+      if(legs.length&&now>legs[0].ts-15*60e3&&fin.length<legs.length&&now<last.ts+60*60e3){
+        const cur=legs.find(l=>!l.horses.some(x=>x.pl===1)),pw=fin[fin.length-1],w=pw&&pw.horses.find(x=>x.pl===1);
+        const hm=ts=>new Date(ts).toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"});
+        trot.live=true;
+        var liveGame={opponent:`${up.bt} · ${track}`,score:`${fin.length}/${legs.length}`,
+          detail:(cur?`${up.bt.slice(0,1)}-${cur.leg} kl. ${hm(cur.ts)}`:"")+(w?` · ${up.bt.slice(0,1)}-${pw.leg}: ${w.n} ${w.h}`:"")};
+      }
       if(legs[0]&&legs[0].horses[0])console.log(`    ATG ${up.id}: ${legs.length} legs · pool sample ${JSON.stringify((g.races[0].starts[0].pools||{})[up.bt]||{}).slice(0,160)}`);
     }
     const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{if(r.atg)old[r.atg]=r;});
@@ -637,7 +646,7 @@ async function atgRound(t){
     }
     console.log(`    ATG: next ${up?up.id:"none"} · ${recentResults.length} results`+(recentResults[0]?` · latest ${recentResults[0].opponent} ${recentResults[0].score} row ${recentResults[0].trot.row}`:""));
     if(!up&&!recentResults.length)return null;
-    return{source:"ATG",standing:null,recentResults,nextGame,trot};
+    return{source:"ATG",standing:null,recentResults,nextGame,trot,liveGame:typeof liveGame!=="undefined"?liveGame:null};
   }catch(e){console.log("    ATG:",e.message);return null;}
 }
 
@@ -797,7 +806,7 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
       }
     }
     if(!data&&t.sport==="Cycling")data=await pcsCycling(t);
-    if(!data&&t.sport==="Trotting")data=await atgRound(t);
+    if(!data&&t.sport==="Trav")data=await atgRound(t);
     // Match statistics per result. Finished games don't change, so stats from the previous snapshot are reused.
     if(data&&data.recentResults){
       const old={};((prev[t.name]&&prev[t.name].data&&prev[t.name].data.recentResults)||[]).forEach(r=>{const k=r.ev||(r.hbm&&"hb"+r.hbm)||(r.ehm&&"ehf"+r.ehm);if(k&&r.stats&&((r.hbm||r.ehm)?r.stats.v===HB_V:r.stats.sv===3))old[k]=r.stats;});
