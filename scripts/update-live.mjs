@@ -19,7 +19,7 @@ globalThis.fetch=(url,opts={})=>rawFetch(url,{...opts,headers:{"User-Agent":UA,.
 const api=new Function(`const DB={};function add(keys,d){keys.forEach(k=>DB[k.toLowerCase()]=d);}
 ${adds}
 ${html.slice(start,end)}
-return {DB,notifyTopic,fetchTeamLive,fetchEspnSummary,_liveLog,teamAliases,nameMatch,norm};`)();
+return {DB,notifyTopic,startTopic,fetchTeamLive,fetchEspnSummary,_liveLog,teamAliases,nameMatch,norm};`)();
 
 // Previous snapshot: lets us reuse API-Sports standings so we stay within the free quota.
 // --live: quick re-run inside the same Actions job (see the workflow's live loop). It starts from this
@@ -918,7 +918,7 @@ for(const [name,e] of Object.entries(teams)){
   const hm=new Date(ts).toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"});
   const what=t.sport==="Trav"?g.opponent:t.shortName+" vs "+g.opponent,tv=g.tv&&g.tv!=="–"&&g.tv!=="-"?" · TV: "+g.tv:"";
   try{const r=await fetch("https://ntfy.sh/",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({topic:api.notifyTopic(name),title:"⏰ "+t.shortName+" starter kl. "+hm,message:what+" starter om "+Math.round(left)+" min"+tv,tags:["alarm_clock"],click:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"})});
+      body:JSON.stringify({topic:api.startTopic(name),title:"⏰ "+t.shortName+" starter kl. "+hm,message:what+" starter om "+Math.round(left)+" min"+tv,tags:["alarm_clock"],click:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"})});
     console.log("notify "+name+": start reminder "+hm+" (HTTP "+r.status+")");}
   catch(err){console.log("notify "+name+": "+err.message);}
 }
