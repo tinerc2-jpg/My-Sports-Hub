@@ -550,8 +550,8 @@ async function fetchEspn(src){
   return{source:"ESPN",
     // ev/lg/sp/tid let the app (and the robot) load the match statistics for a result.
     recentResults:done.slice(0,5).map(e=>({opponent:e.opponent,score:e.score,result:e.result,date:fmtShort(e.d),ev:e.id,lg:e.lg,sp:src.sp,tid:src.id})),
-    nextGame:next?{opponent:next.opponent,date:fmtDay(next.d),time:fmtTime(next.d),tv:next.tv||"–",ts:next.d.getTime()}:upcomingKnown?OFF_SEASON:null,
-    liveGame:live?{opponent:live.opponent,score:live.score||"0–0",detail:live.detail||"Live"}:null,
+    nextGame:next?{opponent:next.opponent,date:fmtDay(next.d),time:fmtTime(next.d),tv:next.tv||"–",ts:next.d.getTime(),ev:next.id,lg:next.lg,sp:src.sp,tid:src.id}:upcomingKnown?OFF_SEASON:null,
+    liveGame:live?{opponent:live.opponent,score:live.score||"0–0",detail:live.detail||"Live",ev:live.id,lg:live.lg,sp:src.sp,tid:src.id}:null,
     standing:espnStanding(table,src.id,soccer||src.sp==="hockey")};
 }
 
@@ -618,6 +618,16 @@ async function fetchEspnSummary(sp,lg,ev,tid){
   out.sv=3; // bump when the summary parsing changes, so the robot recomputes stored stats
   if(!out.stats.length&&!out.goals.length&&!out.periods)return null;
   return out;
+}
+
+// Line-ups (football): ESPN's summary lists them about an hour before kick-off (rosters[].roster[].starter).
+async function fetchEspnLineup(sp,lg,ev,tid){
+  const j=await getJSON(ESPN+"/site/v2/sports/"+sp+"/"+lg+"/summary?event="+ev);
+  const ps=p=>({no:p.jersey||"",n:(p.athlete&&(p.athlete.displayName||p.athlete.shortName))||"",pos:(p.position&&p.position.abbreviation)||""});
+  const teams=(j.rosters||[]).map(ro=>{const r=ro.roster||[];return{me:String(ro.team&&ro.team.id)===String(tid)?1:0,
+    name:(ro.team&&(ro.team.shortDisplayName||ro.team.displayName))||"",formation:ro.formation||"",
+    starters:r.filter(p=>p.starter).map(ps),subs:r.filter(p=>!p.starter).map(ps)};}).filter(t=>t.starters.length);
+  return teams.length?{ev:String(ev),ts:Date.now(),teams}:null;
 }
 
 // ── Formula 1 (Jolpica, Ergast-compatible) ──
@@ -982,6 +992,7 @@ function mergeLive(team,e){
   const out={...team,_live:d.source,liveGame:d.liveGame||null,_liveFields:{}};
   if(hasNews){out.news=d.news;out._liveFields.news=true;}
   if(d.trot)out.trot=d.trot;
+  if(d.lineup)out.lineup=d.lineup;
   if(d.recentResults&&d.recentResults.length){out.recentResults=d.recentResults;out._liveFields.results=true;}
   if(d.nextGame){const g={...d.nextGame};if(g.ts){const x=new Date(g.ts);g.date=fmtDay(x);if(g.time!=="–")g.time=fmtTime(x);}out.nextGame=g;}
   if(d.standing){out._liveFields.standing=true;const s={...team.standing};Object.keys(d.standing).forEach(k=>{if(d.standing[k]!==undefined)s[k]=d.standing[k]; /* null = "unknown now": don't keep May's number */});out.standing=s;}
@@ -1251,6 +1262,29 @@ function TrotSheet({r,onClose}){
       h("div",{style:{fontWeight:800,color:"#ff9fd0",minWidth:40,fontFamily:"'Barlow Condensed',sans-serif"}},t.bt.slice(0,1)+"-"+w.leg),
       h("div",{style:{minWidth:22,fontWeight:700}},w.n||"–"),
       h("div",{style:{flex:1,minWidth:0}},h("div",{style:{fontSize:"0.78rem"}},w.h||"–"),h("div",{style:{fontSize:"0.62rem",color:"#d5deee"}},[w.d,w.km&&"km "+w.km,w.odds&&"odds "+w.odds.toLocaleString("da-DK")].filter(Boolean).join(" · ")))))));
+}
+
+// Football line-ups (about an hour before kick-off): from the snapshot, else straight from ESPN.
+function lineupGame(team){
+  if(team.sport!=="Football")return null;
+  const g=team.liveGame&&team.liveGame.ev?team.liveGame:team.nextGame;
+  if(!g||!g.ev)return null;
+  if(team.lineup&&team.lineup.ev===String(g.ev))return g;
+  const m=g.ts?(g.ts-Date.now())/60e3:null;
+  return team.liveGame||(m!=null&&m<75)?g:null;
+}
+function LineupSheet({team,g,onClose}){
+  const [lu,setLu]=useState(team.lineup&&team.lineup.ev===String(g.ev)?team.lineup:null),[state,setState]=useState(lu?"ok":"loading");
+  useEffect(()=>{if(lu)return;fetchEspnLineup(g.sp,g.lg,g.ev,g.tid).then(x=>{setLu(x);setState(x?"ok":"none");}).catch(()=>setState("none"));},[]);
+  const row=(p,i)=>h("div",{key:i,style:{display:"flex",gap:8,padding:"4px 0",fontSize:"0.8rem",color:"#fff",borderBottom:"1px solid rgba(255,255,255,0.05)"}},
+    h("span",{style:{minWidth:22,color:"#ff9fd0",fontWeight:700}},p.no),h("span",{style:{flex:1}},p.n),h("span",{style:{color:"#d5deee",fontSize:"0.7rem"}},p.pos));
+  return h(Sheet,{title:"📋 Line-ups",onClose},
+    state==="loading"&&h("div",{style:{color:"#d5deee",fontSize:"0.85rem"}},"Loading…"),
+    state==="none"&&h("div",{style:{color:"#d5deee",fontSize:"0.85rem",lineHeight:1.5}},"The line-ups aren't out yet – they usually come about an hour before kick-off. Try again a bit later."),
+    lu&&lu.teams.slice().sort((a,b)=>b.me-a.me).map((t,i)=>h("div",{key:i,style:{marginBottom:14}},
+      h(Lbl,{c:t.name+(t.formation?" · "+t.formation:"")}),
+      h("div",{style:{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"6px 12px"}},t.starters.map(row)),
+      t.subs.length>0&&h("div",{style:{fontSize:"0.72rem",color:"#d5deee",marginTop:6,lineHeight:1.5}},"Bench: "+t.subs.map(p=>p.n).join(", ")))));
 }
 
 // Bottom sheet used by the match and table views.
@@ -1795,12 +1829,12 @@ function App(){
   const [selected,setSelected]=useState(loadSel);
   const [showModal,setShowModal]=useState(false);
   const [removing,setRemoving]=useState(null);
-  const [match,setMatch]=useState(null),[showTable,setShowTable]=useState(false),[showFeedback,setShowFeedback]=useState(false);
+  const [match,setMatch]=useState(null),[showTable,setShowTable]=useState(false),[showFeedback,setShowFeedback]=useState(false),[showLineup,setShowLineup]=useState(false);
   // "home" = grid of all favourites, "team" = one team's page
   const [view,setView]=useState("home");
   const [welcome,setWelcome]=useState(()=>teams.length===0); // first visit
   const viewRef=useRef(view),overlayRef=useRef(false);viewRef.current=view;
-  overlayRef.current=showModal||!!match||showTable||!!removing||showFeedback;
+  overlayRef.current=showModal||!!match||showTable||!!removing||showFeedback||showLineup;
   const [ready,setReady]=useState(false);
   const [live,setLive]=useState(()=>lsGet("msh-live")||{});
   const [busy,setBusy]=useState({});
@@ -2011,6 +2045,7 @@ function App(){
       h(LiveStatus,{entry:live[baseTeam.name],busy:!!busy[baseTeam.name],sport:team.sport,onRefresh:()=>refreshTeam(baseTeam,true)}),
       team.liveGame&&h(LiveGame,{team}),
       team.sport==="Trav"?h(TrotRound,{t:team.trot&&team.trot.next}):h("div",{style:{marginBottom:12}},h(Lbl,{c:"📊 Ranking / Standing"+(lf.standing===true?"":lf.standing==="none"?" \xB7 not available yet":SAVED)}),h(StandingDisplay,{team,onTable:()=>setShowTable(true)})),
+      lineupGame(team)&&h("button",{onClick:()=>setShowLineup(true),style:{width:"100%",marginBottom:12,background:"rgba(232,64,154,0.12)",border:"1px solid rgba(232,64,154,0.45)",borderRadius:12,padding:"11px 14px",color:"#fff",fontWeight:700,fontSize:"0.85rem",cursor:"pointer",fontFamily:"Inter,sans-serif",textAlign:"left"}},"📋 Line-ups"+(team.lineup&&lineupGame(team)&&team.lineup.ev===String(lineupGame(team).ev)?" – out now":"")+" ›"),
       team.nextGame&&h("div",{style:{marginBottom:12}},h(Lbl,{c:"📺 Next On TV"}),h(NextGame,{team})),
       team.recentResults&&team.recentResults.length>0&&h("div",{style:{marginBottom:12}},
         h(Lbl,{c:"🏆 Recent Results"+(lf.results?"":SAVED)}),
@@ -2025,6 +2060,7 @@ function App(){
       h("div",{style:{height:30}})
     ),
     showFeedback&&h(FeedbackSheet,{onClose:()=>setShowFeedback(false)}),
+    showLineup&&lineupGame(team)&&h(LineupSheet,{team,g:lineupGame(team),onClose:()=>setShowLineup(false)}),
     match&&(match.trot?h(TrotSheet,{r:match,onClose:()=>setMatch(null)}):h(MatchSheet,{r:match,team,onClose:()=>setMatch(null)})),
     showTable&&team.standing&&team.standing.table&&h(TableSheet,{team,onClose:()=>setShowTable(false)}),
     showModal&&h(AddModal,{onClose:()=>setShowModal(false),onAdd:handleAdd}),

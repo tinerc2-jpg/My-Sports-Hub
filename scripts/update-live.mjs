@@ -19,7 +19,7 @@ globalThis.fetch=(url,opts={})=>rawFetch(url,{...opts,headers:{"User-Agent":UA,.
 const api=new Function(`const DB={};function add(keys,d){keys.forEach(k=>DB[k.toLowerCase()]=d);}
 ${adds}
 ${html.slice(start,end)}
-return {DB,notifyTopic,startTopic,fetchTeamLive,fetchEspnSummary,_liveLog,teamAliases,nameMatch,norm};`)();
+return {DB,notifyTopic,startTopic,fetchTeamLive,fetchEspnSummary,fetchEspnLineup,_liveLog,teamAliases,nameMatch,norm};`)();
 
 // Previous snapshot: lets us reuse API-Sports standings so we stay within the free quota.
 // --live: quick re-run inside the same Actions job (see the workflow's live loop). It starts from this
@@ -877,6 +877,16 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
       }
       if(got+reused+none)console.log(`    match stats: ${got} new, ${reused} reused, ${none} without stats`+(got?" · e.g. "+JSON.stringify(data.recentResults.find(r=>r.stats).stats).slice(0,160):""));
     }
+    // Line-ups (football): from ~75 min before kick-off until full-time; kept once found (re-read while live).
+    if(data&&t.sport==="Football"){
+      const g=data.liveGame&&data.liveGame.ev?data.liveGame:data.nextGame,pl=prev[t.name]&&prev[t.name].data&&prev[t.name].data.lineup;
+      const mins=g&&g.ts?(g.ts-Date.now())/60e3:null;
+      if(g&&g.ev&&(data.liveGame||(mins!=null&&mins<75&&mins>-150))){
+        if(pl&&pl.ev===String(g.ev)&&!data.liveGame)data.lineup=pl;
+        else{try{const lu=await api.fetchEspnLineup(g.sp,g.lg,g.ev,g.tid);if(lu){data.lineup=lu;console.log(`    line-up ${t.name}: `+lu.teams.map(x=>x.name+" "+x.formation+" ("+x.starters.length+")").join(" v "));}else if(pl&&pl.ev===String(g.ev))data.lineup=pl;}
+          catch(e){console.log(`    line-up ${t.name}: ${e.message}`);if(pl&&pl.ev===String(g.ev))data.lineup=pl;}}
+      }else if(pl&&g&&pl.ev===String(g.ev))data.lineup=pl;
+    }
     const nw=await teamNews(t);
     if(data){
       if(nw){data.news=nw.news;data.newsTs=nw.ts;data.newsV=NEWS_V;}
@@ -968,15 +978,27 @@ for(const [name,e] of Object.entries(teams)){
   if(!d||!t||d.newsOnly)continue;
   if(p&&p.preNotified&&!d.preNotified)d.preNotified=p.preNotified;
   const g=d.nextGame,ts=g&&g.ts,left=ts?(ts-Date.now())/60e3:null;
+  if(p&&p.lineupNotified&&!d.lineupNotified)d.lineupNotified=p.lineupNotified;
+  // Line-up out after the reminder went: one extra "📋" message to the same subscribers.
+  if(d.lineup&&ts&&d.preNotified===ts&&d.lineupNotified!==d.lineup.ev&&g.ev&&d.lineup.ev===String(g.ev)&&left>-15){
+    d.lineupNotified=d.lineup.ev;
+    const me=d.lineup.teams.find(x=>x.me)||d.lineup.teams[0];
+    const body=(me.formation?me.formation+": ":"")+me.starters.map(x=>x.n.split(" ").slice(-1)[0]).join(", ");
+    await sendPush(name,"start",{title:"📋 "+t.shortName+" – holdopstillingen er klar",body,tag:"lineup-"+name,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"});
+    console.log("notify "+name+": line-up");
+    continue;
+  }
   if(!ts||d.liveGame||d.preNotified===ts||left<10||left>70)continue;
   d.preNotified=ts;
   const hm=new Date(ts).toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"});
   const what=t.sport==="Trav"?g.opponent:t.shortName+" vs "+g.opponent,tv=g.tv&&g.tv!=="–"&&g.tv!=="-"?" · TV: "+g.tv:"";
+  const lu=d.lineup&&g.ev&&d.lineup.ev===String(g.ev)?" · 📋 Holdopstillingen er klar":"";
+  if(lu)d.lineupNotified=d.lineup.ev;
   try{const r=await fetch("https://ntfy.sh/",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({topic:api.startTopic(name),title:"⏰ "+t.shortName+" starter kl. "+hm,message:what+" starter om "+Math.round(left)+" min"+tv,tags:["alarm_clock"],click:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"})});
+      body:JSON.stringify({topic:api.startTopic(name),title:"⏰ "+t.shortName+" starter kl. "+hm,message:what+" starter om "+Math.round(left)+" min"+tv+lu,tags:["alarm_clock"],click:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"})});
     console.log("notify "+name+": start reminder "+hm+" (HTTP "+r.status+")");}
   catch(err){console.log("notify "+name+": "+err.message);}
-  await sendPush(name,"start",{title:"⏰ "+t.shortName+" starter kl. "+hm,body:what+" starter om "+Math.round(left)+" min"+tv,tag:"start-"+name,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"});
+  await sendPush(name,"start",{title:"⏰ "+t.shortName+" starter kl. "+hm,body:what+" starter om "+Math.round(left)+" min"+tv+lu,tag:"start-"+name,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"});
 }
 mkdirSync("out",{recursive:true});
 writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length}:null}));
