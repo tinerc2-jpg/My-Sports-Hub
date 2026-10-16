@@ -780,7 +780,7 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
 }
 // Team requests from the app's "Request this team" button (GoatCounter events "request/<sport>/<name>").
 // Needs the GOATCOUNTER_TOKEN repo secret (GoatCounter → Settings → API, read permission). Hourly at most.
-let requests=null;
+let requests=null,usage=prevFull&&prevFull.usage||null;
 const prevRequests=prevFull&&prevFull.requests;
 {
   const pj=LIVE&&existsSync("out/live.json")?JSON.parse(readFileSync("out/live.json","utf8")):null;
@@ -795,6 +795,21 @@ const prevRequests=prevFull&&prevFull.requests;
       requests={ts:Date.now(),list};
       console.log(`requests: HTTP ${r.status} · ${list.length} requested teams`+(list.length?": "+list.map(x=>x.path+" ×"+x.count).join(", "):"")+(r.ok?"":" · "+JSON.stringify(j).slice(0,200)));
     }catch(e){console.log("requests: "+e.message);}
+    // Usage stats for the owner's weekly report (last 7 days): totals per day, top pages, countries, devices.
+    try{
+      const prevU=prevFull&&prevFull.usage;
+      if(!prevU||Date.now()-(prevU.ts||0)>3600e3){
+        const end=new Date().toISOString().slice(0,10),start=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
+        const gc=async p=>{const r=await fetch(`https://mysportshub.goatcounter.com/api/v0/${p}${p.includes("?")?"&":"?"}start=${start}&end=${end}`,{headers:{Authorization:"Bearer "+tok,"Content-Type":"application/json"}});return r.ok?r.json():{error:r.status};};
+        const tot=await gc("stats/total"),hits=await gc("stats/hits?limit=20"),loc=await gc("stats/locations?limit=10"),sys=await gc("stats/systems?limit=10"),siz=await gc("stats/sizes?limit=10");
+        const items=j=>(j.stats||[]).map(x=>({name:x.name||x.id||"?",count:x.count||0}));
+        usage={ts:Date.now(),start,end,total:tot.total||0,events:tot.total_events||0,
+          daily:(tot.stats||[]).map(d=>({day:d.day,count:d.daily||0})),
+          pages:(hits.hits||[]).map(x=>({path:x.path,event:!!x.event,count:x.count||0})),
+          countries:items(loc),systems:items(sys),screens:items(siz)};
+        console.log(`usage: ${usage.total} visits, ${usage.events} events (${start}..${end})`+(tot.error?" · HTTP "+tot.error:""));
+      }else usage=prevU;
+    }catch(e){console.log("usage: "+e.message);}
   }
   // ntfy.sh topic the app posts to ("<sport> | <name>"); messages are kept ~12 h, so collect them every run.
   if(!LIVE){
@@ -834,7 +849,7 @@ for(const [name,e] of Object.entries(teams)){
   catch(err){console.log("notify "+name+": "+err.message);}
 }
 mkdirSync("out",{recursive:true});
-writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests}));
+writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
 const liveNow=Object.entries(teams).filter(([,e])=>needsLive(e)).map(([n,e])=>n+(e.data.liveGame?" "+e.data.liveGame.score:" (kick-off soon)"));
 if(liveNow.length){writeFileSync("out/live-needed",liveNow.join("\n"));console.log("live: "+liveNow.join(" · "));}
