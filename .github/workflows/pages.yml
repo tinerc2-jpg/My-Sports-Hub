@@ -3,7 +3,7 @@ name: Deploy app to GitHub Pages
 on:
   push:
     branches: [main]
-    paths: [index.html, manifest.webmanifest, "icon*", apple-touch-icon.png, .github/workflows/pages.yml]
+    paths: [index.html, sw.js, manifest.webmanifest, "icon*", apple-touch-icon.png, .github/workflows/pages.yml]
   workflow_dispatch:
 
 permissions:
@@ -26,7 +26,7 @@ jobs:
       # never deploy an app with a JavaScript syntax error
       - run: node scripts/check-html.mjs
       # Publish only the app's own files (not scripts/ or notes)
-      - run: mkdir site && cp index.html manifest.webmanifest icon.svg icon-192.png icon-512.png apple-touch-icon.png site/
+      - run: mkdir site && cp index.html sw.js manifest.webmanifest icon.svg icon-192.png icon-512.png apple-touch-icon.png site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:

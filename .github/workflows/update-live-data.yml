@@ -24,6 +24,8 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: 20
+      # Web Push sender (notifications straight from the app)
+      - run: npm install --no-save --no-audit --no-fund web-push@3.6.7
       - run: node scripts/update-live.mjs
         env:
           APISPORTS_KEY: ${{ secrets.APISPORTS_KEY }}

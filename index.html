@@ -232,6 +232,7 @@ footer{padding:24px 48px;border-top:1px solid var(--border);display:flex;align-i
   <div id="app-root"></div>
 </div>
 <script>
+if("serviceWorker" in navigator)window.addEventListener("load",function(){navigator.serviceWorker.register("sw.js").catch(function(){});});
 var _appMounted=false;
 function showApp(){document.getElementById('landing').classList.add('hidden');document.getElementById('app-view').classList.add('active');window.scrollTo(0,0);if(!_appMounted){_appMounted=true;mountApp();try{window.goatcounter&&window.goatcounter.count&&window.goatcounter.count({path:'/app',title:'Opened dashboard',event:true});}catch(e){}}}
 
@@ -945,6 +946,7 @@ async function fetchTeamLive(team){
 // browser can't reach the APIs itself.
 const SNAPSHOT_URL="https://raw.githubusercontent.com/tinerc2-jpg/My-Sports-Hub/live-data/live.json";
 let _snap=null,_snapTs=0,_snapApiBlocked=0;
+let VAPID_PUB=lsGet("msh-vapid"); // Web Push public key, published by the robot in live.json.push
 // Whole-league clubs that aren't in DB (e.g. every Superliga club), listed by the robot in live.json.
 let EXTRA=lsGet("msh-extra")||[];
 const SNAPSHOT_API="https://api.github.com/repos/tinerc2-jpg/My-Sports-Hub/contents/live.json?ref=live-data";
@@ -958,6 +960,7 @@ async function getSnapshot(fresh){
   if(fresh&&!(_snapApiBlocked>Date.now()))j=await fetchJSON(SNAPSHOT_API,{Accept:"application/vnd.github.raw"}).catch(()=>{_snapApiBlocked=Date.now()+10*60*1000;return null;});
   if(!j)j=await fetchJSON(SNAPSHOT_URL+"?t="+Math.floor(Date.now()/300000));
   _snap=j.teams||{};_snapTs=Date.now();
+  if(j.push&&j.push.vapid&&j.push.vapid!==VAPID_PUB){VAPID_PUB=j.push.vapid;lsSet("msh-vapid",VAPID_PUB);}
   if(Array.isArray(j.leagueTeams)&&j.leagueTeams.length){EXTRA=j.leagueTeams;lsSet("msh-extra",EXTRA);}
   return _snap;
 }
@@ -1507,26 +1510,52 @@ function LiveStatus({entry,busy,sport,onRefresh}){
 // the counts into live.json.requests and the owner is told about them.
 const REQUEST_TOPIC="mysportshub-team-requests-7f3k9q";
 // Opt-in goal alerts via the free ntfy app (works on iPhone and Android, also when the app is closed).
-function NotifyRow({team,topic,icon,title,sub,store}){
-  const key="msh-notify-"+store+team.name,[on,setOn]=useState(()=>{try{return localStorage.getItem(key)==="1";}catch(e){return false;}});
-  const [open,setOpen]=useState(false),url="https://ntfy.sh/"+topic;
-  const set=v=>{setOn(v);setOpen(true);try{localStorage.setItem(key,v?"1":"0");}catch(e){}};
+// Notifications straight from the app (Web Push): the robot sends them; the phone only tells it which
+// teams and alert types it wants, via an ntfy topic the robot reads. iPhone: only from the home-screen app.
+const PUSH_SUBS_TOPIC="msh-push-subs-7f3k9q";
+const pushOK=()=>"serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;
+const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent);
+function pushPrefs(){return lsGet("msh-push")||{};}
+async function setPush(name,kind,on){
+  if(on){
+    const perm=await Notification.requestPermission();
+    if(perm!=="granted")throw new Error("denied");
+  }
+  if(!VAPID_PUB)await getSnapshot(true).catch(()=>null);
+  if(!VAPID_PUB)throw new Error("nokey");
+  const reg=await navigator.serviceWorker.register("sw.js").then(()=>navigator.serviceWorker.ready);
+  const key=Uint8Array.from(atob(VAPID_PUB.replace(/-/g,"+").replace(/_/g,"/")),c=>c.charCodeAt(0));
+  const sub=(await reg.pushManager.getSubscription())||(await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key}));
+  const prefs=pushPrefs();prefs[name]={...(prefs[name]||{}),[kind]:on};lsSet("msh-push",prefs);
+  const teams=Object.entries(prefs).map(([n,v])=>({n,start:!!v.start,live:!!v.live})).filter(t=>t.start||t.live);
+  await fetch("https://ntfy.sh/"+PUSH_SUBS_TOPIC,{method:"POST",body:JSON.stringify({sub:sub.toJSON(),teams,ts:Date.now()})});
+  if(on)reg.showNotification("🔔 Notifications are on",{body:name+": "+(kind==="start"?"you'll get a reminder about 60 min before the start.":"kick-off, goals and full-time."),icon:"icon-192.png"});
+}
+function NotifyRow({team,topic,icon,title,sub,kind}){
+  const [on,setOn]=useState(()=>!!(pushPrefs()[team.name]||{})[kind]),[busy,setBusy]=useState(false),[msg,setMsg]=useState(null);
   const btn={border:"none",borderRadius:10,padding:"9px 12px",fontWeight:700,fontSize:"0.8rem",cursor:"pointer",fontFamily:"Inter,sans-serif"};
+  const tap=async()=>{
+    if(!pushOK()){setMsg(isIOS()?"ios":"unsupported");return;}
+    setBusy(true);setMsg(null);
+    try{await setPush(team.name,kind,!on);setOn(!on);}
+    catch(e){setMsg(e.message==="denied"?"denied":"error");}
+    setBusy(false);
+  };
+  const help={ios:"On iPhone, notifications only work in the app on your Home Screen: tap Share ⬆️ → \"Add to Home Screen\", open My Sports Hub from there and tap Turn on again.",
+    unsupported:"This browser can't show notifications. Try Chrome or Safari.",
+    denied:"Notifications are blocked for this app. Allow them in your phone's Settings → Notifications → My Sports Hub, then try again.",
+    error:"Something went wrong – please try again in a minute."};
   return h("div",{style:{padding:"8px 0"}},
     h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
-      h("div",{style:{fontSize:"0.85rem",color:"#fff"}},icon+" "+title,h("div",{style:{fontSize:"0.7rem",color:"#d5deee"}},sub)),
-      h("button",{onClick:()=>set(!on),style:{...btn,flexShrink:0,background:on?"rgba(255,255,255,0.1)":"#e8409a",color:"#fff"}},on?"Turn off":"Turn on")),
-    open&&h("div",{style:{fontSize:"0.78rem",color:"#eef2f8",marginTop:8,lineHeight:1.5}},
-      on?[h("div",{key:1},"1. Install the free app ",h("b",null,"ntfy")," (App Store / Google Play)."),
-          h("div",{key:2},"2. Tap below – or in ntfy tap ＋ and type: ",h("b",{style:{color:"#ff9fd0",wordBreak:"break-all"}},topic)),
-          h("a",{key:3,href:url,target:"_blank",rel:"noopener",style:{display:"inline-block",marginTop:8,...btn,background:"#e8409a",color:"#fff",textDecoration:"none"}},"Subscribe ↗")]
-        :h("div",null,"To stop: open the ntfy app, swipe left on ",h("b",{style:{color:"#ff9fd0",wordBreak:"break-all"}},topic)," and tap Unsubscribe.")));
+      h("div",{style:{fontSize:"0.85rem",color:"#fff"}},icon+" "+title,h("div",{style:{fontSize:"0.7rem",color:"#d5deee"}},on?"✓ On for this phone":sub)),
+      h("button",{onClick:tap,disabled:busy,style:{...btn,flexShrink:0,background:on?"rgba(255,255,255,0.1)":"#e8409a",color:"#fff",opacity:busy?0.6:1}},busy?"…":on?"Turn off":"Turn on")),
+    msg&&h("div",{style:{fontSize:"0.75rem",color:"#eef2f8",marginTop:8,lineHeight:1.5}},help[msg]));
 }
 function NotifyCard({team}){
   return h("div",{style:{background:"rgba(255,255,255,0.06)",borderRadius:12,padding:"4px 12px",marginBottom:12,fontFamily:"Inter,sans-serif"}},
-    h(NotifyRow,{team,topic:startTopic(team.name),icon:"⏰",title:"Start reminder",sub:"About 60 min before the start",store:"start-"}),
+    h(NotifyRow,{team,topic:startTopic(team.name),icon:"⏰",title:"Start reminder",sub:"About 60 min before the start",kind:"start"}),
     team.sport==="Football"&&h("div",{style:{borderTop:"1px solid rgba(255,255,255,0.08)"}},
-      h(NotifyRow,{team,topic:notifyTopic(team.name),icon:"⚽",title:"Live alerts",sub:"Kick-off, goals and full-time",store:""})));
+      h(NotifyRow,{team,topic:notifyTopic(team.name),icon:"⚽",title:"Live alerts",sub:"Kick-off, goals and full-time",kind:"live"})));
 }
 
 // "🎉 X is now available": a team this visitor requested has since been added (found by lookup).

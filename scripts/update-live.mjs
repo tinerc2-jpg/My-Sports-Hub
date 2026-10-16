@@ -39,6 +39,60 @@ else try{
   if(r.ok){prevFull=await r.json();prev=prevFull.teams||{};}
 }catch(e){}
 
+// ── Web Push: notifications straight from the app (no extra app). The VAPID key pair and the key that
+// encrypts the stored subscriptions are derived from the APISPORTS_KEY secret, so nothing new has to be set
+// up and no private key ever leaves Actions. Phones send their subscription (endpoint + the teams and
+// alert types chosen) to an ntfy topic; every full run collects them into live.json.push.subs (encrypted).
+import crypto from "node:crypto";
+const PUSH_SUBS_TOPIC="msh-push-subs-7f3k9q";
+const pushSecret=process.env.APISPORTS_KEY||process.env.PUSH_SECRET||"";
+const b64u=b=>Buffer.from(b).toString("base64url");
+let VAPID=null,SUBS_KEY=null;
+if(pushSecret){
+  const d=Buffer.from(crypto.hkdfSync("sha256",pushSecret,"my-sports-hub","vapid-p256",32));
+  const ec=crypto.createECDH("prime256v1");ec.setPrivateKey(d);
+  VAPID={publicKey:b64u(ec.getPublicKey()),privateKey:b64u(d)};
+  SUBS_KEY=Buffer.from(crypto.hkdfSync("sha256",pushSecret,"my-sports-hub","subs-aes",32));
+}
+const encSubs=list=>{const iv=crypto.randomBytes(12),c=crypto.createCipheriv("aes-256-gcm",SUBS_KEY,iv);const x=Buffer.concat([c.update(JSON.stringify(list)),c.final()]);return b64u(Buffer.concat([iv,c.getAuthTag(),x]));};
+const decSubs=t=>{try{const b=Buffer.from(t,"base64url"),c=crypto.createDecipheriv("aes-256-gcm",SUBS_KEY,b.subarray(0,12));c.setAuthTag(b.subarray(12,28));return JSON.parse(Buffer.concat([c.update(b.subarray(28)),c.final()]).toString());}catch(e){return [];}};
+let pushSubs=[];
+if(VAPID){
+  const pj=LIVE&&existsSync("out/live.json")?JSON.parse(readFileSync("out/live.json","utf8")):prevFull;
+  pushSubs=pj&&pj.push&&pj.push.subs?decSubs(pj.push.subs):[];
+  if(!LIVE){
+    try{
+      const r=await fetch(`https://ntfy.sh/${PUSH_SUBS_TOPIC}/json?poll=1&since=24h`);
+      const msgs=(await r.text()).split("\n").filter(Boolean).map(l=>{try{return JSON.parse(l);}catch(e){return null;}}).filter(m=>m&&m.event==="message");
+      let n=0;
+      for(const m of msgs){let x;try{x=JSON.parse(m.message);}catch(e){continue;}
+        if(!x||!x.sub||!x.sub.endpoint||!/^https:\/\//.test(x.sub.endpoint)||!x.sub.keys)continue;
+        const old=pushSubs.find(s=>s.sub.endpoint===x.sub.endpoint);
+        if(old&&(old.ts||0)>=(x.ts||0))continue;
+        const teams=(Array.isArray(x.teams)?x.teams:[]).slice(0,60).map(t=>({n:String(t.n||"").slice(0,80),start:!!t.start,live:!!t.live})).filter(t=>t.n&&(t.start||t.live));
+        pushSubs=pushSubs.filter(s=>s.sub.endpoint!==x.sub.endpoint);
+        if(teams.length)pushSubs.push({sub:{endpoint:x.sub.endpoint,keys:{p256dh:String(x.sub.keys.p256dh),auth:String(x.sub.keys.auth)}},teams,ts:x.ts||m.time*1000});
+        n++;
+      }
+      console.log(`push: ${pushSubs.length} phones subscribed (${n} updates from ${msgs.length} messages)`);
+    }catch(e){console.log("push subs: "+e.message);}
+  }
+}
+let _webpush=null;
+async function sendPush(name,kind,payload){
+  if(!VAPID)return;
+  const to=pushSubs.filter(s=>s.teams.some(t=>t.n===name&&t[kind]));
+  if(!to.length)return;
+  if(!_webpush){_webpush=(await import("web-push")).default;_webpush.setVapidDetails("https://tinerc2-jpg.github.io/My-Sports-Hub/",VAPID.publicKey,VAPID.privateKey);}
+  let ok=0,gone=0;
+  for(const s of to){
+    try{await _webpush.sendNotification(s.sub,JSON.stringify(payload),{TTL:3600,urgency:"high"});ok++;}
+    catch(e){if(e.statusCode===404||e.statusCode===410){s.gone=true;gone++;}else console.log("push "+name+": HTTP "+(e.statusCode||"")+" "+String(e.body||e.message).slice(0,120));}
+  }
+  pushSubs=pushSubs.filter(s=>!s.gone);
+  console.log(`push ${name} (${kind}): ${ok} sent`+(gone?`, ${gone} expired removed`:""));
+}
+
 // ── API-Sports handball standings (key in the APISPORTS_KEY repo secret; never shipped to the app) ──
 // Free plan: 100 requests/day. We refresh at most hourly (2 requests: leagues + standings) ≈ 48/day.
 const APISPORTS_KEY=process.env.APISPORTS_KEY;
@@ -905,6 +959,7 @@ for(const [name,e] of Object.entries(teams)){
       body:JSON.stringify({topic:api.notifyTopic(name),title,message:body,tags:tags.split(","),click:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"})});
     console.log("notify "+name+": "+title+" (HTTP "+r.status+")");}
   catch(err){console.log("notify "+name+": "+err.message);}
+  await sendPush(name,"live",{title,body,tag:"live-"+name,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"});
 }
 // Start reminders (all sports): about 60 min before the next game / race / round, once per start time
 // (runs every 15 min and are often late, so anything 10–70 min ahead counts).
@@ -921,9 +976,10 @@ for(const [name,e] of Object.entries(teams)){
       body:JSON.stringify({topic:api.startTopic(name),title:"⏰ "+t.shortName+" starter kl. "+hm,message:what+" starter om "+Math.round(left)+" min"+tv,tags:["alarm_clock"],click:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"})});
     console.log("notify "+name+": start reminder "+hm+" (HTTP "+r.status+")");}
   catch(err){console.log("notify "+name+": "+err.message);}
+  await sendPush(name,"start",{title:"⏰ "+t.shortName+" starter kl. "+hm,body:what+" starter om "+Math.round(left)+" min"+tv,tag:"start-"+name,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"});
 }
 mkdirSync("out",{recursive:true});
-writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage}));
+writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length}:null}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
 const liveNow=Object.entries(teams).filter(([,e])=>needsLive(e)).map(([n,e])=>n+(e.data.liveGame?" "+e.data.liveGame.score:" (kick-off soon)"));
 if(liveNow.length){writeFileSync("out/live-needed",liveNow.join("\n"));console.log("live: "+liveNow.join(" · "));}
