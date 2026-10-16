@@ -947,7 +947,7 @@ let _snap=null,_snapTs=0,_snapApiBlocked=0;
 let EXTRA=lsGet("msh-extra")||[];
 const SNAPSHOT_API="https://api.github.com/repos/tinerc2-jpg/My-Sports-Hub/contents/live.json?ref=live-data";
 // A game is on (or about to start) for this cached entry: refresh fast and read the freshest snapshot.
-function liveWindow(e){const d=e&&e.data,k=d&&d.nextGame&&d.nextGame.ts,now=Date.now();return !!(d&&(d.liveGame||(k&&now>k-15*60e3&&now<k+150*60e3)));}
+function liveWindow(e){const d=e&&e.data,k=d&&d.nextGame&&d.nextGame.ts,now=Date.now();return !!(d&&(d.liveGame||(k&&now>k-(d.trot?120:15)*60e3&&now<k+150*60e3)));}
 async function getSnapshot(fresh){
   if(_snap&&Date.now()-_snapTs<(fresh?75*1000:5*60*1000))return _snap;
   // During live games the robot republishes every minute, but raw.githubusercontent caches for ~5 min,
@@ -1222,12 +1222,13 @@ function TrotRound({t}){
           (w=>w?h("div",{style:{fontSize:"0.68rem",color:"#ff9fd0",fontWeight:600}},"🏁 Vinder: "+w.n+" "+w.h+(w.km?" · km "+w.km:"")):h("div",{style:{fontSize:"0.65rem",color:"#d5deee"}},new Date(l.ts).toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"})+" · "+l.horses.filter(x=>!x.x).length+" heste"))(l.horses.find(x=>x.pl===1))),
         h("span",{style:{color:"#ff9fd0"}},open===l.leg?"▾":"›")),
       open===l.leg&&h("div",{style:{padding:"0 12px 10px"}},
-        h("div",{style:{fontSize:"0.65rem",color:"#d5deee",marginBottom:6}},l.name),
+        h("div",{style:{fontSize:"0.65rem",color:"#d5deee",marginBottom:6}},l.name+" · odds (hvid) og % af "+t.bt+"-spillet (pink)"),
         l.horses.map(x=>h("div",{key:x.n,style:{display:"flex",alignItems:"center",gap:8,padding:"5px 0",borderTop:"1px solid rgba(255,255,255,0.06)",opacity:x.x?0.4:1}},
           h("div",{style:{minWidth:22,fontWeight:700,fontSize:"0.8rem"}},x.n),
           h("div",{style:{flex:1,minWidth:0}},
             h("div",{style:{fontSize:"0.78rem",textDecoration:x.x?"line-through":"none"}},x.h),
             h("div",{style:{fontSize:"0.62rem",color:"#d5deee"}},(x.d||"")+(x.tr?" · tr. "+x.tr:""))),
+          x.wo&&!x.x&&!x.pl&&h("div",{style:{fontSize:"0.72rem",fontWeight:700,color:"#fff",minWidth:36,textAlign:"right"}},x.wo.toLocaleString("da-DK",{maximumFractionDigits:2})),
           x.pct!=null&&!x.x&&h("div",{style:{fontSize:"0.7rem",fontWeight:600,color:"#ff9fd0",minWidth:34,textAlign:"right"}},x.pct+"%")))
       ))))
   );
