@@ -41,18 +41,29 @@ else try{
 
 // TheSportsDB (free key): the team's next events with exact UTC timestamps; id cached in the snapshot.
 const _tsdbSearch={};
+const kickoffDebug=[];
+// TheSportsDB's free key allows ~30 requests/min and the robot also uses it for handball: wait and retry on 429.
+async function tsdbGet(url){
+  for(let i=0;i<4;i++){
+    const r=await fetch(url);
+    if(r.status===429){await new Promise(res=>setTimeout(res,3000*(i+1)));continue;}
+    if(!r.ok){kickoffDebug.push(url.split("/").pop()+" HTTP "+r.status);return null;}
+    return r.json();
+  }
+  kickoffDebug.push(url.split("/").pop()+" 429 x4");return null;
+}
 async function tsdbKickoff(t,ts,id){
   const T="https://www.thesportsdb.com/api/v1/json/3";
   try{
     if(!id){
       const q=t.name.replace(/\b(FC|CF|AFC)\b/g,"").trim();
-      const j=await (_tsdbSearch[q]=_tsdbSearch[q]||fetch(T+"/searchteams.php?t="+encodeURIComponent(q)).then(r=>r.ok?r.json():null).catch(()=>null));
+      const j=await (_tsdbSearch[q]=_tsdbSearch[q]||tsdbGet(T+"/searchteams.php?t="+encodeURIComponent(q)));
       const tm=((j&&j.teams)||[]).find(x=>x.strSport==="Soccer");
-      if(!tm)return null;id=tm.idTeam;
+      if(!tm){kickoffDebug.push(t.name+": no TheSportsDB team for "+q);return null;}id=tm.idTeam;
     }
-    const r=await fetch(T+"/eventsnext.php?id="+id);if(!r.ok)return {id};
-    const j=await r.json();
+    const j=await tsdbGet(T+"/eventsnext.php?id="+id);if(!j)return {id};
     const e=((j&&j.events)||[]).map(e=>({e,ts:Date.parse((e.strTimestamp||(e.dateEvent+"T"+(e.strTime||"00:00:00"))).replace(/\+00:00$/,"")+"Z")})).find(x=>x.ts&&Math.abs(x.ts-ts)<36*3600e3);
+    kickoffDebug.push(t.name+": "+(e?e.e.strEvent+" "+new Date(e.ts).toISOString():"no event near "+new Date(ts).toISOString()+" in "+((j&&j.events)||[]).length));
     return e?{id,ts:e.ts,name:e.e.strEvent}:{id};
   }catch(err){console.log("    TheSportsDB kick-off: "+err.message);return null;}
 }
@@ -1049,7 +1060,7 @@ for(const [name,e] of Object.entries(teams)){
   await sendPush(name,"start",{title:"⏰ "+t.shortName+" starter kl. "+hm,body:what+" starter om "+Math.round(left)+" min"+tv+lu,tag:"start-"+name,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"});
 }
 mkdirSync("out",{recursive:true});
-writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length}:null}));
+writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,kickoffDebug:kickoffDebug.slice(0,40),push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length}:null}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
 const liveNow=Object.entries(teams).filter(([,e])=>needsLive(e)).map(([n,e])=>n+(e.data.liveGame?" "+e.data.liveGame.score:" (kick-off soon)"));
 if(liveNow.length){writeFileSync("out/live-needed",liveNow.join("\n"));console.log("live: "+liveNow.join(" · "));}
