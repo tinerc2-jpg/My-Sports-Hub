@@ -1059,6 +1059,13 @@ for(const [name,e] of Object.entries(teams)){
   catch(err){console.log("notify "+name+": "+err.message);}
   await sendPush(name,"start",{title:"⏰ "+t.shortName+" starter kl. "+hm,body:what+" starter om "+Math.round(left)+" min"+tv+lu,tag:"start-"+name,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"});
 }
+// TEMP probe: Danish sites for kick-off times / TV channels (Betis–Barcelona 17 Oct 18:30).
+if(!LIVE){
+  const urls=[["bt","https://www.bt.dk/sport/livescore"],["eb","https://ekstrabladet.dk/sport/livescore/"],["tv2","https://sport.tv2.dk/fodbold/kampprogram"],["tv2b","https://sport.tv2.dk/tv-guide"],
+    ["tvtid","https://tvtid.tv2.dk/"],["tvtidapi","https://tvtid-api.api.tv2.dk/api/tvtid/v1/epg/dayviews/2026-10-17"],["dr","https://www.dr.dk/sporten/resultater/fodbold"],["disney","https://www.disneyplus.com/da-dk/espn"],["prime","https://www.primevideo.com/region/eu/storefront/sports"],
+    ["viaplay","https://viaplay.dk/sport/fodbold"],["tvguide","https://www.tvguide.dk/sport"]];
+  for(const [n,u] of urls){try{const r=await fetch(u);const t=await r.text();const i=t.search(/Betis/i);kickoffDebug.unshift(`PROBE ${n} HTTP ${r.status} len ${t.length} `+(i>=0?"BETIS: "+t.slice(Math.max(0,i-150),i+200).replace(/\s+/g," "):"no Betis"));}catch(e){kickoffDebug.unshift(`PROBE ${n}: ${e.message}`);}}
+}
 mkdirSync("out",{recursive:true});
 writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,kickoffDebug:kickoffDebug.slice(0,40),push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length}:null}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
