@@ -1059,26 +1059,6 @@ for(const [name,e] of Object.entries(teams)){
   catch(err){console.log("notify "+name+": "+err.message);}
   await sendPush(name,"start",{title:"⏰ "+t.shortName+" starter kl. "+hm,body:what+" starter om "+Math.round(left)+" min"+tv+lu,tag:"start-"+name,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"});
 }
-// TEMP probe: how tvtid.tv2.dk loads its programme guide (for Danish TV channels).
-if(!LIVE){
-  try{
-    const r=await fetch("https://tvtid.tv2.dk/");const t=await r.text();
-    const urls=[...new Set((t.match(/https?:\/\/[a-z0-9.-]*(api|tvtid)[a-z0-9./_-]*/gi)||[]))].slice(0,30);
-    const nd=(t.match(/<script id="__NEXT_DATA__"[^>]*>([\s\S]{0,1500})/)||[])[1]||"";
-    const scripts=[...new Set((t.match(/src="([^"]+\.js)"/g)||[]))].slice(0,15);
-    kickoffDebug.unshift("PROBE tvtid urls: "+urls.join(" | "));
-    kickoffDebug.unshift("PROBE tvtid next: "+nd.replace(/\s+/g," ").slice(0,1200));
-    kickoffDebug.unshift("PROBE tvtid scripts: "+scripts.join(" "));
-    // look inside the app bundles for API paths
-    for(const sc of scripts.slice(0,8)){
-      const u=sc.slice(5,-1),abs=u.startsWith("http")?u:"https://tvtid.tv2.dk"+(u.startsWith("/")?"":"/")+u;
-      try{const js=await (await fetch(abs)).text();const m=[...new Set(js.match(/["'`][^"'`]*(epg|schedule|program|dayview|broadcast)[^"'`]{0,80}["'`]/gi)||[])].slice(0,12);if(m.length)kickoffDebug.unshift("PROBE js "+abs.split("/").pop()+": "+m.join(" ").slice(0,900));}catch(e){}
-    }
-    for(const u of ["https://tvtid-api.api.tv2.dk/api/tvtid/v1/epg/dayviews/2026-10-17","https://tvtid-api.api.tv2.dk/api/tvtid/v1/schedules/2026-10-17","https://tvtid.tv2.dk/api/tvtid/v1/epg/dayviews/2026-10-17","https://tvtid-api.api.tv2.dk/api/tvtid/v1/epg/channels"]){
-      try{const r2=await fetch(u);const x=await r2.text();kickoffDebug.unshift("PROBE "+u.replace("https://","")+" HTTP "+r2.status+": "+x.slice(0,300));}catch(e){}
-    }
-  }catch(e){kickoffDebug.unshift("PROBE tvtid: "+e.message);}
-}
 mkdirSync("out",{recursive:true});
 writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,kickoffDebug:kickoffDebug.slice(0,40),push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length}:null}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
