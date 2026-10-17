@@ -1059,6 +1059,14 @@ for(const [name,e] of Object.entries(teams)){
   catch(err){console.log("notify "+name+": "+err.message);}
   await sendPush(name,"start",{title:"⏰ "+t.shortName+" starter kl. "+hm,body:what+" starter om "+Math.round(left)+" min"+tv+lu,tag:"start-"+name,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"});
 }
+// TEMP probe: other kick-off sources for Betis–Barcelona (17 Oct, real 16:30 UTC).
+if(!LIVE){
+  const probe=async(n,u,f)=>{try{const r=await fetch(u);const t=await r.text();let x="";try{x=f(JSON.parse(t));}catch(e){x="parse: "+t.slice(0,120);}kickoffDebug.unshift("PROBE "+n+" HTTP "+r.status+": "+x);}catch(e){kickoffDebug.unshift("PROBE "+n+": "+e.message);}};
+  await probe("espn core","https://sports.core.api.espn.com/v2/sports/soccer/leagues/esp.1/events/401882846",j=>j.date+" "+(j.timeValid));
+  await probe("espn summary","https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/summary?event=401882846",j=>j.header&&j.header.competitions[0].date+" valid "+j.header.competitions[0].timeValid);
+  await probe("fotmob","https://www.fotmob.com/api/data/matches?date=20261017",j=>JSON.stringify(j).match(/.{0,200}Betis.{0,200}/)?.[0]||"no Betis");
+  await probe("fotmob2","https://www.fotmob.com/api/matches?date=20261017",j=>JSON.stringify(j).match(/.{0,200}Betis.{0,200}/)?.[0]||"no Betis");
+}
 mkdirSync("out",{recursive:true});
 writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,kickoffDebug:kickoffDebug.slice(0,40),push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length}:null}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
