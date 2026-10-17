@@ -59,8 +59,8 @@ async function fotmobKickoff(t,g){
       const meH=names.some(n=>fmSame(n,h)),meA=names.some(n=>fmSame(n,a));
       if(!(meH||meA))continue;
       const oppOk=fmSame(opp,meH?a:h);
-      if(oppOk)return {ts,name:h+" – "+a};
-      if(!best)best={ts,name:h+" – "+a,weak:1};
+      if(oppOk)return {ts,name:h+" – "+a,home:meH};
+      if(!best)best={ts,name:h+" – "+a,home:meH,weak:1};
     }
   }
   // A club plays once within ±12 h, so our own name is enough when the opponent is spelled differently ("OB" vs "Odense Boldklub").
@@ -932,6 +932,11 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
           const k=await fotmobKickoff(t,g);
           if(k&&Math.abs(k.ts-g.ts)>=60e3){console.log(`    kick-off fix ${t.name}: ESPN ${new Date(g.ts).toISOString()} → FotMob ${new Date(k.ts).toISOString()} (${k.name})`);kickoffDebug.push(t.name+": ESPN "+new Date(g.ts).toISOString()+" → FotMob "+new Date(k.ts).toISOString());g.ts=k.ts;g.timeFrom="FotMob";}
           else if(k)console.log(`    kick-off ok ${t.name}: ESPN and FotMob agree`);
+          // Home/away second opinion: FotMob's home team must match ESPN's "(H)"/"(A)" tag.
+          if(k&&/\((H|A)\)/.test(g.opponent||"")){
+            const espnHome=/\(H\)/.test(g.opponent);
+            if(espnHome!==k.home){kickoffDebug.push(t.name+": HOME/AWAY fix – ESPN "+(espnHome?"home":"away")+", FotMob "+k.name);console.log(`    home/away fix ${t.name}: FotMob says ${k.name}`);g.opponent=g.opponent.replace(/\((H|A)\)/,k.home?"(H)":"(A)");}
+          }
           else kickoffDebug.push(t.name+": not found on FotMob ("+g.opponent+")");
         }
       }catch(e){console.log(`    kick-off check ${t.name}: ${e.message}`);}
