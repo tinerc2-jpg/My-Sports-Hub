@@ -524,6 +524,10 @@ function espnStanding(j,id,withPoints){
 // European cups: ESPN soccer team ids are the same in every competition, so a club's
 // Champions League / Europa League games come from the same id under these leagues.
 const ESPN_EURO_CUPS=[["uefa.champions","CL"],["uefa.europa","EL"],["uefa.europa.conf","ECL"]];
+// Where football is shown in Denmark (2026/27, per league; from Danish TV guides, owner: Disney+, Viaplay, Prime).
+// ESPN's own "tv" field lists US channels, which don't help Danish viewers.
+const DK_TV={"eng.1":"Viaplay / TV3+ (some Saturdays Prime Video)","esp.1":"Disney+","ger.1":"Viaplay / TV3+","ita.1":"TV 2 Play","den.1":"TV 2 or Viaplay",
+  "uefa.champions":"Viaplay","uefa.europa":"Disney+","uefa.europa.conf":"Disney+","esp.copa_del_rey":"Disney+"};
 async function fetchEspn(src){
   const sched=lg=>ESPN+"/site/v2/sports/"+src.sp+"/"+lg+"/teams/"+src.id+"/schedule";
   const base=sched(src.lg);
@@ -552,7 +556,7 @@ async function fetchEspn(src){
   return{source:"ESPN",
     // ev/lg/sp/tid let the app (and the robot) load the match statistics for a result.
     recentResults:done.slice(0,5).map(e=>({opponent:e.opponent,score:e.score,result:e.result,date:fmtShort(e.d),ev:e.id,lg:e.lg,sp:src.sp,tid:src.id})),
-    nextGame:next?{opponent:next.opponent,date:fmtDay(next.d),time:fmtTime(next.d),tv:next.tv||"–",ts:next.d.getTime(),ev:next.id,lg:next.lg,sp:src.sp,tid:src.id}:upcomingKnown?OFF_SEASON:null,
+    nextGame:next?{opponent:next.opponent,date:fmtDay(next.d),time:fmtTime(next.d),tv:(soccer&&DK_TV[next.lg])||next.tv||"–",ts:next.d.getTime(),ev:next.id,lg:next.lg,sp:src.sp,tid:src.id}:upcomingKnown?OFF_SEASON:null,
     liveGame:live?{opponent:live.opponent,score:live.score||"0–0",detail:live.detail||"Live",ev:live.id,lg:live.lg,sp:src.sp,tid:src.id}:null,
     standing:espnStanding(table,src.id,soccer||src.sp==="hockey")};
 }
