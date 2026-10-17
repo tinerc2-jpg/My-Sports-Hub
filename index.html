@@ -1223,7 +1223,7 @@ function ResultPill({r,onClick}){
   const c=RC[r.result]||"#888",l=r.label||RL[r.result]||r.result; // golf rows carry their finishing position, e.g. "T2"
   return h(onClick?"button":"div",{onClick,style:{display:"flex",alignItems:"center",gap:10,background:"rgba(255,255,255,0.07)",borderRadius:10,padding:"9px 12px",border:"none",borderLeft:"3px solid "+c,width:"100%",textAlign:"left",color:"inherit",font:"inherit",cursor:onClick?"pointer":"default"}},
     h("div",{style:{fontSize:"0.58rem",fontWeight:700,color:c,fontFamily:"Inter,sans-serif",minWidth:28}},l),
-    h("div",{style:{flex:1,fontSize:"0.78rem",color:"#ffffff",fontFamily:"Inter,sans-serif"}},r.opponent),
+    h("div",{style:{flex:1,fontSize:"0.78rem",color:"#ffffff",fontFamily:"Inter,sans-serif"}},String(r.opponent||"").replace("(A)","(away)").replace("(H)","(home)")),
     h("div",{style:{fontSize:"0.78rem",fontWeight:600,color:"#fff",fontFamily:"'Barlow Condensed',sans-serif"}},r.score),
     h("div",{style:{fontSize:"0.58rem",opacity:0.75,minWidth:36,textAlign:"right",fontFamily:"Inter,sans-serif"}},r.date),
     onClick&&h("span",{style:{color:"#ff9fd0",fontSize:"1rem",marginLeft:-4}},"›")
@@ -1509,7 +1509,8 @@ function NextGame({team}){
 
   return h("div",{style:{background:"linear-gradient(135deg,"+team.color+"22,"+team.accent+"33)",border:"1px solid "+team.color+"44",borderRadius:14,padding:14}},
     h("div",{style:{fontSize:"0.55rem",letterSpacing:"2px",opacity:0.8,fontFamily:"Inter,sans-serif",textTransform:"uppercase",marginBottom:5}},"📅 Next Up"),
-    h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.05rem",fontWeight:700,color:"#fff",marginBottom:5}},(team.sport==="Trav"?g.opponent:team.shortName+" vs "+g.opponent)),
+    h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.05rem",fontWeight:700,color:"#fff",marginBottom:5}},team.sport==="Trav"?g.opponent:(f=>f.title+(f.tag?" \xB7 "+f.tag:""))(fixture(team,g.opponent))),
+    team.sport!=="Trav"&&fixture(team,g.opponent).where&&h("div",{style:{fontSize:"0.7rem",fontWeight:700,color:fixture(team,g.opponent).away?"#ffd27a":"#9fe8b0",marginBottom:6,fontFamily:"Inter,sans-serif"}},(fixture(team,g.opponent).away?"✈️ ":"🏟️ ")+fixture(team,g.opponent).where),
     h("div",{style:{display:"flex",gap:12,flexWrap:"wrap",marginBottom:10}},
       h("span",{style:{fontSize:"0.7rem",color:"#d5deee",fontFamily:"Inter,sans-serif"}},"🗓️ "+g.date),
       h("span",{style:{fontSize:"0.7rem",color:"#d5deee",fontFamily:"Inter,sans-serif"}},"🕐 "+g.time),
@@ -1522,14 +1523,22 @@ function NextGame({team}){
   );
 }
 
+// Home team first, as in football everywhere: "(A)" = away game → "Real Betis – Barça", score home–away.
+// ESPN rows carry "(H)"/"(A)" after the opponent and the score as our goals first.
+function fixture(team,opp,score){
+  const o=String(opp||""),m=/\((H|A)\)/.exec(o),away=!!m&&m[1]==="A",tag=(o.match(/\s·\s(.+)$/)||[])[1]||"";
+  const name=o.replace(/\s*\((H|A)\)/,"").replace(/\s·\s.+$/,"").trim(),me=team.shortName||team.name;
+  const sc=score&&away&&/^\d+\s*[–-]\s*\d+$/.test(score)?score.split(/\s*[–-]\s*/).reverse().join("–"):score;
+  return{title:!m?me+" vs "+name:away?name+" – "+me:me+" – "+name,score:sc,where:!m?"":away?"Away game":"Home game",away,tag,name};
+}
 function LiveGame({team}){
   const g=team.liveGame;if(!g)return null;
   return h("div",{style:{background:"linear-gradient(135deg,rgba(239,68,68,0.18),rgba(239,68,68,0.06))",border:"1px solid rgba(239,68,68,0.45)",borderRadius:14,padding:14,marginBottom:8}},
     h("div",{style:{display:"flex",alignItems:"center",gap:6,fontSize:"0.58rem",letterSpacing:"2px",color:"#f87171",fontFamily:"Inter,sans-serif",textTransform:"uppercase",fontWeight:700,marginBottom:6}},
       h("span",{className:"live-dot"}),"Live \xB7 "+g.detail),
     h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
-      h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.05rem",fontWeight:700,color:"#fff"}},(team.sport==="Trav"?g.opponent:team.shortName+" vs "+g.opponent)),
-      h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.6rem",fontWeight:900,color:"#fff"}},g.score)
+      h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.05rem",fontWeight:700,color:"#fff"}},team.sport==="Trav"?g.opponent:fixture(team,g.opponent).title),
+      h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.6rem",fontWeight:900,color:"#fff"}},team.sport==="Trav"?g.score:fixture(team,g.opponent,g.score).score)
     )
   );
 }
@@ -1814,7 +1823,8 @@ function Welcome({teams,onAdd,onPick,onDone}){
 // Home screen tile: one favourite with its table place, last result (or live score) and next game.
 function TeamTile({t,onClick}){
   const s=t.standing||{},r=(t.recentResults||[])[0],g=t.nextGame,lg=t.liveGame;
-  const clean=x=>String(x||"").replace(/\s*\((H|A)\)/g,"").replace(/\s*\([^)]*\)/g,"").trim();
+  // "at Real Betis" = away, "vs X" = home; the score stays ours first on the tile.
+  const clean=x=>{const a=/\(A\)/.test(x||""),hm=/\(H\)/.test(x||"");const n=String(x||"").replace(/\s*\((H|A)\)/g,"").replace(/\s*\([^)]*\)/g,"").trim();return a?"at "+n:hm?"vs "+n:n;};
   const line={fontSize:"0.78rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"};
   const next=g&&g.ts&&g.ts>Date.now()-3*3600e3?(()=>{const d=new Date(g.ts);return d.toLocaleDateString("en-GB",{weekday:"short",timeZone:TZ})+" "+(g.time!=="–"?fmtTime(d):fmtShort(d))+" \xB7 "+clean(g.opponent);})():null;
   return h("button",{onClick,style:{display:"flex",flexDirection:"column",gap:5,minWidth:0,minHeight:122,padding:12,borderRadius:16,cursor:"pointer",textAlign:"left",color:"#fff",font:"inherit",
@@ -1938,7 +1948,7 @@ function App(){
     const offKeywords=["season complete","off-season","pre-season","eliminated","offseason"];
     const isOff=g&&offKeywords.some(k=>g.opponent.toLowerCase().includes(k));
     const nextLine=g&&!isOff
-      ? "📅 Next: "+(team.sport==="Trav"?g.opponent:team.shortName+" vs "+g.opponent)+" — "+g.date+" "+g.time+" ("+g.tv+")"
+      ? "📅 Next: "+(team.sport==="Trav"?g.opponent:fixture(team,g.opponent).title)+" — "+g.date+" "+g.time+" ("+g.tv+")"
       : "🏆 Season complete — "+team.league;
     const recent=team.recentResults&&team.recentResults.length>0
       ?team.recentResults.slice(0,3).map(r=>(r.result==="W"?"✅":r.result==="L"?"❌":"➖")+" "+r.opponent+" "+r.score).join("\n"):"";
