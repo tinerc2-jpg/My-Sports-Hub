@@ -63,7 +63,8 @@ async function fotmobKickoff(t,g){
       if(!best)best={ts,name:h+" – "+a,weak:1};
     }
   }
-  return best&&!best.weak?best:null;
+  // A club plays once within ±12 h, so our own name is enough when the opponent is spelled differently ("OB" vs "Odense Boldklub").
+  return best;
 }
 
 // League scoreboard per day (cached per run): fresher kick-off times than a team's schedule.
