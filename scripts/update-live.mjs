@@ -39,6 +39,19 @@ else try{
   if(r.ok){prevFull=await r.json();prev=prevFull.teams||{};}
 }catch(e){}
 
+// League scoreboard per day (cached per run): fresher kick-off times than a team's schedule.
+const _sb={};
+async function espnScoreboardEvent(sp,lg,ev,ts){
+  const days=[-1,0,1].map(o=>new Date(ts+o*864e5).toISOString().slice(0,10).replace(/-/g,""));
+  for(const d of days){
+    const k=sp+"/"+lg+"/"+d;
+    if(!(k in _sb))_sb[k]=fetch(`https://site.api.espn.com/apis/site/v2/sports/${sp}/${lg}/scoreboard?dates=${d}`).then(r=>r.ok?r.json():null).catch(()=>null);
+    const j=await _sb[k];const e=j&&(j.events||[]).find(x=>String(x.id)===String(ev));
+    if(e)return e;
+  }
+  return null;
+}
+
 // ── Web Push: notifications straight from the app (no extra app). The VAPID key pair and the key that
 // encrypts the stored subscriptions are derived from the APISPORTS_KEY secret, so nothing new has to be set
 // up and no private key ever leaves Actions. Phones send their subscription (endpoint + the teams and
@@ -876,6 +889,15 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
         catch(e){none++;console.log(`    match stats ${key}:`,e.message);}
       }
       if(got+reused+none)console.log(`    match stats: ${got} new, ${reused} reused, ${none} without stats`+(got?" · e.g. "+JSON.stringify(data.recentResults.find(r=>r.stats).stats).slice(0,160):""));
+    }
+    // Kick-off check: ESPN's team schedule can lag behind a rescheduled time (Betis–Barcelona showed 18:00, real
+    // kick-off 18:30). The league scoreboard for that day is fresher, so its time wins for games within 4 days.
+    if(data&&data.nextGame&&data.nextGame.ev&&data.nextGame.sp&&data.nextGame.ts&&data.nextGame.ts-Date.now()<4*864e5){
+      const g=data.nextGame;
+      try{
+        const ev=await espnScoreboardEvent(g.sp,g.lg,g.ev,g.ts);
+        if(ev&&ev.date){const ts=Date.parse(ev.date);if(ts&&Math.abs(ts-g.ts)>=60e3){console.log(`    kick-off fix ${t.name}: schedule ${new Date(g.ts).toISOString()} → scoreboard ${new Date(ts).toISOString()}`);g.ts=ts;}}
+      }catch(e){console.log(`    kick-off check ${t.name}: ${e.message}`);}
     }
     // Line-ups (football): from ~75 min before kick-off until full-time; kept once found (re-read while live).
     if(data&&t.sport==="Football"){
