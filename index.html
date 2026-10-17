@@ -407,9 +407,11 @@ function nameMatch(aliases,names){
   if(aliases.some(a=>a.length>=4&&ns.some(n=>n.length>=4&&(n.includes(a)||a.includes(n)))))return 1;
   return 0;
 }
-function fmtDay(d){return d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short"});}
-function fmtShort(d){return d.toLocaleDateString("en-GB",{day:"numeric",month:"short"});}
-function fmtTime(d){return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit"});}
+// Always Danish time (CET/CEST), also on the robot (which runs in UTC) and on phones set to another time zone.
+const TZ="Europe/Copenhagen";
+function fmtDay(d){return d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",timeZone:TZ});}
+function fmtShort(d){return d.toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:TZ});}
+function fmtTime(d){return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:TZ});}
 function timeAgo(ts){const m=Math.round((Date.now()-ts)/60000);if(m<1)return "just now";if(m<60)return m+" min ago";const hr=Math.round(m/60);return hr<24?hr+"h ago":Math.round(hr/24)+"d ago";}
 const SAVED=" \xB7 saved May 2026";
 const OFF_SEASON={opponent:"No upcoming fixtures - off-season",date:"Off-season",time:"–",tv:"–"};
@@ -1807,7 +1809,7 @@ function TeamTile({t,onClick}){
   const s=t.standing||{},r=(t.recentResults||[])[0],g=t.nextGame,lg=t.liveGame;
   const clean=x=>String(x||"").replace(/\s*\((H|A)\)/g,"").replace(/\s*\([^)]*\)/g,"").trim();
   const line={fontSize:"0.78rem",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis"};
-  const next=g&&g.ts&&g.ts>Date.now()-3*3600e3?(()=>{const d=new Date(g.ts);return d.toLocaleDateString("en-GB",{weekday:"short"})+" "+(g.time!=="–"?fmtTime(d):fmtShort(d))+" \xB7 "+clean(g.opponent);})():null;
+  const next=g&&g.ts&&g.ts>Date.now()-3*3600e3?(()=>{const d=new Date(g.ts);return d.toLocaleDateString("en-GB",{weekday:"short",timeZone:TZ})+" "+(g.time!=="–"?fmtTime(d):fmtShort(d))+" \xB7 "+clean(g.opponent);})():null;
   return h("button",{onClick,style:{display:"flex",flexDirection:"column",gap:5,minWidth:0,minHeight:122,padding:12,borderRadius:16,cursor:"pointer",textAlign:"left",color:"#fff",font:"inherit",
       background:"linear-gradient(135deg,"+t.color+"cc,#1d3360)",border:lg?"2px solid #ef4444":"1px solid rgba(255,255,255,0.14)",textShadow:"0 1px 2px rgba(0,0,0,0.45)"}},
     h("div",{style:{display:"flex",alignItems:"center",gap:8,minWidth:0}},
