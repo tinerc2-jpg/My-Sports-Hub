@@ -27,7 +27,7 @@ return {DB,notifyTopic,startTopic,fetchTeamLive,fetchEspnSummary,fetchEspnLineup
 const LIVE=process.argv.includes("--live");
 const NOW=Date.now();
 // Trav: from 2 h before the first leg (odds and pool % move most then).
-function needsLive(e){const d=e&&e.data,k=d&&d.nextGame&&d.nextGame.ts;return !!(d&&(d.liveGame||(k&&NOW>k-(d.trot?120:15)*60e3&&NOW<k+150*60e3)));}
+function needsLive(e){const d=e&&e.data,k=d&&d.nextGame&&!d.nextGame.tba&&d.nextGame.ts;return !!(d&&(d.liveGame||(k&&NOW>k-(d.trot?120:15)*60e3&&NOW<k+150*60e3)));}
 let prev={},prevFull=null;
 let prevExtra=null;
 if(LIVE&&existsSync("out/live.json")){const j=JSON.parse(readFileSync("out/live.json","utf8"));prev=j.teams||{};prevExtra=j.leagueTeams||[];}
@@ -1047,7 +1047,7 @@ for(const [name,e] of Object.entries(teams)){
     console.log("notify "+name+": line-up");
     continue;
   }
-  if(!ts||d.liveGame||d.preNotified===ts||left<10||left>70)continue;
+  if(!ts||g.tba||d.liveGame||d.preNotified===ts||left<10||left>70)continue; // no reminder for a time that isn't set yet
   d.preNotified=ts;
   const hm=new Date(ts).toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"});
   const what=t.sport==="Trav"?g.opponent:t.shortName+" vs "+g.opponent,tv=g.tv&&g.tv!=="–"&&g.tv!=="-"?" · TV: "+g.tv:"";
