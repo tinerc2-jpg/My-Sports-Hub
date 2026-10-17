@@ -941,6 +941,13 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
         }
       }catch(e){console.log(`    kick-off check ${t.name}: ${e.message}`);}
     }
+    // Live stats (ESPN games): summary of the game in progress, at most once a minute (the live loop runs every ~15 s).
+    if(data&&data.liveGame&&data.liveGame.ev&&data.liveGame.sp){
+      const lg=data.liveGame,pg=prev[t.name]&&prev[t.name].data&&prev[t.name].data.liveGame;
+      if(pg&&pg.ev===lg.ev&&pg.stats&&Date.now()-(pg.statsTs||0)<60e3){lg.stats=pg.stats;lg.statsTs=pg.statsTs;}
+      else{try{const st=await api.fetchEspnSummary(lg.sp,lg.lg,lg.ev,lg.tid);if(st){lg.stats=st;lg.statsTs=Date.now();}else if(pg&&pg.ev===lg.ev&&pg.stats){lg.stats=pg.stats;lg.statsTs=pg.statsTs;}}
+        catch(e){console.log(`    live stats ${t.name}: ${e.message}`);if(pg&&pg.ev===lg.ev&&pg.stats){lg.stats=pg.stats;lg.statsTs=pg.statsTs;}}}
+    }
     // Line-ups (football): from ~75 min before kick-off until full-time; kept once found (re-read while live).
     if(data&&t.sport==="Football"){
       const g=data.liveGame&&data.liveGame.ev?data.liveGame:data.nextGame,pl=prev[t.name]&&prev[t.name].data&&prev[t.name].data.lineup;
