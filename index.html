@@ -819,7 +819,10 @@ async function fetchTennis(team,src){
     const sets=(me.linescores||[]).map((l,i)=>l.value+"-"+((((op||{}).linescores||[])[i]||{}).value??"")).join(" ");
     const round=c.round&&(c.round.displayName||c.round.description)||"";
     const d=new Date(c.date||c.startDate||ev.date);
-    return{d,state:st.state||"pre",completed:!!st.completed,detail:st.shortDetail||st.detail||"",
+    // No court time yet (set the day before in the order of play): ESPN then gives midnight US Eastern (04:00/05:00 UTC)
+    // or timeValid:false. Show the date only, never a made-up time.
+    const tba=c.timeValid===false||(d.getUTCMinutes()===0&&(d.getUTCHours()===4||d.getUTCHours()===5));
+    return{d,tba,state:st.state||"pre",completed:!!st.completed,detail:st.shortDetail||st.detail||"",
       opponent:(op?athleteName(op):"TBD")+" ("+[ev.shortName||ev.name,round].filter(Boolean).join(", ")+")",
       score:sets,result:me.winner===true?"W":op&&op.winner===true?"L":"D"};
   });
@@ -848,7 +851,7 @@ async function fetchTennis(team,src){
   }
   return{source:"ESPN",
     recentResults:done.slice(0,5).map(m=>({opponent:m.opponent,score:m.score,result:m.result,date:fmtShort(m.d),ts:m.d.getTime()})),
-    nextGame:next?{opponent:next.opponent,date:fmtDay(next.d),time:fmtTime(next.d),tv:"–",ts:next.d.getTime()}:NO_MATCH(cal?"Next on tour: "+cal.label+" · "+fmtShort(new Date(cal.ts)):null),
+    nextGame:next?{opponent:next.opponent,date:fmtDay(next.d),time:next.tba?"–":fmtTime(next.d),tv:"–",ts:next.d.getTime(),tba:next.tba||undefined}:NO_MATCH(cal?"Next on tour: "+cal.label+" · "+fmtShort(new Date(cal.ts)):null),
     liveGame:live?{opponent:live.opponent,score:live.score||"–",detail:live.detail||"Live"}:null,
     standing,
     // ESPN's id for the player (from a match), so the Actions script can look up a rank outside the top 150
@@ -967,7 +970,7 @@ let VAPID_PUB=lsGet("msh-vapid"); // Web Push public key, published by the robot
 let EXTRA=lsGet("msh-extra")||[];
 const SNAPSHOT_API="https://api.github.com/repos/tinerc2-jpg/My-Sports-Hub/contents/live.json?ref=live-data";
 // A game is on (or about to start) for this cached entry: refresh fast and read the freshest snapshot.
-function liveWindow(e){const d=e&&e.data,k=d&&d.nextGame&&d.nextGame.ts,now=Date.now();return !!(d&&(d.liveGame||(k&&now>k-(d.trot?120:15)*60e3&&now<k+150*60e3)));}
+function liveWindow(e){const d=e&&e.data,k=d&&d.nextGame&&!d.nextGame.tba&&d.nextGame.ts,now=Date.now();return !!(d&&(d.liveGame||(k&&now>k-(d.trot?120:15)*60e3&&now<k+150*60e3)));}
 async function getSnapshot(fresh){
   if(_snap&&Date.now()-_snapTs<(fresh?75*1000:5*60*1000))return _snap;
   // During live games the robot republishes every minute, but raw.githubusercontent caches for ~5 min,
