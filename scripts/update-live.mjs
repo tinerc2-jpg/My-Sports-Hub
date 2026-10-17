@@ -42,30 +42,28 @@ else try{
 // TheSportsDB (free key): the team's next events with exact UTC timestamps; id cached in the snapshot.
 const _tsdbSearch={};
 const kickoffDebug=[];
-// TheSportsDB's free key allows ~30 requests/min and the robot also uses it for handball: wait and retry on 429.
-async function tsdbGet(url){
-  for(let i=0;i<4;i++){
-    const r=await fetch(url);
-    if(r.status===429){await new Promise(res=>setTimeout(res,3000*(i+1)));continue;}
-    if(!r.ok){kickoffDebug.push(url.split("/").pop()+" HTTP "+r.status);return null;}
-    return r.json();
-  }
-  kickoffDebug.push(url.split("/").pop()+" 429 x4");return null;
-}
-async function tsdbKickoff(t,ts,id){
-  const T="https://www.thesportsdb.com/api/v1/json/3";
-  try{
-    if(!id){
-      const q=t.name.replace(/\b(FC|CF|AFC)\b/g,"").trim();
-      const j=await (_tsdbSearch[q]=_tsdbSearch[q]||tsdbGet(T+"/searchteams.php?t="+encodeURIComponent(q)));
-      const tm=((j&&j.teams)||[]).find(x=>x.strSport==="Soccer");
-      if(!tm){kickoffDebug.push(t.name+": no TheSportsDB team for "+q);return null;}id=tm.idTeam;
+// FotMob's match list per day (cached per run): home/away names + status.utcTime.
+const _fm={};
+const fmNorm=x=>api.norm(String(x||"").replace(/\((H|A)\)|·.*$/g,"").replace(/\b(fc|cf|afc|sc|ac|if|bk|fk|ssc|as|ss|cd|ud|rc|club|de|the)\b/gi," ")).replace(/\s+/g," ").trim();
+const fmSame=(a,b)=>{a=fmNorm(a);b=fmNorm(b);return !!a&&!!b&&(a===b||a.length>3&&b.length>3&&(a.includes(b)||b.includes(a)));};
+async function fotmobKickoff(t,g){
+  const days=[...new Set([-1,0,1].map(o=>new Date(g.ts+o*864e5).toISOString().slice(0,10).replace(/-/g,"")))];
+  const opp=g.opponent,names=[t.name,t.shortName].filter(Boolean);
+  let best=null;
+  for(const d of days){
+    if(!(d in _fm))_fm[d]=fetch("https://www.fotmob.com/api/data/matches?date="+d).then(r=>r.ok?r.json():null).catch(()=>null);
+    const j=await _fm[d];if(!j)continue;
+    for(const lg of j.leagues||[])for(const m of lg.matches||[]){
+      const h=m.home&&m.home.name,a=m.away&&m.away.name,ts=Date.parse(m.status&&m.status.utcTime||"");
+      if(!ts||Math.abs(ts-g.ts)>12*3600e3)continue;
+      const meH=names.some(n=>fmSame(n,h)),meA=names.some(n=>fmSame(n,a));
+      if(!(meH||meA))continue;
+      const oppOk=fmSame(opp,meH?a:h);
+      if(oppOk)return {ts,name:h+" – "+a};
+      if(!best)best={ts,name:h+" – "+a,weak:1};
     }
-    const j=await tsdbGet(T+"/eventsnext.php?id="+id);if(!j)return {id};
-    const e=((j&&j.events)||[]).map(e=>({e,ts:Date.parse((e.strTimestamp||(e.dateEvent+"T"+(e.strTime||"00:00:00"))).replace(/\+00:00$/,"")+"Z")})).find(x=>x.ts&&Math.abs(x.ts-ts)<36*3600e3);
-    kickoffDebug.push(t.name+": "+(e?e.e.strEvent+" "+new Date(e.ts).toISOString():"no event near "+new Date(ts).toISOString()+" in "+((j&&j.events)||[]).length));
-    return e?{id,ts:e.ts,name:e.e.strEvent}:{id};
-  }catch(err){console.log("    TheSportsDB kick-off: "+err.message);return null;}
+  }
+  return best&&!best.weak?best:null;
 }
 
 // League scoreboard per day (cached per run): fresher kick-off times than a team's schedule.
@@ -926,13 +924,14 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
       try{
         const ev=await espnScoreboardEvent(g.sp,g.lg,g.ev,g.ts);
         if(ev&&ev.date){const ts=Date.parse(ev.date);if(ts&&Math.abs(ts-g.ts)>=60e3){console.log(`    kick-off fix ${t.name}: schedule ${new Date(g.ts).toISOString()} → scoreboard ${new Date(ts).toISOString()}`);g.ts=ts;}}
-        // Second opinion for football (games within 2 days): TheSportsDB's next events. ESPN kept Betis–Barcelona
-        // at 16:00 UTC in both schedule and scoreboard while the real kick-off was 16:30 UTC.
+        // Second opinion for football (games within 2 days): FotMob's day list. ESPN kept Betis–Barcelona at 16:00 UTC
+        // in schedule, scoreboard, summary and core API while the real kick-off was 16:30 UTC (FotMob had it right).
+        // (TheSportsDB answers 403 to Actions.)
         if(t.sport==="Football"&&g.ts-Date.now()<2*864e5){
-          const pd=prev[t.name]&&prev[t.name].data;
-          const k=await tsdbKickoff(t,g.ts,pd&&pd.tsdbId);
-          if(k){data.tsdbId=k.id;if(k.ts&&Math.abs(k.ts-g.ts)>=60e3){console.log(`    kick-off fix ${t.name}: ESPN ${new Date(g.ts).toISOString()} → TheSportsDB ${new Date(k.ts).toISOString()} (${k.name})`);g.ts=k.ts;g.timeFrom="TheSportsDB";}
-            else console.log(`    kick-off ok ${t.name}: ESPN and TheSportsDB agree (${new Date(g.ts).toISOString()})`);}
+          const k=await fotmobKickoff(t,g);
+          if(k&&Math.abs(k.ts-g.ts)>=60e3){console.log(`    kick-off fix ${t.name}: ESPN ${new Date(g.ts).toISOString()} → FotMob ${new Date(k.ts).toISOString()} (${k.name})`);kickoffDebug.push(t.name+": ESPN "+new Date(g.ts).toISOString()+" → FotMob "+new Date(k.ts).toISOString());g.ts=k.ts;g.timeFrom="FotMob";}
+          else if(k)console.log(`    kick-off ok ${t.name}: ESPN and FotMob agree`);
+          else kickoffDebug.push(t.name+": not found on FotMob ("+g.opponent+")");
         }
       }catch(e){console.log(`    kick-off check ${t.name}: ${e.message}`);}
     }
@@ -1058,14 +1057,6 @@ for(const [name,e] of Object.entries(teams)){
     console.log("notify "+name+": start reminder "+hm+" (HTTP "+r.status+")");}
   catch(err){console.log("notify "+name+": "+err.message);}
   await sendPush(name,"start",{title:"⏰ "+t.shortName+" starter kl. "+hm,body:what+" starter om "+Math.round(left)+" min"+tv+lu,tag:"start-"+name,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"});
-}
-// TEMP probe: other kick-off sources for Betis–Barcelona (17 Oct, real 16:30 UTC).
-if(!LIVE){
-  const probe=async(n,u,f)=>{try{const r=await fetch(u);const t=await r.text();let x="";try{x=f(JSON.parse(t));}catch(e){x="parse: "+t.slice(0,120);}kickoffDebug.unshift("PROBE "+n+" HTTP "+r.status+": "+x);}catch(e){kickoffDebug.unshift("PROBE "+n+": "+e.message);}};
-  await probe("espn core","https://sports.core.api.espn.com/v2/sports/soccer/leagues/esp.1/events/401882846",j=>j.date+" "+(j.timeValid));
-  await probe("espn summary","https://site.api.espn.com/apis/site/v2/sports/soccer/esp.1/summary?event=401882846",j=>j.header&&j.header.competitions[0].date+" valid "+j.header.competitions[0].timeValid);
-  await probe("fotmob","https://www.fotmob.com/api/data/matches?date=20261017",j=>JSON.stringify(j).match(/.{0,200}Betis.{0,200}/)?.[0]||"no Betis");
-  await probe("fotmob2","https://www.fotmob.com/api/matches?date=20261017",j=>JSON.stringify(j).match(/.{0,200}Betis.{0,200}/)?.[0]||"no Betis");
 }
 mkdirSync("out",{recursive:true});
 writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,kickoffDebug:kickoffDebug.slice(0,40),push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length}:null}));
