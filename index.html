@@ -1319,8 +1319,17 @@ function Sheet({title,onClose,children}){
 // snapshot) or loads them from ESPN, then the snapshot.
 function MatchSheet({r,team,onClose}){
   const [st,setSt]=useState(r.stats||null),[err,setErr]=useState(null);
+  // Live game: refresh the stats every minute while the sheet is open (ESPN directly, else the robot's snapshot).
   useEffect(()=>{
-    if(st)return;let gone=false;
+    if(!r.live)return;let gone=false;
+    const tick=async()=>{let x=null;try{x=await fetchEspnSummary(r.sp,r.lg,r.ev,r.tid);}catch(e){}
+      if(!x){const snap=await getSnapshot(true).catch(()=>null),d=snap&&snap[team.name]&&snap[team.name].data;x=d&&d.liveGame&&d.liveGame.stats||null;}
+      if(!gone&&x)setSt(x);};
+    const id=setInterval(tick,60000);if(!st)tick();
+    return()=>{gone=true;clearInterval(id);};
+  },[]);
+  useEffect(()=>{
+    if(st||r.live)return;let gone=false;
     (async()=>{
       let x=null;
       try{x=await fetchEspnSummary(r.sp,r.lg,r.ev,r.tid);}catch(e){}
@@ -1335,14 +1344,14 @@ function MatchSheet({r,team,onClose}){
   const col=(a,b)=>home?[a,b]:[b,a]; // show home team on the left
   const [L,R]=col({n:me,s:sc[0],me:1},{n:op,s:sc[1]});
   const cond="'Barlow Condensed',sans-serif";
-  return h(Sheet,{title:(tag?tag+" \xB7 ":"")+r.date,onClose},
+  return h(Sheet,{title:r.live?"🔴 Live \xB7 "+(r.detail||""):(tag?tag+" \xB7 ":"")+r.date,onClose},
     h("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:12,background:"rgba(255,255,255,0.06)",borderRadius:14,padding:"14px 10px",marginBottom:14}},
       h("div",{style:{flex:1,textAlign:"right",fontFamily:cond,fontSize:"1.1rem",fontWeight:700,color:L.me?"#ff9fd0":"#fff"}},L.n),
       h("div",{style:{fontFamily:cond,fontSize:"2rem",fontWeight:900,color:"#fff",whiteSpace:"nowrap"}},(L.s||"–")+" – "+(R.s||"–")),
       h("div",{style:{flex:1,fontFamily:cond,fontSize:"1.1rem",fontWeight:700,color:R.me?"#ff9fd0":"#fff"}},R.n)
     ),
     st&&st.info&&h("div",{style:{textAlign:"center",color:"#d5deee",fontSize:"0.74rem",margin:"-6px 0 14px"}},st.info),
-    !st&&!err&&h("div",{style:{textAlign:"center",color:"#d5deee",fontSize:"0.8rem",padding:20}},"Loading match statistics…"),
+    !st&&(!err||r.live)&&h("div",{style:{textAlign:"center",color:"#d5deee",fontSize:"0.8rem",padding:20}},r.live?"Live statistics usually appear a few minutes into the game…":"Loading match statistics…"),
     err&&h("div",{style:{textAlign:"center",color:"#d5deee",fontSize:"0.8rem",padding:20}},"No statistics available for this match yet."),
     st&&st.goals&&st.goals.length>0&&h("div",{style:{marginBottom:14}},
       h(Lbl,{c:"⚽ Goals"}),
@@ -1531,15 +1540,17 @@ function fixture(team,opp,score){
   const sc=score&&away&&/^\d+\s*[–-]\s*\d+$/.test(score)?score.split(/\s*[–-]\s*/).reverse().join("–"):score;
   return{title:!m?me+" vs "+name:away?name+" – "+me:me+" – "+name,score:sc,where:!m?"":away?"Away game":"Home game",away,tag,name};
 }
-function LiveGame({team}){
+function LiveGame({team,onStats}){
   const g=team.liveGame;if(!g)return null;
-  return h("div",{style:{background:"linear-gradient(135deg,rgba(239,68,68,0.18),rgba(239,68,68,0.06))",border:"1px solid rgba(239,68,68,0.45)",borderRadius:14,padding:14,marginBottom:8}},
+  const can=onStats&&g.ev&&g.sp;
+  return h(can?"button":"div",{onClick:can?onStats:undefined,style:{width:"100%",textAlign:"left",font:"inherit",color:"inherit",cursor:can?"pointer":"default",display:"block",background:"linear-gradient(135deg,rgba(239,68,68,0.18),rgba(239,68,68,0.06))",border:"1px solid rgba(239,68,68,0.45)",borderRadius:14,padding:14,marginBottom:8}},
     h("div",{style:{display:"flex",alignItems:"center",gap:6,fontSize:"0.58rem",letterSpacing:"2px",color:"#f87171",fontFamily:"Inter,sans-serif",textTransform:"uppercase",fontWeight:700,marginBottom:6}},
       h("span",{className:"live-dot"}),"Live \xB7 "+g.detail),
     h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
       h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.05rem",fontWeight:700,color:"#fff"}},team.sport==="Trav"?g.opponent:fixture(team,g.opponent).title),
       h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontSize:"1.6rem",fontWeight:900,color:"#fff"}},team.sport==="Trav"?g.score:fixture(team,g.opponent,g.score).score)
-    )
+    ),
+    can&&h("div",{style:{marginTop:8,fontSize:"0.75rem",fontWeight:700,color:"#ff9fd0",fontFamily:"Inter,sans-serif"}},"📊 Live stats ›")
   );
 }
 
@@ -1928,7 +1939,7 @@ function App(){
     es.onmessage=ev=>{try{
       const m=JSON.parse(JSON.parse(ev.data).message||"{}");if(!m.n)return;
       setLive(prev=>{const cur=prev[m.n];if(!cur||!cur.data)return prev;
-        const n={...prev,[m.n]:{...cur,data:{...cur.data,liveGame:{opponent:m.o,score:m.s,detail:m.d}}}};lsSet("msh-live",n);return n;});
+        const n={...prev,[m.n]:{...cur,data:{...cur.data,liveGame:{...(cur.data.liveGame||{}),opponent:m.o,score:m.s,detail:m.d}}}}; /* keep ev/stats */lsSet("msh-live",n);return n;});
     }catch(e){}};
     return()=>es.close();
   },[anyLive]);
@@ -2062,7 +2073,7 @@ function App(){
       ),
       h(NotifyCard,{team}),
       h(LiveStatus,{entry:live[baseTeam.name],busy:!!busy[baseTeam.name],sport:team.sport,onRefresh:()=>refreshTeam(baseTeam,true)}),
-      team.liveGame&&h(LiveGame,{team}),
+      team.liveGame&&h(LiveGame,{team,onStats:()=>setMatch({...team.liveGame,live:true,date:""})}),
       team.sport==="Trav"?h(TrotRound,{t:team.trot&&team.trot.next}):h("div",{style:{marginBottom:12}},h(Lbl,{c:"📊 Ranking / Standing"+(lf.standing===true?"":lf.standing==="none"?" \xB7 not available yet":SAVED)}),h(StandingDisplay,{team,onTable:()=>setShowTable(true)})),
       lineupGame(team)&&h("button",{onClick:()=>setShowLineup(true),style:{width:"100%",marginBottom:12,background:"rgba(232,64,154,0.12)",border:"1px solid rgba(232,64,154,0.45)",borderRadius:12,padding:"11px 14px",color:"#fff",fontWeight:700,fontSize:"0.85rem",cursor:"pointer",fontFamily:"Inter,sans-serif",textAlign:"left"}},"📋 Line-ups"+(team.lineup&&lineupGame(team)&&team.lineup.ev===String(lineupGame(team).ev)?" – out now":"")+" ›"),
       team.nextGame&&h("div",{style:{marginBottom:12}},h(Lbl,{c:"📺 Next On TV"}),h(NextGame,{team})),
