@@ -39,6 +39,24 @@ else try{
   if(r.ok){prevFull=await r.json();prev=prevFull.teams||{};}
 }catch(e){}
 
+// TheSportsDB (free key): the team's next events with exact UTC timestamps; id cached in the snapshot.
+const _tsdbSearch={};
+async function tsdbKickoff(t,ts,id){
+  const T="https://www.thesportsdb.com/api/v1/json/3";
+  try{
+    if(!id){
+      const q=t.name.replace(/\b(FC|CF|AFC)\b/g,"").trim();
+      const j=await (_tsdbSearch[q]=_tsdbSearch[q]||fetch(T+"/searchteams.php?t="+encodeURIComponent(q)).then(r=>r.ok?r.json():null).catch(()=>null));
+      const tm=((j&&j.teams)||[]).find(x=>x.strSport==="Soccer");
+      if(!tm)return null;id=tm.idTeam;
+    }
+    const r=await fetch(T+"/eventsnext.php?id="+id);if(!r.ok)return {id};
+    const j=await r.json();
+    const e=((j&&j.events)||[]).map(e=>({e,ts:Date.parse((e.strTimestamp||(e.dateEvent+"T"+(e.strTime||"00:00:00"))).replace(/\+00:00$/,"")+"Z")})).find(x=>x.ts&&Math.abs(x.ts-ts)<36*3600e3);
+    return e?{id,ts:e.ts,name:e.e.strEvent}:{id};
+  }catch(err){console.log("    TheSportsDB kick-off: "+err.message);return null;}
+}
+
 // League scoreboard per day (cached per run): fresher kick-off times than a team's schedule.
 const _sb={};
 async function espnScoreboardEvent(sp,lg,ev,ts){
@@ -897,6 +915,14 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
       try{
         const ev=await espnScoreboardEvent(g.sp,g.lg,g.ev,g.ts);
         if(ev&&ev.date){const ts=Date.parse(ev.date);if(ts&&Math.abs(ts-g.ts)>=60e3){console.log(`    kick-off fix ${t.name}: schedule ${new Date(g.ts).toISOString()} → scoreboard ${new Date(ts).toISOString()}`);g.ts=ts;}}
+        // Second opinion for football (games within 2 days): TheSportsDB's next events. ESPN kept Betis–Barcelona
+        // at 16:00 UTC in both schedule and scoreboard while the real kick-off was 16:30 UTC.
+        if(t.sport==="Football"&&g.ts-Date.now()<2*864e5){
+          const pd=prev[t.name]&&prev[t.name].data;
+          const k=await tsdbKickoff(t,g.ts,pd&&pd.tsdbId);
+          if(k){data.tsdbId=k.id;if(k.ts&&Math.abs(k.ts-g.ts)>=60e3){console.log(`    kick-off fix ${t.name}: ESPN ${new Date(g.ts).toISOString()} → TheSportsDB ${new Date(k.ts).toISOString()} (${k.name})`);g.ts=k.ts;g.timeFrom="TheSportsDB";}
+            else console.log(`    kick-off ok ${t.name}: ESPN and TheSportsDB agree (${new Date(g.ts).toISOString()})`);}
+        }
       }catch(e){console.log(`    kick-off check ${t.name}: ${e.message}`);}
     }
     // Line-ups (football): from ~75 min before kick-off until full-time; kept once found (re-read while live).
