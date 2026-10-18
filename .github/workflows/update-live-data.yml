@@ -53,7 +53,8 @@ jobs:
           while [ -f out/live-needed ] && [ "$(date +%s)" -lt "$end" ]; do
             sleep 15
             # every 15 min also a full run, so the other teams keep updating during a long live loop
-            if [ $(( $(date +%s) - ${last_full:-$(date +%s)} )) -ge 900 ]; then last_full=$(date +%s); node scripts/update-live.mjs || break
+            # every full run picks up the newest code from main, so a fix doesn't wait for the loop to end (up to 2 h)
+            if [ $(( $(date +%s) - ${last_full:-$(date +%s)} )) -ge 900 ]; then last_full=$(date +%s); git fetch -q origin main && git checkout -q origin/main -- index.html scripts || true; node scripts/update-live.mjs || break
             else last_full=${last_full:-$(date +%s)}; node scripts/update-live.mjs --live || break; fi
             cd out
             git add live.json
