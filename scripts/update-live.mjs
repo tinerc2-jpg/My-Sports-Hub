@@ -375,6 +375,7 @@ async function hbProgramFor(team,tableNames){
       const j=await (await fetch("https://tophaandbold.dk/match/"+g.mid+".json")).json();
       const st=String(j.status||""),finished=/finish|ended|slut|afslut|done|played|complete/i.test(st)||(/^60:00/.test(j.time||"")&&!j.time_running);
       console.log(`    handball live check ${g.mid}: status "${st}", time ${j.time}, running ${j.time_running}, score ${j.score}`);
+      kickoffDebug.push(`${team.name}: handball live check ${g.mid} status "${st}" time ${j.time} running ${j.time_running} score ${j.score}`);
       if(finished)continue;
       const started=j.time_running||(j.time&&j.time!=="00:00.00")||g.d.getTime()<now;
       if(!started)continue;
@@ -382,7 +383,7 @@ async function hbProgramFor(team,tableNames){
       live={opponent:(home?g.away:g.home)+(home?" (H)":" (A)"),score:(home?hs+"–"+as:as+"–"+hs),
         detail:/pause|halvleg|half/i.test(st)?"Half-time":min?min+"'":"Live",mid:g.mid};
       g.hs=null; // not a result yet
-    }catch(e){console.log("    handball live check: "+e.message);}
+    }catch(e){console.log("    handball live check: "+e.message);kickoffDebug.push(team.name+": handball live check error "+e.message);}
   }
   const done=mine.filter(g=>g.hs!=null&&g.d.getTime()<now&&(!live||g.mid!==live.mid)).sort((a,b)=>b.d-a.d);
   const next=mine.filter(g=>g.hs==null&&g.d.getTime()>now-3*3600e3).sort((a,b)=>a.d-b.d)[0];
@@ -856,9 +857,14 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
         if(s){data.standing=s.standing;data.standingFrom=s.from;data.standingTs=Date.now();data.source=data.source.replace(" + Wikipedia","")+" + "+s.from;}
       }
       // League results and next game from the match programme (TheSportsDB's free key has only a few games).
-      const tbl=data.standing&&data.standing.table;
-      if(t.league===TV2_LEAGUE&&tbl){
-        const pg=await hbProgramFor(t,tbl.map(r=>r.n));
+      // Team names to find in the programme: this run's table, else the last snapshot's, else the league club list
+      // (a missing table must never switch off results/live for the league).
+      const pt=prev[t.name]&&prev[t.name].data&&prev[t.name].data.standing&&prev[t.name].data.standing.table;
+      const hbNames=((data.standing&&data.standing.table)||pt||[]).map(r=>r.n);
+      if(!hbNames.length)extraTeams.filter(x=>x.sport==="Handball").forEach(x=>hbNames.push(x.name,x.shortName));
+      if(t.league===TV2_LEAGUE&&hbNames.length){
+        const pg=await hbProgramFor(t,hbNames.filter(Boolean));
+        if(!pg)kickoffDebug.push(t.name+": handball programme gave nothing ("+hbNames.length+" names)");
         if(pg){
           const seenR=new Set();
           data.recentResults=[...pg.recentResults,...(data.recentResults||[])].filter(r=>{const k=r.date+"|"+(r.opponent||"").split(" (")[0].slice(0,4);return !seenR.has(k)&&seenR.add(k);}).sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,5);
