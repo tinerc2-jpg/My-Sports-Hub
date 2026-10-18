@@ -1398,6 +1398,27 @@ function SportsWeek({teams,onOpen,onLive}){
     msg&&h("div",{style:{fontSize:"0.72rem",color:"#eef2f8",marginTop:8,lineHeight:1.5}},msg));
 }
 
+// "What's new": shown on the home screen until the visitor closes it; bump WHATS_NEW.id for the next round of news.
+const WHATS_NEW={id:"2026-10-18",items:[
+  ["📅","My sports week","All your teams' games for the next 7 days – scroll down on the home screen."],
+  ["📲","Add to your calendar","One tap on ＋ Calendar puts the week's games in your phone's calendar."],
+  ["☀️","Morning summary","Turn it on to get your sports day at 8:00."],
+  ["🔔","Start reminders","Turn on ⏰ on a team's page to get a message an hour before the start."],
+  ["📊","Live stats & line-ups","Tap the LIVE box during a football game. Line-ups appear an hour before kick-off."],
+]};
+function WhatsNew({hasTeams}){
+  const [seen,setSeen]=useState(()=>{try{return localStorage.getItem("msh-news-seen")===WHATS_NEW.id;}catch(e){return false;}});
+  if(seen||!hasTeams)return null;
+  const close=()=>{setSeen(true);try{localStorage.setItem("msh-news-seen",WHATS_NEW.id);}catch(e){}};
+  return h("div",{style:{position:"relative",marginBottom:14,borderRadius:18,padding:"14px 14px 10px",background:"linear-gradient(135deg,rgba(232,64,154,0.35),rgba(29,51,96,0.85))",border:"1px solid rgba(232,64,154,0.5)",boxShadow:"0 8px 24px rgba(0,0,0,0.3)",fontFamily:"Inter,sans-serif"}},
+    h("button",{onClick:close,"aria-label":"Close",style:{position:"absolute",top:10,right:10,width:32,height:32,borderRadius:"50%",border:"none",background:"rgba(255,255,255,0.12)",color:"#fff",cursor:"pointer"}},"✕"),
+    h("div",{style:{fontFamily:"'Barlow Condensed',sans-serif",fontWeight:800,fontSize:"1.3rem",marginBottom:8,color:"#fff"}},"✨ What's new"),
+    WHATS_NEW.items.map(([ic,t,d],i)=>h("div",{key:i,style:{display:"flex",gap:10,alignItems:"flex-start",padding:"6px 0",borderTop:i?"1px solid rgba(255,255,255,0.08)":"none"}},
+      h("span",{style:{fontSize:"1.2rem",lineHeight:1.2}},ic),
+      h("div",null,h("div",{style:{fontWeight:700,fontSize:"0.85rem",color:"#fff"}},t),h("div",{style:{fontSize:"0.74rem",color:"#eef2f8",lineHeight:1.4}},d)))),
+    h("button",{onClick:close,style:{marginTop:8,width:"100%",border:"none",borderRadius:10,padding:"9px",fontWeight:700,fontSize:"0.82rem",background:"#e8409a",color:"#fff",cursor:"pointer"}},"Got it 👍"));
+}
+
 // Bottom sheet used by the match and table views.
 function Sheet({title,onClose,children}){
   useEffect(()=>{
@@ -2155,6 +2176,7 @@ function App(){
     (welcome||teams.length===0)&&view==="home"&&h(Welcome,{teams,onAdd:()=>setShowModal(true),onPick:addQuick,onDone:()=>setWelcome(false)}),
     view==="home"&&h(RequestDone,{teams,onAdd:addQuick}),
     !(welcome||teams.length===0)&&view==="home"&&h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
+      h(WhatsNew,{hasTeams:teams.length>0}),
       h(Lbl,{c:"My teams \xB7 "+teams.length}),
       h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}},
         teams.map(t=>h(TeamTile,{key:t.id,t:mergeLive(t,live[t.name]),onClick:()=>handleSelect(t.id)})),
