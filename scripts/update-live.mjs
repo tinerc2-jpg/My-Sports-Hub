@@ -837,9 +837,12 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
   if(LIVE&&!needsLive(prev[t.name])){if(prev[t.name]){teams[t.name]=prev[t.name];ok++;}skipped++;continue;}
   api._liveLog.length=0;
   try{
-    let data=await api.fetchTeamLive(t);
+    // TheSportsDB now answers 403 to Actions: for handball that must not stop the programme/EHF/table sources below.
+    let data=null;
+    try{data=await api.fetchTeamLive(t);}catch(e){if(t.sport!=="Handball")throw e;console.log(`    ${t.name}: TheSportsDB failed (${e.message}) – using the league programme / EHF instead`);}
     // league clubs TheSportsDB doesn't know still get table, programme and EHF data below
     if(!data&&t.sport==="Handball"&&t.league===TV2_LEAGUE)data={source:"Top Håndbold",recentResults:[],nextGame:null};
+    if(!data&&t.sport==="Handball")data={source:"EHF",recentResults:[],nextGame:null};
     if(data&&t.sport==="Handball"){
       if(!APISPORTS_KEY)console.log("    API-Sports: no APISPORTS_KEY secret set");
       else{
