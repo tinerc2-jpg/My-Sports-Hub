@@ -112,7 +112,8 @@ if(VAPID){
         if(old&&(old.ts||0)>=(x.ts||0))continue;
         const teams=(Array.isArray(x.teams)?x.teams:[]).slice(0,60).map(t=>({n:String(t.n||"").slice(0,80),start:!!t.start,live:!!t.live})).filter(t=>t.n&&(t.start||t.live));
         pushSubs=pushSubs.filter(s=>s.sub.endpoint!==x.sub.endpoint);
-        if(teams.length)pushSubs.push({sub:{endpoint:x.sub.endpoint,keys:{p256dh:String(x.sub.keys.p256dh),auth:String(x.sub.keys.auth)}},teams,ts:x.ts||m.time*1000});
+        const favs=x.morning&&Array.isArray(x.favs)?x.favs.slice(0,60).map(f=>String(f).slice(0,80)):[];
+        if(teams.length||favs.length)pushSubs.push({sub:{endpoint:x.sub.endpoint,keys:{p256dh:String(x.sub.keys.p256dh),auth:String(x.sub.keys.auth)}},teams,morning:!!favs.length,favs,ts:x.ts||m.time*1000});
         n++;
       }
       console.log(`push: ${pushSubs.length} phones subscribed (${n} updates from ${msgs.length} messages)`);
@@ -120,9 +121,9 @@ if(VAPID){
   }
 }
 let _webpush=null;
-async function sendPush(name,kind,payload){
+async function sendPush(name,kind,payload,only){
   if(!VAPID)return;
-  const to=pushSubs.filter(s=>s.teams.some(t=>t.n===name&&t[kind]));
+  const to=only||pushSubs.filter(s=>s.teams.some(t=>t.n===name&&t[kind]));
   if(!to.length)return;
   if(!_webpush){_webpush=(await import("web-push")).default;_webpush.setVapidDetails("https://tinerc2-jpg.github.io/My-Sports-Hub/",VAPID.publicKey,VAPID.privateKey);}
   let ok=0,gone=0;
@@ -393,6 +394,7 @@ async function hbProgramFor(team,tableNames){
     recentResults:done.slice(0,5).map(g=>{const v=view(g);return{opponent:v.opp,score:v.ms+"–"+v.os,result:v.ms>v.os?"W":v.ms<v.os?"L":"D",date:fmtS(g.d),ts:g.d.getTime(),hbm:g.mid||undefined,home:isMe(g.home)?1:0};}),
     nextGame:next?{opponent:view(next).opp,date:next.d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",timeZone:"Europe/Copenhagen"}),
       time:next.d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"}),tv:next.tv||"–",ts:next.d.getTime()}:null,
+    upcoming:mine.filter(g=>g.hs==null&&g.d.getTime()>now-3*3600e3).sort((a,b)=>a.d-b.d).slice(0,6).map(g=>({opponent:view(g).opp,ts:g.d.getTime(),tv:g.tv||"–"})),
   };
 }
 // ── EHF (eurohandball.com): European club games — live score, results, next game ──
@@ -875,6 +877,7 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
           if(pg.nextGame&&!(data.nextGame&&data.nextGame.ts&&data.nextGame.ts<pg.nextGame.ts))data.nextGame=pg.nextGame;
           if(!/Top Håndbold/.test(data.source))data.source+=" + Top Håndbold";
           if(pg.liveGame)data.liveGame=pg.liveGame;
+          if(pg.upcoming)data.upcoming=pg.upcoming;
           data.preferSnapshot=true; // the app's own handball source (TheSportsDB) has far less: use this file
         }
       }
@@ -1080,8 +1083,37 @@ for(const [name,e] of Object.entries(teams)){
   catch(err){console.log("notify "+name+": "+err.message);}
   await sendPush(name,"start",{title:"⏰ "+t.shortName+" starter kl. "+hm,body:what+" starter om "+Math.round(left)+" min"+tv+lu,tag:"start-"+name,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"});
 }
+// Morning summary (☀️ at about 8:00 Danish time, once a day): each phone that turned it on gets its favourites' games today.
+let morningSent=(LIVE&&existsSync("out/live.json")?(JSON.parse(readFileSync("out/live.json","utf8")).push||{}).morningSent:prevFull&&prevFull.push&&prevFull.push.morningSent)||null;
+{
+  const now=new Date(),hour=+now.toLocaleTimeString("en-GB",{hour:"2-digit",hourCycle:"h23",timeZone:"Europe/Copenhagen"}).slice(0,2),day=now.toLocaleDateString("en-CA",{timeZone:"Europe/Copenhagen"});
+  if(VAPID&&hour>=8&&hour<11&&morningSent!==day){
+    morningSent=day;
+    const hm=ts=>new Date(ts).toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"});
+    const today=ts=>ts&&new Date(ts).toLocaleDateString("en-CA",{timeZone:"Europe/Copenhagen"})===day;
+    let sent=0;
+    for(const sub of pushSubs.filter(x=>x.morning&&x.favs&&x.favs.length)){
+      const lines=[];
+      for(const n of sub.favs){
+        const d=teams[n]&&teams[n].data;if(!d)continue;
+        const t=api.DB[Object.keys(api.DB).find(k=>api.DB[k].name===n)]||extraTeams.find(x=>x.name===n)||{shortName:n,emoji:""};
+        const games=[d.nextGame,...(d.upcoming||[])].filter(g=>g&&today(g.ts)&&!g.tba);
+        const seen=new Set();
+        for(const g of games){if(seen.has(Math.round(g.ts/36e5)))continue;seen.add(Math.round(g.ts/36e5));
+          const o=String(g.opponent||""),away=/\(A\)/.test(o),opp=o.replace(/\s*\((H|A)\)/,"").replace(/\s·\s.+$/,"");
+          const title=t.sport==="Trav"?opp:/\((H|A)\)/.test(o)?(away?opp+" – "+t.shortName:t.shortName+" – "+opp):t.shortName+" · "+opp;
+          lines.push({ts:g.ts,txt:hm(g.ts)+" "+(t.emoji||"")+" "+title+(g.tv&&g.tv!=="–"?" ("+g.tv+")":"")});}
+      }
+      if(!lines.length)continue;
+      lines.sort((a,b)=>a.ts-b.ts);
+      await sendPush("","morning",{title:"☀️ Din sportsdag – "+lines.length+(lines.length===1?" kamp":" kampe"),body:lines.map(l=>l.txt).join("\n"),tag:"morning-"+day,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"},[sub]);
+      sent++;
+    }
+    console.log(`morning summary ${day}: ${sent} phones`);
+  }
+}
 mkdirSync("out",{recursive:true});
-writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,kickoffDebug:kickoffDebug.slice(0,40),push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length}:null}));
+writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,kickoffDebug:kickoffDebug.slice(0,40),push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length,morningSent}:null}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
 const liveNow=Object.entries(teams).filter(([,e])=>needsLive(e)).map(([n,e])=>n+(e.data.liveGame?" "+e.data.liveGame.score:" (kick-off soon)"));
 if(liveNow.length){writeFileSync("out/live-needed",liveNow.join("\n"));console.log("live: "+liveNow.join(" · "));}
