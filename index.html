@@ -483,7 +483,8 @@ function espnEvent(ev,id,lg){
   else if(ms!=null&&os!=null&&!isNaN(+ms)&&!isNaN(+os))result=+ms>+os?"W":+ms<+os?"L":"D";
   const tv=(c.broadcasts||[]).map(b=>(b.media&&b.media.shortName)||(b.names||[]).join("/")).filter(Boolean).join(" / ");
   const ot=op.team||{};
-  return{id:ev.id,lg,d,completed:!!st.completed,state:st.state||"pre",detail:st.shortDetail||st.detail||"",
+  // timeValid:false = ESPN has only the date (kick-off not set yet, e.g. LaLiga rounds a few weeks ahead)
+  return{id:ev.id,lg,d,tba:c.timeValid===false||ev.timeValid===false,completed:!!st.completed,state:st.state||"pre",detail:st.shortDetail||st.detail||"",
     opponent:(ot.displayName||ot.shortDisplayName||"TBD")+(me.homeAway==="home"?" (H)":me.homeAway==="away"?" (A)":""),
     score:ms!=null&&os!=null?ms+"–"+os:"",result,tv};
 }
@@ -556,11 +557,11 @@ async function fetchEspn(src){
   return{source:"ESPN",
     // ev/lg/sp/tid let the app (and the robot) load the match statistics for a result.
     recentResults:done.slice(0,5).map(e=>({opponent:e.opponent,score:e.score,result:e.result,date:fmtShort(e.d),ev:e.id,lg:e.lg,sp:src.sp,tid:src.id})),
-    nextGame:next?{opponent:next.opponent,date:fmtDay(next.d),time:fmtTime(next.d),tv:(soccer&&DK_TV[next.lg])||next.tv||"–",ts:next.d.getTime(),ev:next.id,lg:next.lg,sp:src.sp,tid:src.id}:upcomingKnown?OFF_SEASON:null,
+    nextGame:next?{opponent:next.opponent,date:fmtDay(next.d),time:next.tba?"–":fmtTime(next.d),tba:next.tba||undefined,tv:(soccer&&DK_TV[next.lg])||next.tv||"–",ts:next.d.getTime(),ev:next.id,lg:next.lg,sp:src.sp,tid:src.id}:upcomingKnown?OFF_SEASON:null,
     liveGame:live?{opponent:live.opponent,score:live.score||"0–0",detail:live.detail||"Live",ev:live.id,lg:live.lg,sp:src.sp,tid:src.id}:null,
     // the next few games, for the week calendar on the home screen
     upcoming:evs.filter(e=>e.state==="pre"&&e.d.getTime()>now-3*3600e3).sort((a,b)=>a.d-b.d).slice(0,6)
-      .map(e=>({opponent:e.opponent,ts:e.d.getTime(),tv:(soccer&&DK_TV[e.lg])||e.tv||"–",ev:e.id})),
+      .map(e=>({opponent:e.opponent,ts:e.d.getTime(),tv:(soccer&&DK_TV[e.lg])||e.tv||"–",ev:e.id,tba:e.tba||undefined})),
     standing:espnStanding(table,src.id,soccer||src.sp==="hockey")};
 }
 
@@ -1317,7 +1318,7 @@ function weekEvents(teams){
       score:/\((H|A)\)/.test(r.opponent||"")?fixture(t,r.opponent,r.score).score:r.score,result:r.result});});
     const g=t.nextGame;
     if(g&&g.ts)push({t,state:"next",ts:g.ts,ev:g.ev,tba:g.tba||g.time==="–",base:base(g.opponent),title:titleOf(t,g.opponent),tag:tagOf(g.opponent),tv:g.tv});
-    (t.upcoming||[]).forEach(u=>push({t,state:"next",ts:u.ts,ev:u.ev,base:base(u.opponent),title:titleOf(t,u.opponent),tag:tagOf(u.opponent),tv:u.tv}));
+    (t.upcoming||[]).forEach(u=>push({t,state:"next",ts:u.ts,ev:u.ev,tba:u.tba,base:base(u.opponent),title:titleOf(t,u.opponent),tag:tagOf(u.opponent),tv:u.tv}));
   });
   return out.filter(e=>e.state!=="next"||(e.ts>now-3*3600e3&&e.ts<until)).sort((a,b)=>(a.state==="live"?-1:0)-(b.state==="live"?-1:0)||a.ts-b.ts);
 }
