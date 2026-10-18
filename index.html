@@ -558,6 +558,9 @@ async function fetchEspn(src){
     recentResults:done.slice(0,5).map(e=>({opponent:e.opponent,score:e.score,result:e.result,date:fmtShort(e.d),ev:e.id,lg:e.lg,sp:src.sp,tid:src.id})),
     nextGame:next?{opponent:next.opponent,date:fmtDay(next.d),time:fmtTime(next.d),tv:(soccer&&DK_TV[next.lg])||next.tv||"–",ts:next.d.getTime(),ev:next.id,lg:next.lg,sp:src.sp,tid:src.id}:upcomingKnown?OFF_SEASON:null,
     liveGame:live?{opponent:live.opponent,score:live.score||"0–0",detail:live.detail||"Live",ev:live.id,lg:live.lg,sp:src.sp,tid:src.id}:null,
+    // the next few games, for the week calendar on the home screen
+    upcoming:evs.filter(e=>e.state==="pre"&&e.d.getTime()>now-3*3600e3).sort((a,b)=>a.d-b.d).slice(0,6)
+      .map(e=>({opponent:e.opponent,ts:e.d.getTime(),tv:(soccer&&DK_TV[e.lg])||e.tv||"–",ev:e.id})),
     standing:espnStanding(table,src.id,soccer||src.sp==="hockey")};
 }
 
@@ -1001,6 +1004,7 @@ function mergeLive(team,e){
   const out={...team,_live:d.source,liveGame:d.liveGame||null,_liveFields:{}};
   if(hasNews){out.news=d.news;out._liveFields.news=true;}
   if(d.trot)out.trot=d.trot;
+  if(d.upcoming)out.upcoming=d.upcoming;
   if(d.lineup)out.lineup=d.lineup;
   if(d.recentResults&&d.recentResults.length){out.recentResults=d.recentResults;out._liveFields.results=true;}
   if(d.nextGame){const g={...d.nextGame};if(g.ts){const x=new Date(g.ts);g.date=fmtDay(x);if(g.time!=="–")g.time=fmtTime(x);}out.nextGame=g;}
@@ -1296,6 +1300,104 @@ function LineupSheet({team,g,onClose}){
       t.subs.length>0&&h("div",{style:{fontSize:"0.72rem",color:"#d5deee",marginTop:6,lineHeight:1.5}},"Bench: "+t.subs.map(p=>p.n).join(", ")))));
 }
 
+// ── "My sports week": every favourite's games for the next 7 days in one list (Danish time, home team first) ──
+const DAY_MS=864e5;
+function cphDayKey(ts){return new Date(ts).toLocaleDateString("en-CA",{timeZone:TZ});}
+function weekEvents(teams){
+  const now=Date.now(),todayKey=cphDayKey(now),until=now+7*DAY_MS,out=[];
+  const titleOf=(t,opp)=>t.sport==="Trav"?opp:/\((H|A)\)/.test(opp||"")?fixture(t,opp).title:t.shortName+" \xB7 "+String(opp||"").replace(/\s*\([^)]*\)/g,"");
+  const tagOf=opp=>(String(opp||"").match(/\s·\s(.+)$/)||[])[1]||"";
+  teams.forEach(t=>{
+    const seen=[];const push=e=>{if(seen.some(x=>(e.ev&&x.ev===e.ev)||(Math.abs(x.ts-e.ts)<6*3600e3&&x.base===e.base)))return;seen.push(e);out.push(e);};
+    const base=o=>String(o||"").replace(/\s*\(.*$/,"").slice(0,8);
+    const lg=t.liveGame;
+    if(lg)push({t,state:"live",ts:(t.nextGame&&t.nextGame.ts&&t.nextGame.ts<now?t.nextGame.ts:now),ev:lg.ev,base:base(lg.opponent),title:titleOf(t,lg.opponent),tag:tagOf(lg.opponent),
+      score:t.sport==="Trav"?lg.score:fixture(t,lg.opponent,lg.score).score,detail:lg.detail});
+    (t.recentResults||[]).forEach(r=>{if(r.ts&&cphDayKey(r.ts)===todayKey&&r.ts<=now)push({t,state:"done",ts:r.ts,base:base(r.opponent),title:titleOf(t,r.opponent),tag:tagOf(r.opponent),
+      score:/\((H|A)\)/.test(r.opponent||"")?fixture(t,r.opponent,r.score).score:r.score,result:r.result});});
+    const g=t.nextGame;
+    if(g&&g.ts)push({t,state:"next",ts:g.ts,ev:g.ev,tba:g.tba||g.time==="–",base:base(g.opponent),title:titleOf(t,g.opponent),tag:tagOf(g.opponent),tv:g.tv});
+    (t.upcoming||[]).forEach(u=>push({t,state:"next",ts:u.ts,ev:u.ev,base:base(u.opponent),title:titleOf(t,u.opponent),tag:tagOf(u.opponent),tv:u.tv}));
+  });
+  return out.filter(e=>e.state!=="next"||(e.ts>now-3*3600e3&&e.ts<until)).sort((a,b)=>(a.state==="live"?-1:0)-(b.state==="live"?-1:0)||a.ts-b.ts);
+}
+function icsFor(evs){
+  const z=ts=>new Date(ts).toISOString().replace(/[-:]/g,"").replace(/\.\d+/,"");
+  const esc=x=>String(x||"").replace(/[\\,;]/g,m=>"\\"+m).replace(/\n/g," ");
+  const lines=["BEGIN:VCALENDAR","VERSION:2.0","PRODID:-//My Sports Hub//DA","CALSCALE:GREGORIAN","X-WR-CALNAME:My Sports Hub"];
+  evs.filter(e=>e.state==="next"&&!e.tba).forEach(e=>{
+    const dur=e.t.sport==="Trav"?3:e.t.sport==="Handball"?1.75:e.t.sport==="Football"?2:2.5;
+    lines.push("BEGIN:VEVENT","UID:"+(e.ev||e.ts)+"-"+e.t.name.replace(/\W/g,"")+"@mysportshub","DTSTAMP:"+z(Date.now()),"DTSTART:"+z(e.ts),"DTEND:"+z(e.ts+dur*3600e3),
+      "SUMMARY:"+esc(e.t.emoji+" "+e.title+(e.tag?" · "+e.tag:"")),"DESCRIPTION:"+esc((e.tv&&e.tv!=="–"?"TV: "+e.tv+" · ":"")+"My Sports Hub"),
+      "BEGIN:VALARM","ACTION:DISPLAY","DESCRIPTION:"+esc(e.title),"TRIGGER:-PT60M","END:VALARM","END:VEVENT");
+  });
+  lines.push("END:VCALENDAR");return lines.join("\r\n");
+}
+function SportsWeek({teams,onOpen,onLive}){
+  const [all,setAll]=useState(false),[morning,setMorning]=useState(()=>!!(pushPrefs()[MORNING_KEY]||{}).morning),[msg,setMsg]=useState(null),[busy,setBusy]=useState(false);
+  const evs=weekEvents(teams);
+  if(!evs.length)return null;
+  const now=Date.now(),todayKey=cphDayKey(now),tomKey=cphDayKey(now+DAY_MS);
+  const days=[];evs.forEach(e=>{const k=e.state==="live"?todayKey:cphDayKey(e.ts);let d=days.find(x=>x.k===k);if(!d)days.push(d={k,ts:e.ts,list:[]});d.list.push(e);});
+  days.sort((a,b)=>a.k<b.k?-1:1);
+  const shown=all?days:days.slice(0,3);
+  const dayName=d=>d.k===todayKey?"Today":d.k===tomKey?"Tomorrow":new Date(d.ts).toLocaleDateString("en-GB",{weekday:"long",timeZone:TZ});
+  const dayDate=d=>new Date(d.ts).toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:TZ});
+  const clash=(e,list)=>e.state==="next"&&!e.tba&&list.some(x=>x!==e&&x.state==="next"&&!x.tba&&Math.abs(x.ts-e.ts)<100*60e3);
+  const until=ts=>{const m=Math.round((ts-now)/60e3);return m<=0?"starting":m<60?"in "+m+" min":m<24*60?"in "+Math.floor(m/60)+" h"+(m%60>=15?" "+(m%60)+" m":""):null;};
+  const cond="'Barlow Condensed',sans-serif";
+  const addCal=()=>{
+    const blob=new Blob([icsFor(evs)],{type:"text/calendar;charset=utf-8"}),url=URL.createObjectURL(blob),a=document.createElement("a");
+    a.href=url;a.download="my-sports-week.ics";document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(url),60000);
+    try{window.goatcounter&&window.goatcounter.count&&window.goatcounter.count({path:"calendar-export",title:"Week added to calendar",event:true});}catch(e){}
+  };
+  const toggleMorning=async()=>{
+    if(!pushOK()){setMsg(isIOS()?"On iPhone, open My Sports Hub from your Home Screen first, then turn this on.":"This browser can't show notifications.");return;}
+    setBusy(true);setMsg(null);
+    try{await setPush(MORNING_KEY,"morning",!morning);setMorning(!morning);}catch(e){setMsg(e.message==="denied"?"Notifications are blocked – allow them in Settings → Notifications → My Sports Hub.":"Something went wrong – try again in a minute.");}
+    setBusy(false);
+  };
+  const row=(e,list)=>{
+    const t=e.t,live=e.state==="live",done=e.state==="done",cl=clash(e,list);
+    const time=live?"LIVE":e.tba?"TBA":fmtTime(new Date(e.ts));
+    return h("button",{key:t.name+e.ts+e.state,onClick:()=>live?onLive(t):onOpen(t),style:{display:"flex",alignItems:"stretch",gap:0,width:"100%",textAlign:"left",font:"inherit",color:"#fff",cursor:"pointer",
+        background:live?"linear-gradient(90deg,rgba(239,68,68,0.22),rgba(239,68,68,0.06))":"rgba(255,255,255,0.05)",border:live?"1px solid rgba(239,68,68,0.55)":"1px solid rgba(255,255,255,0.07)",borderRadius:14,overflow:"hidden",padding:0}},
+      h("div",{style:{width:5,flexShrink:0,background:"linear-gradient(180deg,"+t.color+","+(t.accent||t.color)+")"}}),
+      h("div",{style:{width:62,flexShrink:0,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"10px 0",borderRight:"1px solid rgba(255,255,255,0.06)"}},
+        live?h("span",{style:{display:"flex",alignItems:"center",gap:5,fontFamily:cond,fontWeight:800,fontSize:"0.95rem",color:"#f87171"}},h("span",{className:"live-dot"}),"LIVE")
+          :h("span",{style:{fontFamily:cond,fontWeight:800,fontSize:"1.25rem",letterSpacing:0.5,color:done?"#9aa8c2":"#fff"}},time),
+        !live&&!done&&!e.tba&&until(e.ts)&&h("span",{style:{fontSize:"0.58rem",color:"#ff9fd0",fontWeight:600,marginTop:1}},until(e.ts))),
+      h("div",{style:{flex:1,minWidth:0,padding:"9px 10px",display:"flex",flexDirection:"column",justifyContent:"center",gap:3}},
+        h("div",{style:{display:"flex",alignItems:"flex-start",gap:6,minWidth:0}},
+          h("span",{style:{fontSize:"1rem",flexShrink:0}},t.emoji),
+          h("span",{style:{fontFamily:cond,fontWeight:700,fontSize:"1.02rem",lineHeight:1.15,overflow:"hidden",display:"-webkit-box",WebkitLineClamp:2,WebkitBoxOrient:"vertical"}},e.title)),
+        h("div",{style:{display:"flex",flexWrap:"wrap",gap:5,alignItems:"center"}},
+          e.tag&&h("span",{style:{fontSize:"0.6rem",fontWeight:700,padding:"2px 6px",borderRadius:6,background:"rgba(255,255,255,0.1)",color:"#eef2f8"}},e.tag),
+          live&&e.detail&&h("span",{style:{fontSize:"0.62rem",color:"#ffd0e6"}},e.detail),
+          !live&&!done&&e.tv&&e.tv!=="–"&&h("span",{style:{fontSize:"0.6rem",fontWeight:600,padding:"2px 6px",borderRadius:6,background:"rgba(232,64,154,0.16)",color:"#ff9fd0",whiteSpace:"nowrap",overflow:"hidden",textOverflow:"ellipsis",maxWidth:"100%"}},"📺 "+e.tv),
+          cl&&h("span",{style:{fontSize:"0.6rem",fontWeight:700,padding:"2px 6px",borderRadius:6,background:"rgba(255,196,0,0.16)",color:"#ffd27a"}},"⚠️ Same time"))),
+      (live||done)&&h("div",{style:{display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"0 12px",gap:2}},
+        h("span",{style:{fontFamily:cond,fontWeight:900,fontSize:"1.35rem"}},e.score||""),
+        done&&e.result&&h("span",{style:{fontSize:"0.55rem",fontWeight:800,padding:"1px 6px",borderRadius:5,background:RC[e.result]||"#888",color:"#0a1326"}},e.result==="W"?"WIN":e.result==="L"?"LOSS":"DRAW")));
+  };
+  return h("div",{style:{marginTop:18,borderRadius:20,padding:"14px 12px 12px",background:"linear-gradient(160deg,rgba(232,64,154,0.16),rgba(29,51,96,0.55) 45%,rgba(10,19,38,0.6))",border:"1px solid rgba(232,64,154,0.28)",boxShadow:"0 10px 30px rgba(0,0,0,0.25)"}},
+    h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,marginBottom:10,padding:"0 4px"}},
+      h("div",null,h("div",{style:{fontFamily:cond,fontWeight:800,fontSize:"1.35rem",letterSpacing:0.5}},"📅 My sports week"),
+        h("div",{style:{fontSize:"0.68rem",color:"#d5deee"}},evs.filter(e=>e.state!=="done").length+" games · Danish time")),
+      h("button",{onClick:addCal,style:{border:"none",borderRadius:10,padding:"8px 10px",fontWeight:700,fontSize:"0.72rem",cursor:"pointer",background:"#e8409a",color:"#fff",fontFamily:"Inter,sans-serif",flexShrink:0}},"＋ Calendar")),
+    shown.map(d=>h("div",{key:d.k,style:{marginBottom:10}},
+      h("div",{style:{display:"flex",alignItems:"baseline",gap:8,margin:"4px 4px 6px"}},
+        h("span",{style:{fontFamily:cond,fontWeight:800,fontSize:"0.95rem",letterSpacing:1.5,textTransform:"uppercase",color:d.k===todayKey?"#ff9fd0":"#fff"}},dayName(d)),
+        h("span",{style:{fontSize:"0.68rem",color:"#9aa8c2"}},dayDate(d)),
+        h("span",{style:{flex:1,height:1,background:"rgba(255,255,255,0.08)"}})),
+      h("div",{style:{display:"flex",flexDirection:"column",gap:6}},d.list.map(e=>row(e,d.list))))),
+    days.length>3&&h("button",{onClick:()=>setAll(!all),style:{width:"100%",background:"none",border:"none",color:"#ff9fd0",fontWeight:700,fontSize:"0.8rem",cursor:"pointer",padding:"4px 0 8px",fontFamily:"Inter,sans-serif"}},all?"Show less ▴":"Show the whole week ▾"),
+    h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10,background:"rgba(255,255,255,0.05)",borderRadius:12,padding:"9px 12px"}},
+      h("div",{style:{fontSize:"0.8rem"}},"☀️ Morning summary",h("div",{style:{fontSize:"0.66rem",color:"#d5deee"}},morning?"✓ On – every day at 8:00 when you have games":"Your sports day at 8:00")),
+      h("button",{onClick:toggleMorning,disabled:busy,style:{border:"none",borderRadius:10,padding:"8px 12px",fontWeight:700,fontSize:"0.75rem",cursor:"pointer",background:morning?"rgba(255,255,255,0.1)":"#e8409a",color:"#fff",fontFamily:"Inter,sans-serif",flexShrink:0,opacity:busy?0.6:1}},busy?"…":morning?"Turn off":"Turn on")),
+    msg&&h("div",{style:{fontSize:"0.72rem",color:"#eef2f8",marginTop:8,lineHeight:1.5}},msg));
+}
+
 // Bottom sheet used by the match and table views.
 function Sheet({title,onClose,children}){
   useEffect(()=>{
@@ -1578,9 +1680,10 @@ const REQUEST_TOPIC="mysportshub-team-requests-7f3k9q";
 const PUSH_SUBS_TOPIC="msh-push-subs-7f3k9q";
 const pushOK=()=>"serviceWorker" in navigator&&"PushManager" in window&&"Notification" in window;
 const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent);
+const MORNING_KEY="__morning__";
 function pushPrefs(){return lsGet("msh-push")||{};}
-async function setPush(name,kind,on){
-  if(on){
+async function setPush(name,kind,on,quiet){
+  if(on&&!quiet){
     const perm=await Notification.requestPermission();
     if(perm!=="granted")throw new Error("denied");
   }
@@ -1590,9 +1693,10 @@ async function setPush(name,kind,on){
   const key=Uint8Array.from(atob(VAPID_PUB.replace(/-/g,"+").replace(/_/g,"/")),c=>c.charCodeAt(0));
   const sub=(await reg.pushManager.getSubscription())||(await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:key}));
   const prefs=pushPrefs();prefs[name]={...(prefs[name]||{}),[kind]:on};lsSet("msh-push",prefs);
-  const teams=Object.entries(prefs).map(([n,v])=>({n,start:!!v.start,live:!!v.live})).filter(t=>t.start||t.live);
-  await fetch("https://ntfy.sh/"+PUSH_SUBS_TOPIC,{method:"POST",body:JSON.stringify({sub:sub.toJSON(),teams,ts:Date.now()})});
-  if(on){const t="🔔 Notifications are on",b=name+": "+(kind==="start"?"you'll get a reminder about 60 min before the start.":"kick-off, goals and full-time.");reg.showNotification(t,{body:b,icon:"icon-192.png",data:{url:"./?app",title:t,body:b}});}
+  const teams=Object.entries(prefs).filter(([n])=>n!==MORNING_KEY).map(([n,v])=>({n,start:!!v.start,live:!!v.live})).filter(t=>t.start||t.live);
+  const morning=!!(prefs[MORNING_KEY]||{}).morning,favs=morning?(lsGet("msh-teams")||[]).map(t=>t&&t.name).filter(Boolean).slice(0,60):[];
+  await fetch("https://ntfy.sh/"+PUSH_SUBS_TOPIC,{method:"POST",body:JSON.stringify({sub:sub.toJSON(),teams,morning,favs,ts:Date.now()})});
+  if(on&&!quiet){const t="🔔 Notifications are on",b=kind==="morning"?"You'll get your sports day every morning at 8:00 when you have games.":name+": "+(kind==="start"?"you'll get a reminder about 60 min before the start.":"kick-off, goals and full-time.");reg.showNotification(t,{body:b,icon:"icon-192.png",data:{url:"./?app",title:t,body:b}});}
 }
 function NotifyRow({team,topic,icon,title,sub,kind}){
   const [on,setOn]=useState(()=>!!(pushPrefs()[team.name]||{})[kind]),[busy,setBusy]=useState(false),[msg,setMsg]=useState(null);
@@ -1859,6 +1963,9 @@ function App(){
   const [selected,setSelected]=useState(loadSel);
   const [showModal,setShowModal]=useState(false);
   const [removing,setRemoving]=useState(null);
+  // Morning summary: when the favourites change, tell the robot the new list (quietly).
+  const favKey=teams.map(t=>t.name).join("|");
+  useEffect(()=>{try{if((pushPrefs()[MORNING_KEY]||{}).morning&&pushOK()&&Notification.permission==="granted")setPush(MORNING_KEY,"morning",true,true).catch(()=>{});}catch(e){}},[favKey]);
   const [match,setMatch]=useState(null),[showTable,setShowTable]=useState(false),[showFeedback,setShowFeedback]=useState(false),[showLineup,setShowLineup]=useState(false);
   // "home" = grid of all favourites, "team" = one team's page
   const [view,setView]=useState("home");
@@ -2053,6 +2160,7 @@ function App(){
         teams.map(t=>h(TeamTile,{key:t.id,t:mergeLive(t,live[t.name]),onClick:()=>handleSelect(t.id)})),
         h("button",{onClick:()=>setShowModal(true),style:{minHeight:122,borderRadius:16,border:"2px dashed rgba(232,64,154,0.5)",background:"rgba(232,64,154,0.07)",color:"#ff9fd0",fontWeight:700,fontSize:"0.95rem",cursor:"pointer",fontFamily:"Inter,sans-serif"}},"＋ Add team")
       ),
+      h(SportsWeek,{teams:teams.map(t=>mergeLive(t,live[t.name])),onOpen:t=>handleSelect((teams.find(x=>x.name===t.name)||{}).id),onLive:t=>{handleSelect((teams.find(x=>x.name===t.name)||{}).id);if(t.liveGame&&t.liveGame.ev&&t.liveGame.sp)setTimeout(()=>setMatch({...t.liveGame,live:true,date:""}),50);}}),
       h("button",{onClick:()=>setShowFeedback(true),style:{marginTop:16,width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:12,padding:12,color:"#eef2f8",fontSize:"0.88rem",cursor:"pointer",fontFamily:"Inter,sans-serif"}},"💬 Ideas & feedback – tell us what to improve"),
       h("div",{style:{height:30}})
     ),
