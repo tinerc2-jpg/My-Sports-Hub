@@ -1074,7 +1074,9 @@ for(const [name,e] of Object.entries(teams)){
   if(!ts||g.tba||d.liveGame||d.preNotified===ts||left<10||left>70)continue; // no reminder for a time that isn't set yet
   d.preNotified=ts;
   const hm=new Date(ts).toLocaleTimeString("da-DK",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Copenhagen"});
-  const what=t.sport==="Trav"?g.opponent:t.shortName+" vs "+g.opponent,tv=g.tv&&g.tv!=="–"&&g.tv!=="-"?" · TV: "+g.tv:"";
+  // home team first, like everywhere in the app ("Real Betis – Barça", never "Barça vs Real Betis (A)")
+  const go=String(g.opponent||""),gAway=/\(A\)/.test(go),gOpp=go.replace(/\s*\((H|A)\)/,"").replace(/\s·\s(.+)$/,(m,x)=>" · "+x);
+  const what=t.sport==="Trav"?go:/\((H|A)\)/.test(go)?(gAway?gOpp.replace(/( · .+)?$/,m=>" – "+t.shortName+m):t.shortName+" – "+gOpp):t.shortName+" · "+go.replace(/\s*\([^)]*\)/g,""),tv=g.tv&&g.tv!=="–"&&g.tv!=="-"?" · TV: "+g.tv:"";
   const lu=d.lineup&&g.ev&&d.lineup.ev===String(g.ev)?" · 📋 Holdopstillingen er klar":"";
   if(lu)d.lineupNotified=d.lineup.ev;
   try{const r=await fetch("https://ntfy.sh/",{method:"POST",headers:{"Content-Type":"application/json"},
