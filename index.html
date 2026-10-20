@@ -2180,7 +2180,7 @@ function App(){
       h(WhatsNew,{hasTeams:teams.length>0}),
       h(Lbl,{c:"My teams \xB7 "+teams.length}),
       h("div",{style:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(150px,1fr))",gap:10}},
-        teams.map(t=>h(TeamTile,{key:t.id,t:mergeLive(t,live[t.name]),onClick:()=>handleSelect(t.id)})),
+        teams.map((t,i)=>{const m=mergeLive(t,live[t.name]),d=x=>x&&new Date(x).toLocaleDateString("sv",{timeZone:TZ}),td=d(Date.now()),ng=m.nextGame,today=ng&&ng.ts&&!ng.tba&&d(ng.ts)===td?ng.ts:(m.recentResults||[]).some(r=>r.ts&&d(r.ts)===td)?9e15:0;return {t,m,i,k:m.liveGame?0:today?1:2,ts:today||0};}).sort((a,b)=>a.k-b.k||(a.k===1?a.ts-b.ts:0)||a.i-b.i).map(({t,m})=>h(TeamTile,{key:t.id,t:m,onClick:()=>handleSelect(t.id)})),
         h("button",{onClick:()=>setShowModal(true),style:{minHeight:122,borderRadius:16,border:"2px dashed rgba(232,64,154,0.5)",background:"rgba(232,64,154,0.07)",color:"#ff9fd0",fontWeight:700,fontSize:"0.95rem",cursor:"pointer",fontFamily:"Inter,sans-serif"}},"＋ Add team")
       ),
       h(SportsWeek,{teams:teams.map(t=>mergeLive(t,live[t.name])),onOpen:t=>handleSelect((teams.find(x=>x.name===t.name)||{}).id),onLive:t=>{handleSelect((teams.find(x=>x.name===t.name)||{}).id);if(t.liveGame&&t.liveGame.ev&&t.liveGame.sp)setTimeout(()=>setMatch({...t.liveGame,live:true,date:""}),50);}}),
