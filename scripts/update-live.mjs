@@ -27,7 +27,7 @@ return {DB,notifyTopic,startTopic,fetchTeamLive,fetchEspnSummary,fetchEspnLineup
 const LIVE=process.argv.includes("--live");
 const NOW=Date.now();
 // Trav: from 2 h before the first leg (odds and pool % move most then).
-function needsLive(e){const d=e&&e.data,k=d&&d.nextGame&&!d.nextGame.tba&&d.nextGame.ts;return !!(d&&(d.liveGame||(k&&NOW>k-(d.trot?120:15)*60e3&&NOW<k+150*60e3)));}
+function needsLive(e){const d=e&&e.data,k=d&&d.nextGame&&!d.nextGame.tba&&d.nextGame.ts;return !!(d&&(d.liveGame||(k&&NOW>k-(d.trot?120:60)*60e3&&NOW<k+150*60e3)));}
 let prev={},prevFull=null;
 let prevExtra=null;
 if(LIVE&&existsSync("out/live.json")){const j=JSON.parse(readFileSync("out/live.json","utf8"));prev=j.teams||{};prevExtra=j.leagueTeams||[];}
