@@ -18,5 +18,12 @@ for(const [t,o,sc,want] of cases){
   const got=fixture(t,o,sc);
   for(const k of Object.keys(want))if(got[k]!==want[k]){bad++;console.error(`✗ ${o}: ${k} = "${got[k]}", expected "${want[k]}"`);}
 }
+// scoreLine(): tiles, result rows and share text ("Bayern Munich 0–1 Arsenal")
+const sl=html.match(/function scoreLine\(team,opp,score\)\{[\s\S]*?\n\}/);
+if(!sl){console.error("scoreLine() not found in index.html");process.exit(1);}
+const scoreLine=new Function(src[0]+"\n"+sl[0]+"\nreturn scoreLine;")();
+for(const [t,o,sc,want] of [[{shortName:"Arsenal"},"Bayern Munich (A) · CL","1–0","Bayern Munich 0–1 Arsenal · CL"],[barca,"Real Madrid (H)","3–1","Barça 3–1 Real Madrid"]]){
+  const got=scoreLine(t,o,sc);if(got!==want){bad++;console.error(`✗ scoreLine ${o}: "${got}", expected "${want}"`);}
+}
 if(bad){console.error(bad+" home/away check(s) failed – not deploying");process.exit(1);}
 console.log("home/away checks OK ("+cases.length+" cases)");
