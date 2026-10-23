@@ -41,8 +41,8 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add live.json
           git commit -qm "Live data $(date -u +%Y-%m-%dT%H:%MZ)"
-          git push -qf "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" live-data
-      # While a favourite is playing (or kicks off within 15 min) the script leaves out/live-needed:
+          for i in 1 2 3; do git push -qf "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" live-data && break; echo "push failed ($i) – retrying"; sleep 10; done
+      # While a favourite is playing (or kicks off within 60 min) the script leaves out/live-needed:
       # re-run it every minute for as long as a game is on (up to 110 min per job; scheduled runs wait meanwhile).
       - name: Live updates every minute during games
         env:
@@ -59,6 +59,7 @@ jobs:
             cd out
             git add live.json
             git commit -qm "Live data $(date -u +%Y-%m-%dT%H:%MZ)" || true
-            git push -qf "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" live-data
+            # a GitHub hiccup (500 on push, 23 Oct) must not end the live loop: try again next round
+            git push -qf "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" live-data || echo "push failed – retrying next round"
             cd ..
           done
