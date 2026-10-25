@@ -974,7 +974,7 @@ let VAPID_PUB=lsGet("msh-vapid"); // Web Push public key, published by the robot
 let EXTRA=lsGet("msh-extra")||[];
 const SNAPSHOT_API="https://api.github.com/repos/tinerc2-jpg/My-Sports-Hub/contents/live.json?ref=live-data";
 // A game is on (or about to start) for this cached entry: refresh fast and read the freshest snapshot.
-function liveWindow(e){const d=e&&e.data,k=d&&d.nextGame&&!d.nextGame.tba&&d.nextGame.ts,now=Date.now();return !!(d&&(d.liveGame||(k&&now>k-(d.trot?120:15)*60e3&&now<k+150*60e3)));}
+function liveWindow(e){const d=e&&e.data,k=d&&d.nextGame&&!d.nextGame.tba&&d.nextGame.ts,now=Date.now();return !!(d&&(d.liveGame||(k&&now>k-(d.trot?120:60)*60e3&&now<k+150*60e3)));}
 async function getSnapshot(fresh){
   if(_snap&&Date.now()-_snapTs<(fresh?75*1000:5*60*1000))return _snap;
   // During live games the robot republishes every minute, but raw.githubusercontent caches for ~5 min,
@@ -2035,6 +2035,11 @@ function App(){
           if(!data.standing&&s.standing)data={...data,standing:s.standing,source:data.source+" + "+(s.standingFrom||"table")+" via GitHub"};
           if(!data.news&&s.news)data={...data,news:s.news};
         }
+      }
+      // The direct answer can miss a live game the robot has (Liverpool–Villarreal CL, 20 Oct): take the snapshot's.
+      if(data&&!data.liveGame&&fresh){
+        const snap=await getSnapshot(true).catch(()=>null),s=snap&&snap[t.name];
+        if(s&&s.data&&s.data.liveGame&&Date.now()-s.ts<10*60e3)data={...data,liveGame:s.data.liveGame};
       }
       saveLive(t.name,{ts:Date.now(),data});
     }catch(e){
