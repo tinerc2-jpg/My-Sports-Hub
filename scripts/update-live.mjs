@@ -377,7 +377,9 @@ async function hbProgramFor(team,tableNames){
       const st=String(j.status||""),finished=/finish|ended|slut|afslut|done|played|complete/i.test(st)||(/^60:00/.test(j.time||"")&&!j.time_running);
       console.log(`    handball live check ${g.mid}: status "${st}", time ${j.time}, running ${j.time_running}, score ${j.score}`);
       kickoffDebug.push(`${team.name}: handball live check ${g.mid} status "${st}" time ${j.time} running ${j.time_running} score ${j.score}`);
-      if(finished)continue;
+      // finished but the programme page doesn't have the score yet (Ringsted–GOG 25 Oct stayed "next game"
+      // for an hour): take the final score from the match JSON
+      if(finished){const fs=/^(\d+)-(\d+)$/.exec(String(j.score||""));if(g.hs==null&&fs){g.hs=+fs[1];g.as=+fs[2];}continue;}
       const started=j.time_running||(j.time&&j.time!=="00:00.00")||g.d.getTime()<now;
       if(!started)continue;
       const [hs,as]=String(j.score||"0-0").split("-").map(Number),home=isMe(g.home),min=parseInt(String(j.time||"0"),10);
