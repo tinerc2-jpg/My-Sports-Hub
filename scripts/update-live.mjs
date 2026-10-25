@@ -1043,9 +1043,18 @@ for(const [name,e] of Object.entries(teams)){
   const d=e&&e.data,p=prev[name]&&prev[name].data,t=api.DB[Object.keys(api.DB).find(k=>api.DB[k].name===name)]||extraTeams.find(x=>x.name===name);
   if(!d||!t||t.sport!=="Football")continue;
   const now=d.liveGame,was=p&&p.liveGame;let title=null,body=null,tags="soccer";
-  if(now&&!was){title="Kick-off: "+t.shortName;body=t.shortName+" vs "+now.opponent+" has started";}
-  else if(now&&was&&now.score!==was.score){title="⚽ GOAL – "+t.shortName+" "+now.score;body=t.shortName+" "+now.score+" "+now.opponent+" ("+now.detail+")";tags="soccer,tada";}
-  else if(!now&&was&&d.recentResults&&d.recentResults[0]){const r=d.recentResults[0];title="Full-time: "+t.shortName+" "+r.score;body=(r.result==="W"?"Win! ":r.result==="L"?"Loss. ":"Draw. ")+t.shortName+" "+r.score+" "+r.opponent;tags="checkered_flag";}
+  // ESPN sometimes answers with an older score (24 Oct: Chelsea 0–1, 0–0, 0–1, 0–2, 0–0 …), and each flip
+  // used to send another GOAL / kick-off push. Remember per game what was sent (liveNote, carried between
+  // runs) and only notify kick-off once, a goal only when the total goes above what we already sent,
+  // full-time once.
+  const goals=x=>{const m=/^(\d+)\D+(\d+)$/.exec(String(x||"").trim());return m?+m[1]+ +m[2]:null;};
+  const key=now&&(now.ev||now.opponent);let note=p&&p.liveNote||null;
+  if(now&&(!note||note.key!==key))note={key,goals:0,ko:false,ft:false};
+  if(note)d.liveNote=note;
+  if(now&&!note.ko){note.ko=true;title="Kick-off: "+t.shortName;body=t.shortName+" vs "+now.opponent+" has started";}
+  else if(now&&goals(now.score)!=null&&goals(now.score)>note.goals){title="⚽ GOAL – "+t.shortName+" "+now.score;body=t.shortName+" "+now.score+" "+now.opponent+" ("+now.detail+")";tags="soccer,tada";}
+  else if(!now&&was&&note&&!note.ft&&d.recentResults&&d.recentResults[0]&&(d.recentResults[0].ev?String(d.recentResults[0].ev)===String(note.key):true)){note.ft=true;const r=d.recentResults[0];title="Full-time: "+t.shortName+" "+r.score;body=(r.result==="W"?"Win! ":r.result==="L"?"Loss. ":"Draw. ")+t.shortName+" "+r.score+" "+r.opponent;tags="checkered_flag";}
+  if(now&&goals(now.score)!=null)note.goals=Math.max(note.goals,goals(now.score));
   if(!title)continue;
   // JSON publish: headers can't carry emoji / ø
   try{const r=await fetch("https://ntfy.sh/",{method:"POST",headers:{"Content-Type":"application/json"},
