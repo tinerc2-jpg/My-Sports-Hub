@@ -988,9 +988,12 @@ async function getSnapshot(fresh){
   return _snap;
 }
 
-function liveIsStale(e,selected){
+// The robot's last snapshot says this team is playing right now (even when our own data doesn't know yet).
+function snapLive(name){const s=_snap&&_snap[name];return !!(s&&s.data&&s.data.liveGame&&Date.now()-(s.ts||0)<15*60e3);}
+function liveIsStale(e,selected,name){
   if(!e)return true;
   const now=Date.now();
+  if(name&&snapLive(name)&&!(e.data&&e.data.liveGame)&&now-(e.ts||0)>LIVE_TTL_INGAME)return true;
   if(e.errTs&&now-e.errTs<LIVE_RETRY)return false;
   if(!e.data&&now-(e.ts||0)>LIVE_TTL_INGAME)return true; // "no data" is cheap to re-check (the snapshot may have it now)
   const d=e.data,kick=d&&d.nextGame&&d.nextGame.ts;
@@ -2017,9 +2020,9 @@ function App(){
   async function refreshTeam(t,force){
     if(!t||_inflight[t.name])return;
     const cur=liveRef.current[t.name];
-    if(!force&&!liveIsStale(cur,t.id===selRef.current))return;
+    if(!force&&!liveIsStale(cur,t.id===selRef.current,t.name))return;
     _inflight[t.name]=true;setBusy(b=>({...b,[t.name]:true}));
-    const fresh=liveWindow(cur);
+    const fresh=liveWindow(cur)||snapLive(t.name);
     try{
       // Handball (and anything the robot marks so) is richer in the snapshot than from the browser's own sources.
       const snap0=await getSnapshot(fresh).catch(()=>null),s0=snap0&&snap0[t.name];
@@ -2037,8 +2040,9 @@ function App(){
         }
       }
       // The direct answer can miss a live game the robot has (Liverpool–Villarreal CL, 20 Oct): take the snapshot's.
-      if(data&&!data.liveGame&&fresh){
-        const snap=await getSnapshot(true).catch(()=>null),s=snap&&snap[t.name];
+      // (no window check: during the game nextGame may already point to the following match – Liverpool 25 Oct)
+      if(data&&!data.liveGame){
+        const snap=await getSnapshot(fresh).catch(()=>null),s=snap&&snap[t.name];
         if(s&&s.data&&s.data.liveGame&&Date.now()-s.ts<10*60e3)data={...data,liveGame:s.data.liveGame};
       }
       saveLive(t.name,{ts:Date.now(),data});
