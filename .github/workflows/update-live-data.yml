@@ -70,4 +70,7 @@ jobs:
         if: always()
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: gh workflow run update-live-data.yml --ref main -R "$GITHUB_REPOSITORY" || echo "could not start the next job – cron takes over"
+        # after a failure wait 10 min first, so a bug can't start a job every minute (26 Oct: 3 failures in 4 min)
+        run: |
+          [ "${{ job.status }}" = "success" ] || sleep 600
+          gh workflow run update-live-data.yml --ref main -R "$GITHUB_REPOSITORY" || echo "could not start the next job – cron takes over"
