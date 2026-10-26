@@ -10,6 +10,7 @@ on:
 
 permissions:
   contents: write
+  actions: write   # the job starts its own successor (see the last step)
 
 concurrency:
   group: live-data
@@ -42,24 +43,31 @@ jobs:
           git add live.json
           git commit -qm "Live data $(date -u +%Y-%m-%dT%H:%MZ)"
           for i in 1 2 3; do git push -qf "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" live-data && break; echo "push failed ($i) – retrying"; sleep 10; done
-      # While a favourite is playing (or kicks off within 60 min) the script leaves out/live-needed:
-      # re-run it every minute for as long as a game is on (up to 110 min per job; scheduled runs wait meanwhile).
-      - name: Live updates every minute during games
+      # The job keeps itself going instead of trusting GitHub's cron (26 Oct: no scheduled run for 2 h 10 min,
+      # just before Rune's match). For up to 110 min: while a favourite is playing (or kicks off within 60 min,
+      # out/live-needed) re-run --live every ~15 s; otherwise a full run every 15 min. Then it starts the next job.
+      - name: Keep updating (live every ~15 s during games, full run every 15 min)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           APISPORTS_KEY: ${{ secrets.APISPORTS_KEY }}
+          GOATCOUNTER_TOKEN: ${{ secrets.GOATCOUNTER_TOKEN }}
         run: |
-          end=$(( $(date +%s) + 110*60 ))
-          while [ -f out/live-needed ] && [ "$(date +%s)" -lt "$end" ]; do
+          end=$(( $(date +%s) + 110*60 )); last_full=$(date +%s)
+          while [ "$(date +%s)" -lt "$end" ]; do
             sleep 15
-            # every 15 min also a full run, so the other teams keep updating during a long live loop
-            # every full run picks up the newest code from main, so a fix doesn't wait for the loop to end (up to 2 h)
-            if [ $(( $(date +%s) - ${last_full:-$(date +%s)} )) -ge 900 ]; then last_full=$(date +%s); git fetch -q origin main && git checkout -q origin/main -- index.html scripts || true; node scripts/update-live.mjs || break
-            else last_full=${last_full:-$(date +%s)}; node scripts/update-live.mjs --live || break; fi
+            # every full run picks up the newest code from main, so a fix doesn't wait for the loop to end
+            if [ $(( $(date +%s) - last_full )) -ge 900 ]; then last_full=$(date +%s); git fetch -q origin main && git checkout -q origin/main -- index.html scripts || true; node scripts/update-live.mjs || continue
+            elif [ -f out/live-needed ]; then node scripts/update-live.mjs --live || continue
+            else continue; fi
             cd out
             git add live.json
             git commit -qm "Live data $(date -u +%Y-%m-%dT%H:%MZ)" || true
-            # a GitHub hiccup (500 on push, 23 Oct) must not end the live loop: try again next round
+            # a GitHub hiccup (500 on push, 23 Oct) must not end the loop: try again next round
             git push -qf "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" live-data || echo "push failed – retrying next round"
             cd ..
           done
+      - name: Start the next job
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run update-live-data.yml --ref main -R "$GITHUB_REPOSITORY" || echo "could not start the next job – cron takes over"
