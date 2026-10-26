@@ -1040,7 +1040,7 @@ for(const [name,e] of Object.entries(teams)){
   // keep a scoreboard result from an earlier run until ESPN's own schedule has it
   for(const r of (p.recentResults||[]).filter(r=>r.sb&&!d.recentResults.some(x=>String(x.ev)===String(r.ev))))
     if(Date.now()-r.ts<3*864e5)d.recentResults=[r,...d.recentResults].sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,5);
-  const g=[p.liveGame,p.nextGame].find(x=>x&&x.ev&&x.sp&&x.lg&&(x===p.liveGame||(x.ts&&x.ts<Date.now()&&Date.now()-x.ts<6*3600e3)));
+  let g=[p.liveGame,p.nextGame].find(x=>x&&x.ev&&x.sp&&x.lg&&(x===p.liveGame||(x.ts&&x.ts<Date.now()&&Date.now()-x.ts<6*3600e3)));
   // or the game the live alerts last followed (liveNote.key = ESPN event id), same league as the next game
   const n=p.liveNote,ng=p.nextGame||d.nextGame;
   if(!g&&n&&n.key&&/^\d+$/.test(String(n.key))&&(!n.ts||Date.now()-n.ts<12*3600e3)&&ng&&ng.sp&&ng.lg)g={ev:n.key,sp:ng.sp,lg:ng.lg,tid:ng.tid,opponent:n.opp||"",ts:n.ts||Date.now()};
