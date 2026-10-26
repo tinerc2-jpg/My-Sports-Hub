@@ -1031,6 +1031,34 @@ const prevRequests=prevFull&&prevFull.requests;
     }catch(e){console.log("requests (ntfy): "+e.message);requests={...(requests||{}),ntfy:pr};}
   }
 }
+// A game that just ended can drop out of ESPN's team schedule before it shows up as a result (FCK–OB 1–1,
+// 26 Oct: still missing 35 min after full-time while nextGame had moved on). If the previous run had it as
+// live / next game and it started in the last 6 h, read the final score from the league scoreboard.
+for(const [name,e] of Object.entries(teams)){
+  const d=e&&e.data,p=prev[name]&&prev[name].data;
+  if(!d||!p||!Array.isArray(d.recentResults))continue;
+  // keep a scoreboard result from an earlier run until ESPN's own schedule has it
+  for(const r of (p.recentResults||[]).filter(r=>r.sb&&!d.recentResults.some(x=>String(x.ev)===String(r.ev))))
+    if(Date.now()-r.ts<3*864e5)d.recentResults=[r,...d.recentResults].sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,5);
+  const g=[p.liveGame,p.nextGame].find(x=>x&&x.ev&&x.sp&&x.lg&&(x===p.liveGame||(x.ts&&x.ts<Date.now()&&Date.now()-x.ts<6*3600e3)));
+  // or the game the live alerts last followed (liveNote.key = ESPN event id), same league as the next game
+  const n=p.liveNote,ng=p.nextGame||d.nextGame;
+  if(!g&&n&&n.key&&/^\d+$/.test(String(n.key))&&(!n.ts||Date.now()-n.ts<12*3600e3)&&ng&&ng.sp&&ng.lg)g={ev:n.key,sp:ng.sp,lg:ng.lg,tid:ng.tid,opponent:n.opp||"",ts:n.ts||Date.now()};
+  if(!g||d.recentResults.some(r=>String(r.ev)===String(g.ev))||(d.liveGame&&String(d.liveGame.ev)===String(g.ev)))continue;
+  try{
+    const ev=await espnScoreboardEvent(g.sp,g.lg,g.ev,g.ts||(p.nextGame&&p.nextGame.ts)||Date.now());
+    const c=ev&&ev.competitions&&ev.competitions[0],st=c&&c.status&&c.status.type||ev&&ev.status&&ev.status.type;
+    if(!c||!st||!st.completed)continue;
+    const tid=String(g.tid||""),me=c.competitors.find(x=>String(x.id)===tid||String(x.team&&x.team.id)===tid),op=c.competitors.find(x=>x!==me);
+    if(!me||!op)continue;
+    const ms=+me.score,os=+op.score,ts=new Date(c.date||ev.date).getTime();
+    const opp=g.opponent||((op.team&&(op.team.displayName||op.team.name))||"")+(me.homeAway==="home"?" (H)":me.homeAway==="away"?" (A)":"");
+    const row={opponent:opp,score:ms+"–"+os,result:ms>os?"W":ms<os?"L":"D",
+      date:new Date(ts).toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:"Europe/Copenhagen"}),ev:String(g.ev),lg:g.lg,sp:g.sp,tid,ts,sb:1};
+    d.recentResults=[row,...d.recentResults].slice(0,5);
+    console.log(`result from scoreboard ${name}: ${row.opponent} ${row.score}`);
+  }catch(err){console.log("result from scoreboard "+name+": "+err.message);}
+}
 // Live push to the app: every changed live score goes to one ntfy.sh topic the app listens to while a
 // game is on (EventSource), so the app updates within seconds instead of polling GitHub every 75 s.
 for(const [name,e] of Object.entries(teams)){
@@ -1051,7 +1079,7 @@ for(const [name,e] of Object.entries(teams)){
   // full-time once.
   const goals=x=>{const m=/^(\d+)\D+(\d+)$/.exec(String(x||"").trim());return m?+m[1]+ +m[2]:null;};
   const key=now&&(now.ev||now.opponent);let note=p&&p.liveNote||null;
-  if(now&&(!note||note.key!==key))note={key,goals:0,ko:false,ft:false};
+  if(now&&(!note||note.key!==key))note={key,goals:0,ko:false,ft:false,opp:now.opponent,ts:Date.now()};
   if(note)d.liveNote=note;
   if(now&&!note.ko){note.ko=true;title="Kick-off: "+t.shortName;body=t.shortName+" vs "+now.opponent+" has started";}
   else if(now&&goals(now.score)!=null&&goals(now.score)>note.goals){title="⚽ GOAL – "+t.shortName+" "+now.score;body=t.shortName+" "+now.score+" "+now.opponent+" ("+now.detail+")";tags="soccer,tada";}
