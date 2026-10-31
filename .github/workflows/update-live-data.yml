@@ -19,7 +19,7 @@ concurrency:
 jobs:
   update:
     runs-on: ubuntu-latest
-    timeout-minutes: 120
+    timeout-minutes: 350
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -52,8 +52,10 @@ jobs:
           APISPORTS_KEY: ${{ secrets.APISPORTS_KEY }}
           GOATCOUNTER_TOKEN: ${{ secrets.GOATCOUNTER_TOKEN }}
         run: |
-          end=$(( $(date +%s) + 110*60 )); last_full=$(date +%s)
-          while [ "$(date +%s)" -lt "$end" ]; do
+          # 110 min, but never hand over to the next job during a game: a new job can wait 10+ min for a runner
+          # (31 Oct: 13 min without updates right at Barça's kick-off) – keep going while live, up to 5½ h in total
+          start=$(date +%s); end=$(( start + 110*60 )); hard=$(( start + 330*60 )); last_full=$(date +%s)
+          while [ "$(date +%s)" -lt "$end" ] || { [ -f out/live-needed ] && [ "$(date +%s)" -lt "$hard" ]; }; do
             sleep 15
             # every full run picks up the newest code from main, so a fix doesn't wait for the loop to end
             if [ $(( $(date +%s) - last_full )) -ge 900 ]; then last_full=$(date +%s); git fetch -q origin main && git checkout -q origin/main -- index.html scripts || true; node scripts/update-live.mjs || continue
