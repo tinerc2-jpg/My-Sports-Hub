@@ -1008,13 +1008,29 @@ const prevRequests=prevFull&&prevFull.requests;
       if(!prevU||Date.now()-(prevU.ts||0)>3600e3){
         const end=new Date().toISOString().slice(0,10),start=new Date(Date.now()-7*864e5).toISOString().slice(0,10);
         const gc=async p=>{const r=await fetch(`https://mysportshub.goatcounter.com/api/v0/${p}${p.includes("?")?"&":"?"}start=${start}&end=${end}`,{headers:{Authorization:"Bearer "+tok,"Content-Type":"application/json"}});return r.ok?r.json():{error:r.status};};
-        const tot=await gc("stats/total"),hits=await gc("stats/hits?limit=20"),loc=await gc("stats/locations?limit=10"),sys=await gc("stats/systems?limit=10"),siz=await gc("stats/sizes?limit=10");
+        const pause=()=>new Promise(r=>setTimeout(r,300)); // GoatCounter API: max 4 req/s
+        const gcs=async ps=>{const out=[];for(const p of ps){out.push(await gc(p));await pause();}return out;};
+        const [tot,hits,loc,sys,siz,brw,refs,camp]=await gcs(["stats/total","stats/hits?limit=20","stats/locations?limit=10","stats/systems?limit=10","stats/sizes?limit=10","stats/browsers?limit=10","stats/toprefs?limit=10","stats/campaigns?limit=10"]);
         const items=j=>(j.stats||[]).map(x=>({name:x.name||x.id||"?",count:x.count||0}));
-        usage={ts:Date.now(),start,end,total:tot.total||0,events:tot.total_events||0,
+        // Regions (cities/regions) for the top countries: stats/locations/<country id>.
+        const regions=[];
+        for(const c of (loc.stats||[]).slice(0,3)){if(!c.id)continue;const j=await gc("stats/locations/"+encodeURIComponent(c.id)+"?limit=10");await pause();
+          for(const x of items(j))regions.push({country:c.name||c.id,name:x.name||"(unknown)",count:x.count});}
+        // 30 days: total + per day (separate start date).
+        const start30=new Date(Date.now()-30*864e5).toISOString().slice(0,10);
+        let month=null;
+        try{const r=await fetch(`https://mysportshub.goatcounter.com/api/v0/stats/total?start=${start30}&end=${end}`,{headers:{Authorization:"Bearer "+tok,"Content-Type":"application/json"}});
+          if(r.ok){const j=await r.json();month={start:start30,end,total:j.total||0,events:j.total_events||0,daily:(j.stats||[]).map(d=>({day:d.day,count:d.daily||0}))};}}catch(e){}
+        const pages=(hits.hits||[]).map(x=>({path:x.path,event:!!x.event,count:x.count||0}));
+        usage={ts:Date.now(),start,end,
+          total:tot.total||0, // GoatCounter counts visitors (unique per session), not raw page loads
+          events:tot.total_events||0,
           daily:(tot.stats||[]).map(d=>({day:d.day,count:d.daily||0})),
-          pages:(hits.hits||[]).map(x=>({path:x.path,event:!!x.event,count:x.count||0})),
-          countries:items(loc),systems:items(sys),screens:items(siz)};
-        console.log(`usage: ${usage.total} visits, ${usage.events} events (${start}..${end})`+(tot.error?" · HTTP "+tot.error:""));
+          pages,
+          notifOpens:pages.filter(x=>/[?&]n[bt]=/.test(x.path)).reduce((a,x)=>a+x.count,0), // opened by tapping a notification
+          countries:items(loc),regions,systems:items(sys),browsers:items(brw),screens:items(siz),
+          referrers:items(refs),campaigns:items(camp),month};
+        console.log(`usage: ${usage.total} visitors, ${usage.events} events (${start}..${end}), 30 d: ${month?month.total:"?"}, refs ${usage.referrers.length}, regions ${regions.length}`+(tot.error?" · HTTP "+tot.error:"")+(refs.error?" · refs HTTP "+refs.error:""));
       }else usage=prevU;
     }catch(e){console.log("usage: "+e.message);}
   }
