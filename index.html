@@ -982,7 +982,7 @@ async function getSnapshot(fresh){
   let j=null;
   if(fresh&&!(_snapApiBlocked>Date.now()))j=await fetchJSON(SNAPSHOT_API,{Accept:"application/vnd.github.raw"}).catch(()=>{_snapApiBlocked=Date.now()+10*60*1000;return null;});
   if(!j)j=await fetchJSON(SNAPSHOT_URL+"?t="+Math.floor(Date.now()/300000));
-  _snap=j.teams||{};_snapTs=Date.now();
+  _snap=j.teams||{};_snapTs=Date.now();_snapSync=j.sync||{};
   if(j.push&&j.push.vapid&&j.push.vapid!==VAPID_PUB){VAPID_PUB=j.push.vapid;lsSet("msh-vapid",VAPID_PUB);}
   if(Array.isArray(j.leagueTeams)&&j.leagueTeams.length){EXTRA=j.leagueTeams;lsSet("msh-extra",EXTRA);}
   return _snap;
@@ -1090,6 +1090,29 @@ function loadSel(){
   if(_cachedSel)return _cachedSel;
   try{return localStorage.getItem("msh-sel")||"s-gog";}catch(e){return "s-gog";}
 }
+// Same teams on all devices (owner, 7 Nov 2026): devices that share a sync code post their favourite names to
+// ntfy (SYNC_TOPIC, key = sha256(code)[0..16]); the robot keeps the newest list per key in live.json.sync.
+const SYNC_TOPIC="msh-sync-7f3k9q";let _snapSync={},_syncQuiet=false;
+async function syncKey(code){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("msh:"+code));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("").slice(0,16);}
+async function syncPush(teams,force){
+  const st=lsGet("msh-sync");if(!st||!st.code)return;
+  const names=teams.map(t=>t.name);if(!force&&JSON.stringify(names)===JSON.stringify(st.last||[]))return;
+  const ts=Date.now();lsSet("msh-sync",{...st,ts,last:names});
+  try{await fetch("https://ntfy.sh/"+SYNC_TOPIC,{method:"POST",body:JSON.stringify({k:await syncKey(st.code),t:names.slice(0,60),ts})});}catch(e){}
+}
+// Newer list from another device → rebuild the favourites from the names (keeps this device's objects where it can).
+async function syncPull(teams){
+  const st=lsGet("msh-sync");if(!st||!st.code)return null;
+  const e=_snapSync[await syncKey(st.code)];
+  if(!e){if(!st.ts)syncPush(teams,true);return null;}
+  if(!(e.ts>(st.ts||0)))return null;
+  lsSet("msh-sync",{...st,ts:e.ts,last:e.t});
+  if(JSON.stringify(e.t)===JSON.stringify(teams.map(t=>t.name)))return null;
+  return e.t.map((n,i)=>{const have=teams.find(t=>t.name===n);if(have)return have;const x=lookup(n,"");return x&&!x._unknown?{...x,id:norm(x.name).replace(/\s+/g,"-")+"-"+Date.now()+i}:null;}).filter(Boolean);
+}
+// ?sync=CODE (the link from "Same teams on all devices") joins this device to the code once.
+(function(){try{const c=new URLSearchParams(location.search).get("sync");const st=lsGet("msh-sync");
+  if(c&&/^[a-z0-9]{6,20}$/.test(c)&&(!st||st.code!==c))lsSet("msh-sync",{code:c,ts:0,last:[]});}catch(e){}})();
 function persist(teams,sel){
   const toSave=teams.map(t=>({id:t.id,name:t.name,shortName:t.shortName,
     sport:t.sport,league:t.league,country:t.country,
@@ -1097,6 +1120,29 @@ function persist(teams,sel){
   _cachedTeams=teams;_cachedSel=sel;
   try{localStorage.setItem("msh-teams",JSON.stringify(toSave));
     localStorage.setItem("msh-sel",sel);}catch(e){}
+  if(!_syncQuiet)syncPush(teams);
+}
+function SyncCard({teams}){
+  const [st,setSt]=useState(()=>lsGet("msh-sync")),[copied,setCopied]=useState(false);
+  const base=/^https?:/.test(location.protocol)&&!/^(localhost|127\.)/.test(location.hostname)?location.origin+location.pathname.replace(/index\.html$/,""):"https://tinerc2-jpg.github.io/My-Sports-Hub/";
+  const on=()=>{const code=Array.from(crypto.getRandomValues(new Uint8Array(8)),b=>"abcdefghjkmnpqrstuvwxyz23456789"[b%31]).join("");const v={code,ts:0,last:[]};lsSet("msh-sync",v);setSt(v);syncPush(teams,true);};
+  const off=()=>{try{localStorage.removeItem("msh-sync");}catch(e){}setSt(null);};
+  const link=st&&st.code?base+"?app&sync="+st.code:"";
+  const copy=()=>{const done=()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);};
+    if(navigator.share){navigator.share({title:"My Sports Hub",url:link}).catch(()=>{});return;}
+    try{navigator.clipboard.writeText(link).then(done,()=>{});}catch(e){}};
+  const btn={border:"none",borderRadius:10,padding:"8px 12px",fontWeight:700,fontSize:"0.75rem",cursor:"pointer",fontFamily:"Roboto,'Google Sans',Arial,sans-serif"};
+  return h("div",{style:{marginTop:10,background:"#16264a",border:"1px solid rgba(255,255,255,0.1)",borderRadius:14,padding:"12px 14px",fontFamily:"Roboto,'Google Sans',Arial,sans-serif"}},
+    h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
+      h("div",{style:{fontSize:"0.85rem",fontWeight:600}},"🔄 Same teams on all devices",
+        h("div",{style:{fontSize:"0.7rem",color:"#d5deee",fontWeight:400,marginTop:2}},st&&st.code?"✓ On – changes follow within ~15 min":"Your phone and computer show the same favourites")),
+      st&&st.code?h("button",{onClick:off,style:{...btn,background:"rgba(255,255,255,0.08)",color:"#eef2f8"}},"Turn off")
+        :h("button",{onClick:on,style:{...btn,background:"#e8409a",color:"#fff"}},"Turn on")),
+    st&&st.code&&h("div",{style:{marginTop:10,fontSize:"0.72rem",color:"#d5deee",lineHeight:1.5}},
+      "Open this link once on your other phone or computer:",
+      h("div",{style:{marginTop:6,display:"flex",gap:8,alignItems:"center"}},
+        h("code",{style:{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",background:"rgba(255,255,255,0.06)",borderRadius:8,padding:"7px 9px",color:"#ff9fd0",userSelect:"all"}},link),
+        h("button",{onClick:copy,style:{...btn,background:"#e8409a",color:"#fff",flexShrink:0}},copied?"✓ Copied":navigator.share?"Send":"Copy"))));
 }
 add(["fc fredericia","fredericia fodbold"],{name:"FC Fredericia",shortName:"FC Fredericia",sport:"Football",league:"1. division",country:"🇩🇰",color:"#c8102e",accent:"#1d3360",emoji:"⚽",standing:{rank:null,points:null,wins:null,draws:null,losses:null},recentResults:[],nextGame:null,news:[]});
 add(["brentford","brentford fc"],{name:"Brentford FC",shortName:"Brentford",sport:"Football",league:"Premier League",country:"🇬🇧",color:"#E30613",accent:"#1C1C1C",emoji:"⚽",standing:{rank:9,points:49,wins:14,draws:7,losses:16},recentResults:[{opponent:"Liverpool (A)",score:"1-1",result:"D",date:"May 24"},{opponent:"Crystal Palace (H)",score:"2-2",result:"D",date:"May 17"},{opponent:"Man City (A)",score:"0-3",result:"L",date:"May 9"}],nextGame:{opponent:"Season complete - 9th place finish",date:"Season complete",time:"-",tv:"-"},news:[{title:"Brentford 9th - solid PL season done, drew 1-1 at Liverpool",time:"today",hot:false},{title:"Igor Thiago top scorer 21 PL goals - breakthrough season",time:"today",hot:true},{title:"Keith Andrews confirmed as permanent head coach",time:"today",hot:false}]});
@@ -1993,6 +2039,11 @@ function TeamTile({t,onClick}){
 function App(){
   const [teams,setTeams]=useState(()=>teamsFromLink(loadTeams()));
   const [selected,setSelected]=useState(loadSel);
+  useEffect(()=>{
+    let stop=false;
+    const check=()=>getSnapshot().then(()=>syncPull(teamsRef.current)).then(n=>{if(stop||!n)return;_syncQuiet=true;setTeams(n);persist(n,n[0]?n[0].id:"");_syncQuiet=false;}).catch(()=>{});
+    check();const iv=setInterval(check,180000);return()=>{stop=true;clearInterval(iv);};
+  },[]);
   const [showModal,setShowModal]=useState(false);
   const [removing,setRemoving]=useState(null);
   // Morning summary: when the favourites change, tell the robot the new list (quietly).
@@ -2208,6 +2259,7 @@ function App(){
       ),
       h(SportsWeek,{teams:teams.map(t=>mergeLive(t,live[t.name])),onOpen:t=>handleSelect((teams.find(x=>x.name===t.name)||{}).id),onLive:t=>{handleSelect((teams.find(x=>x.name===t.name)||{}).id);if(t.liveGame&&t.liveGame.ev&&t.liveGame.sp)setTimeout(()=>setMatch({...t.liveGame,live:true,date:""}),50);}}),
       h("button",{onClick:()=>setShowFeedback(true),style:{marginTop:16,width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:12,padding:12,color:"#eef2f8",fontSize:"0.88rem",cursor:"pointer",fontFamily:"Roboto,'Google Sans',Arial,sans-serif"}},"💬 Ideas & feedback – tell us what to improve"),
+      teams.length>0&&h(SyncCard,{teams}),
       h("div",{style:{height:30}})
     ),
     view==="team"&&team&&h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},

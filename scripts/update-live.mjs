@@ -28,15 +28,15 @@ const LIVE=process.argv.includes("--live");
 const NOW=Date.now();
 // Trav: from 2 h before the first leg (odds and pool % move most then).
 function needsLive(e){const d=e&&e.data,k=d&&d.nextGame&&!d.nextGame.tba&&d.nextGame.ts;return !!(d&&(d.liveGame||(k&&NOW>k-(d.trot?120:60)*60e3&&NOW<k+150*60e3)));}
-let prev={},prevFull=null;
+let prev={},prevFull=null,prevSync=null;
 let prevExtra=null;
-if(LIVE&&existsSync("out/live.json")){const j=JSON.parse(readFileSync("out/live.json","utf8"));prev=j.teams||{};prevExtra=j.leagueTeams||[];}
+if(LIVE&&existsSync("out/live.json")){const j=JSON.parse(readFileSync("out/live.json","utf8"));prev=j.teams||{};prevExtra=j.leagueTeams||[];prevSync=j.sync||null;}
 else try{
   // the API has no CDN cache (raw.githubusercontent can be ~5 min old); raw file as fallback
   const repo=process.env.GITHUB_REPOSITORY||"tinerc2-jpg/My-Sports-Hub";
   let r=await fetch(`https://api.github.com/repos/${repo}/contents/live.json?ref=live-data`,{headers:{Accept:"application/vnd.github.raw"}});
   if(!r.ok)r=await fetch(`https://raw.githubusercontent.com/${repo}/live-data/live.json`);
-  if(r.ok){prevFull=await r.json();prev=prevFull.teams||{};}
+  if(r.ok){prevFull=await r.json();prev=prevFull.teams||{};prevSync=prevFull.sync||null;}
 }catch(e){}
 
 // TheSportsDB (free key): the team's next events with exact UTC timestamps; id cached in the snapshot.
@@ -1042,6 +1042,21 @@ const prevRequests=prevFull&&prevFull.requests;
     }catch(e){console.log("requests (ntfy): "+e.message);requests={...(requests||{}),ntfy:pr};}
   }
 }
+// Same teams on all devices: devices post {k,t,ts} to ntfy; keep the newest favourites list per key (a year).
+let sync=prevSync||{};
+if(!LIVE){
+  try{
+    const r=await fetch("https://ntfy.sh/msh-sync-7f3k9q/json?poll=1&since=24h");
+    const msgs=(await r.text()).split("\n").filter(Boolean).map(l=>{try{return JSON.parse(l);}catch(e){return null;}}).filter(m=>m&&m.event==="message");
+    let n=0;
+    for(const m of msgs){try{const v=JSON.parse(m.message);
+      if(!/^[a-f0-9]{16}$/.test(v.k)||!Array.isArray(v.t)||!(v.ts>0)||v.ts>Date.now()+6e5)continue;
+      const t=v.t.filter(x=>typeof x==="string").map(x=>x.slice(0,60)).slice(0,60);
+      if(!sync[v.k]||sync[v.k].ts<v.ts){sync[v.k]={t,ts:v.ts};n++;}}catch(e){}}
+    for(const k of Object.keys(sync))if(Date.now()-sync[k].ts>365*864e5)delete sync[k];
+    console.log(`sync: ${msgs.length} recent, ${n} updated, ${Object.keys(sync).length} kept`);
+  }catch(e){console.log("sync: "+e.message);}
+}
 // A game that just ended can drop out of ESPN's team schedule before it shows up as a result (FCK–OB 1–1,
 // 26 Oct: still missing 35 min after full-time while nextGame had moved on). If the previous run had it as
 // live / next game and it started in the last 6 h, read the final score from the league scoreboard.
@@ -1165,7 +1180,7 @@ let morningSent=(LIVE&&existsSync("out/live.json")?(JSON.parse(readFileSync("out
   }
 }
 mkdirSync("out",{recursive:true});
-writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,kickoffDebug:kickoffDebug.slice(0,40),push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length,morningSent}:null}));
+writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,sync,kickoffDebug:kickoffDebug.slice(0,40),push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length,morningSent}:null}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
 const liveNow=Object.entries(teams).filter(([,e])=>needsLive(e)).map(([n,e])=>n+(e.data.liveGame?" "+e.data.liveGame.score:" (kick-off soon)"));
 if(liveNow.length){writeFileSync("out/live-needed",liveNow.join("\n"));console.log("live: "+liveNow.join(" · "));}
