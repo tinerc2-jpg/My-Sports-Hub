@@ -8,10 +8,10 @@
 - Robotten kører selv i løkke, skifter ikke job under kampe.
 - Ét tjek før dagens første kamp (daglig rutine); ugentlig/månedlig brugsrapport; daglig tjek af holdønsker.
 - Udvikl lokalt og vis skærmbilleder før noget lægges ud.
-- Samme hold på alle enheder: "🔄 Same teams on all devices" (sync-kode + link) – lagt ud 7/11, ikke testet på 2 rigtige enheder.
+- Sync (11/11): fejl tømte Tines liste; rettet (#138): enhed der joiner venter, tom liste tages aldrig. Kode kan skrives ind i appen (#139). `?restore&teams=…` slår sync fra og lægger hold ind.
 
 **Åbne opgaver:**
 - Vercel: projektet er ikke oprettet endnu (navnet "mysportshub" blev afvist – prøv fx "sportshubdk"). vercel.json er klar.
 - Spørg om GitHub Pages skal blive ved, når Vercel kører.
 
-**Næste skridt:** Spørg om sync virker mellem telefon og computer. Hjælp Tine med Vercel-import (navn uden bindestreg).
+**Næste skridt:** Tjek at Tines hold er tilbage i hjemmeskærm-appen (via kode). Hjælp Tine med Vercel-import (navn uden bindestreg).

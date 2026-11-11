@@ -1044,13 +1044,16 @@ const prevRequests=prevFull&&prevFull.requests;
 }
 // Same teams on all devices: devices post {k,t,ts} to ntfy; keep the newest favourites list per key (a year).
 let sync=prevSync||{};
+// 11 Nov 2026: a sync bug emptied the owner's list – put her saved list back on both of her codes (once; newer lists win).
+{const T=["GOG Håndbold","FC Barcelona","Arsenal FC","Liverpool FC","Manchester United","Rasmus Højgaard","Brøndby IF","Holger Rune","Carlos Alcaraz","SSC Napoli","Novak Djokovic","Jannik Sinner","FC København","Tottenham Hotspur","Lazio","Viborg FF","Rory McIlroy","Brentford FC","Jonas Vingegaard"],TS=1794404400000;
+  for(const k of ["8d7b41e9d38b1aec","dc5cda48b71e9976"])if(!sync[k]||sync[k].ts<TS)sync[k]={t:T,ts:TS};}
 if(!LIVE){
   try{
     const r=await fetch("https://ntfy.sh/msh-sync-7f3k9q/json?poll=1&since=24h");
     const msgs=(await r.text()).split("\n").filter(Boolean).map(l=>{try{return JSON.parse(l);}catch(e){return null;}}).filter(m=>m&&m.event==="message");
     let n=0;
     for(const m of msgs){try{const v=JSON.parse(m.message);
-      if(!/^[a-f0-9]{16}$/.test(v.k)||!Array.isArray(v.t)||!(v.ts>0)||v.ts>Date.now()+6e5)continue;
+      if(!/^[a-f0-9]{16}$/.test(v.k)||!Array.isArray(v.t)||!v.t.length||!(v.ts>0)||v.ts>Date.now()+6e5)continue;
       const t=v.t.filter(x=>typeof x==="string").map(x=>x.slice(0,60)).slice(0,60);
       if(!sync[v.k]||sync[v.k].ts<v.ts){sync[v.k]={t,ts:v.ts};n++;}}catch(e){}}
     for(const k of Object.keys(sync))if(Date.now()-sync[k].ts>365*864e5)delete sync[k];
