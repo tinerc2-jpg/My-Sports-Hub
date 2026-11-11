@@ -1,11 +1,13 @@
 // The logged-in user's favourites: {teams:[names], ts}. An empty list is never saved (that is how the
 // sync bug of 11 Nov 2026 lost the owner's teams); the previous list is kept as a backup.
-import { getJSON, setJSON, requireUser } from "./_lib.js";
+import { getJSON, setJSON, requireUser, saveUser } from "./_lib.js";
 
 export default async function handler(req, res) {
   const u = await requireUser(req, res); if (!u) return;
   try {
     const key = "teams:" + u.id;
+    // "Last seen" for the admin dashboard, written at most every 6 hours.
+    if (Date.now() - (u.lastSeen || 0) > 6 * 3600e3) { u.lastSeen = Date.now(); await saveUser(u).catch(() => {}); }
     if (req.method === "GET") return res.status(200).json((await getJSON(key)) || { teams: [], ts: 0 });
     if (req.method === "PUT") {
       const t = (req.body || {}).teams;
