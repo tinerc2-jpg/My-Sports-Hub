@@ -32,7 +32,9 @@ function devCmd([cmd, key, ...args]) {
   fs.writeFileSync(DEV_FILE, JSON.stringify(db));
   return out;
 }
-export async function redis(...cmd) {
+// The Redis database is shared with Kapitly, so every key gets the "msh:" prefix (keys are always the 2nd item).
+export async function redis(c0, key, ...rest) {
+  const cmd = [c0, "msh:" + key, ...rest];
   if (!REDIS_URL) {
     if (IS_HOSTED) throw new Error("Databasen er ikke sat op (mangler Upstash Redis i Vercel).");
     return devCmd(cmd);
