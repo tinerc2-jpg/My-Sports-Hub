@@ -40,7 +40,9 @@ jobs:
           git init -q -b live-data
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add live.json
+          # Vercel only reads vercel.json from the pushed branch: without it every live-data push became 3 Vercel deployments (hit 100/day on 10 Nov)
+          echo '{"git":{"deploymentEnabled":false}}' > vercel.json
+          git add live.json vercel.json
           git commit -qm "Live data $(date -u +%Y-%m-%dT%H:%MZ)"
           for i in 1 2 3; do git push -qf "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" live-data && break; echo "push failed ($i) – retrying"; sleep 10; done
       # The job keeps itself going instead of trusting GitHub's cron (26 Oct: no scheduled run for 2 h 10 min,
