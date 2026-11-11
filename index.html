@@ -2112,7 +2112,9 @@ function App(){
     let stop=false;
     const adopt=n=>{if(stop||!n||!n.length)return;_syncQuiet=true;setTeams(n);persist(n,n[0].id);_syncQuiet=false;};
     const check=()=>(_acct.user?acctPull(teamsRef.current):getSnapshot().then(()=>syncPull(teamsRef.current))).then(adopt).catch(()=>{});
-    acctInit().then(a=>{if(!stop)setAcct(a);check();});
+    acctInit().then(a=>{if(stop)return;setAcct(a);
+      // Logged in on load: merge this device's teams into the account (a ?teams= link opened before login state was known).
+      if(a.user)acctMerge(teamsRef.current).then(adopt).catch(()=>{});else check();});
     const vis=()=>{if(document.visibilityState==="visible"&&_acct.user)check();};document.addEventListener("visibilitychange",vis);
     const iv=setInterval(check,180000);return()=>{stop=true;clearInterval(iv);document.removeEventListener("visibilitychange",vis);};
   },[]);
