@@ -1,12 +1,10 @@
 // Owner dashboard data (admin.html): accounts and their teams. Only for admin users
 // (env ADMIN_USERS, comma-separated user ids; default "admin"). No passwords/hashes are returned.
-import { redis, getJSON, requireUser } from "./_lib.js";
-
-const admins = () => (process.env.ADMIN_USERS || "admin").split(",").map((s) => s.trim().toLowerCase()).filter(Boolean);
+import { redis, getJSON, requireUser, isAdmin } from "./_lib.js";
 
 export default async function handler(req, res) {
   const u = await requireUser(req, res); if (!u) return;
-  if (!admins().includes(u.id)) return res.status(403).json({ error: "Only the admin can see this." });
+  if (!isAdmin(u)) return res.status(403).json({ error: "Only the admin can see this." });
   try {
     const ids = (await redis("SMEMBERS", "users")) || [];
     const users = [];

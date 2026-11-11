@@ -51,7 +51,8 @@ export const setJSON = (k, v) => redis("SET", k, JSON.stringify(v));
 export const userId = (name) => String(name || "").trim().toLowerCase().replace(/\s+/g, "-").replace(/[^a-z0-9æøå_-]/g, "").slice(0, 40);
 export const getUser = (id) => getJSON("user:" + id);
 export const saveUser = async (u) => { await setJSON("user:" + u.id, u); await redis("SADD", "users", u.id); };
-export const publicUser = (u) => ({ id: u.id, name: u.name });
+export const isAdmin = (u) => !!u && (process.env.ADMIN_USERS || "admin").split(",").map((s) => s.trim().toLowerCase()).includes(u.id);
+export const publicUser = (u) => ({ id: u.id, name: u.name, ...(isAdmin(u) ? { admin: true } : {}) });
 
 export function hashPassword(pw, salt = crypto.randomBytes(16).toString("hex")) {
   return { salt, hash: crypto.scryptSync(String(pw), salt, 32).toString("hex") };
