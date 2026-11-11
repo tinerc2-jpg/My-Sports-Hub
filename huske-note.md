@@ -1,17 +1,15 @@
 # Huske-note (11. nov 2026)
 
-**Mål:** My Sports Hub – sportsapp til Tine (GitHub Pages; robot opdaterer live.json).
+**Mål:** My Sports Hub – sportsapp til Tine (GitHub Pages + nu Vercel; robot opdaterer live.json).
 
 **Beslutninger:**
-- Design: mørk navy + pink i Google-stil (Roboto, flade kort, farvestriber). Godkendt 6/11.
-- Hjemmeholdet står altid først (scoreLine/fixture).
-- Robotten kører selv i løkke, skifter ikke job under kampe.
-- Ét tjek før dagens første kamp (daglig rutine); ugentlig/månedlig brugsrapport; daglig tjek af holdønsker.
+- Design: mørk navy + pink, Google-stil. Hjemmeholdet altid først.
 - Udvikl lokalt og vis skærmbilleder før noget lægges ud.
-- Sync (11/11): fejl tømte Tines liste; rettet (#138): enhed der joiner venter, tom liste tages aldrig. Kode kan skrives ind i appen (#139). `?restore&teams=…` slår sync fra og lægger hold ind.
+- Konto-login som i Kapitly (api/, Upstash Redis delt med Kapitly, nøgler med `msh:`-forstavelse).
+- Vercel-projekt `sportshubdk` (team "kapitly") – https://sportshubdk-sigma.vercel.app. IKKE koblet til GitHub (Tine mangler GitHub Login Connection), så deploy sker via Vercel-API med token (gemt i miljøet).
+- Sync-fejl 11/11 tømte Tines hold; rettet, liste gendannet.
 
 **Åbne opgaver:**
-- Vercel: projektet er ikke oprettet endnu (navnet "mysportshub" blev afvist – prøv fx "sportshubdk"). vercel.json er klar.
-- Spørg om GitHub Pages skal blive ved, når Vercel kører.
-
-**Næste skridt:** Tjek at Tines hold er tilbage i hjemmeskærm-appen (via kode). Hjælp Tine med Vercel-import (navn uden bindestreg).
+- Tine skal teste login på Vercel-adressen og lægge appen på hjemmeskærmen derfra.
+- Evt. koble Vercel til GitHub (Login Connection), så main deployer automatisk.
+- Spørg om GitHub Pages skal blive ved.
