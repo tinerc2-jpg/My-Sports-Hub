@@ -1111,7 +1111,36 @@ async function syncPull(teams){
   lsSet("msh-sync",{...st,ts:e.ts,last:e.t,joined:false});
   if(!e.t||!e.t.length)return null;
   if(JSON.stringify(e.t)===JSON.stringify(teams.map(t=>t.name)))return null;
-  return e.t.map((n,i)=>{const have=teams.find(t=>t.name===n);if(have)return have;const x=lookup(n,"");return x&&!x._unknown?{...x,id:norm(x.name).replace(/\s+/g,"-")+"-"+Date.now()+i}:null;}).filter(Boolean);
+  return teamsFromNames(e.t,teams);
+}
+function teamsFromNames(names,teams){
+  return names.map((n,i)=>{const have=teams.find(t=>t.name===n);if(have)return have;const x=lookup(n,"");return x&&!x._unknown?{...x,id:norm(x.name).replace(/\s+/g,"-")+"-"+Date.now()+i}:null;}).filter(Boolean);
+}
+// Account (Vercel only, 11 Nov 2026, same setup as Kapitly): /api/auth logs in, /api/teams keeps the favourites
+// per user in Upstash Redis. On GitHub Pages there is no /api, so the card stays hidden.
+let _acct={ok:false,user:null},_acctTimer=null;
+async function api(path,opt){const r=await fetch(path,{credentials:"same-origin",...opt,headers:{"Content-Type":"application/json",...((opt||{}).headers||{})}});
+  const ct=r.headers.get("content-type")||"";if(!ct.includes("json"))throw new Error("no-api");const j=await r.json();if(!r.ok)throw new Error(j.error||("HTTP "+r.status));return j;}
+async function acctInit(){try{const j=await api("/api/auth");_acct={ok:true,user:j.user};}catch(e){_acct={ok:false,user:null};}return _acct;}
+function acctPush(teams){
+  if(!_acct.user)return;const names=teams.map(t=>t.name);if(!names.length)return;
+  clearTimeout(_acctTimer);_acctTimer=setTimeout(()=>api("/api/teams",{method:"PUT",body:JSON.stringify({teams:names})}).then(v=>lsSet("msh-acct-ts",v.ts)).catch(()=>{}),800);
+}
+// Newer list on the account (changed on another device) → rebuild the favourites.
+async function acctPull(teams){
+  if(!_acct.user)return null;
+  const v=await api("/api/teams");if(!v.teams||!v.teams.length||!(v.ts>(lsGet("msh-acct-ts")||0)))return null;
+  lsSet("msh-acct-ts",v.ts);
+  if(JSON.stringify(v.teams)===JSON.stringify(teams.map(t=>t.name)))return null;
+  const n=teamsFromNames(v.teams,teams);return n.length?n:null;
+}
+// Just logged in: the account's teams plus any this device has that the account doesn't (nothing is lost).
+async function acctMerge(teams){
+  const v=await api("/api/teams");const names=v.teams||[];
+  const all=[...names,...teams.map(t=>t.name).filter(n=>!names.includes(n))];
+  lsSet("msh-acct-ts",v.ts||0);
+  if(all.length&&all.length!==names.length)acctPush(teamsFromNames(all,teams));
+  return teamsFromNames(all,teams);
 }
 // ?sync=CODE (the link from "Same teams on all devices") joins this device to the code once.
 (function(){try{const c=new URLSearchParams(location.search).get("sync");const st=lsGet("msh-sync");
@@ -1123,7 +1152,34 @@ function persist(teams,sel){
   _cachedTeams=teams;_cachedSel=sel;
   try{localStorage.setItem("msh-teams",JSON.stringify(toSave));
     localStorage.setItem("msh-sel",sel);}catch(e){}
-  if(!_syncQuiet)syncPush(teams);
+  if(!_syncQuiet){syncPush(teams);acctPush(teams);}
+}
+function AccountCard({acct,onLogin,onLogout}){
+  const [mode,setMode]=useState(null),[name,setName]=useState(""),[pw,setPw]=useState(""),[err,setErr]=useState(""),[busy,setBusy]=useState(false);
+  const F="Roboto,'Google Sans',Arial,sans-serif";
+  const btn={border:"none",borderRadius:10,padding:"8px 12px",fontWeight:700,fontSize:"0.75rem",cursor:"pointer",fontFamily:F};
+  const inp={width:"100%",boxSizing:"border-box",fontSize:16,padding:"9px 10px",borderRadius:8,border:"1px solid rgba(255,255,255,0.15)",background:"rgba(255,255,255,0.06)",color:"#eef2f8",marginTop:8,fontFamily:F};
+  const go=e=>{e.preventDefault();setErr("");setBusy(true);
+    api("/api/auth",{method:"POST",body:JSON.stringify({action:mode,name,password:pw})}).then(j=>{setBusy(false);setMode(null);setPw("");onLogin(j.user);}).catch(x=>{setBusy(false);setErr(x.message==="no-api"?"Login isn't available here.":x.message);});};
+  const box={marginTop:10,background:"#16264a",border:"1px solid rgba(255,255,255,0.1)",borderRadius:14,padding:"12px 14px",fontFamily:F};
+  if(acct.user)return h("div",{style:{...box,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
+    h("div",{style:{fontSize:"0.85rem",fontWeight:600}},"👤 "+acct.user.name,
+      h("div",{style:{fontSize:"0.7rem",color:"#d5deee",fontWeight:400,marginTop:2}},"✓ Your teams are saved to your account – log in on any device")),
+    h("button",{onClick:onLogout,style:{...btn,whiteSpace:"nowrap",flexShrink:0,background:"rgba(255,255,255,0.08)",color:"#eef2f8"}},"Log out"));
+  return h("div",{style:box},
+    h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
+      h("div",{style:{fontSize:"0.85rem",fontWeight:600}},"👤 Your account",
+        h("div",{style:{fontSize:"0.7rem",color:"#d5deee",fontWeight:400,marginTop:2}},"Save your teams and see them on every device")),
+      !mode&&h("div",{style:{display:"flex",gap:6,flexShrink:0}},
+        h("button",{onClick:()=>setMode("login"),style:{...btn,background:"rgba(255,255,255,0.08)",color:"#eef2f8"}},"Log in"),
+        h("button",{onClick:()=>setMode("signup"),style:{...btn,background:"#e8409a",color:"#fff"}},"Sign up"))),
+    mode&&h("form",{onSubmit:go},
+      h("input",{value:name,onChange:e=>setName(e.target.value),placeholder:"Name",autoCapitalize:"none",autoCorrect:"off",autoComplete:"username",style:inp}),
+      h("input",{value:pw,onChange:e=>setPw(e.target.value),type:"password",placeholder:mode==="signup"?"Choose a password (min. 6)":"Password",autoComplete:mode==="signup"?"new-password":"current-password",style:inp}),
+      err&&h("div",{style:{color:"#ff9fd0",fontSize:"0.75rem",marginTop:8}},err),
+      h("div",{style:{display:"flex",gap:8,marginTop:10}},
+        h("button",{type:"submit",disabled:busy,style:{...btn,background:"#e8409a",color:"#fff",flex:1}},busy?"…":mode==="signup"?"Create account":"Log in"),
+        h("button",{type:"button",onClick:()=>{setMode(null);setErr("");},style:{...btn,background:"rgba(255,255,255,0.08)",color:"#eef2f8"}},"Cancel"))));
 }
 function SyncCard({teams}){
   const [st,setSt]=useState(()=>lsGet("msh-sync")),[copied,setCopied]=useState(false);
@@ -2048,10 +2104,17 @@ function TeamTile({t,onClick}){
 function App(){
   const [teams,setTeams]=useState(()=>teamsFromLink(loadTeams()));
   const [selected,setSelected]=useState(loadSel);
+  const [acct,setAcct]=useState(_acct);
+  const onLogin=user=>{_acct={ok:true,user};setAcct(_acct);try{localStorage.removeItem("msh-sync");}catch(e){}
+    acctMerge(teamsRef.current).then(n=>{if(n.length){_syncQuiet=true;setTeams(n);persist(n,n[0].id);_syncQuiet=false;}}).catch(()=>{});};
+  const onLogout=()=>{api("/api/auth",{method:"POST",body:JSON.stringify({action:"logout"})}).catch(()=>{});_acct={ok:true,user:null};setAcct(_acct);};
   useEffect(()=>{
     let stop=false;
-    const check=()=>getSnapshot().then(()=>syncPull(teamsRef.current)).then(n=>{if(stop||!n)return;_syncQuiet=true;setTeams(n);persist(n,n[0]?n[0].id:"");_syncQuiet=false;}).catch(()=>{});
-    check();const iv=setInterval(check,180000);return()=>{stop=true;clearInterval(iv);};
+    const adopt=n=>{if(stop||!n||!n.length)return;_syncQuiet=true;setTeams(n);persist(n,n[0].id);_syncQuiet=false;};
+    const check=()=>(_acct.user?acctPull(teamsRef.current):getSnapshot().then(()=>syncPull(teamsRef.current))).then(adopt).catch(()=>{});
+    acctInit().then(a=>{if(!stop)setAcct(a);check();});
+    const vis=()=>{if(document.visibilityState==="visible"&&_acct.user)check();};document.addEventListener("visibilitychange",vis);
+    const iv=setInterval(check,180000);return()=>{stop=true;clearInterval(iv);document.removeEventListener("visibilitychange",vis);};
   },[]);
   const [showModal,setShowModal]=useState(false);
   const [removing,setRemoving]=useState(null);
@@ -2252,6 +2315,7 @@ function App(){
       )
     ),
     (welcome||teams.length===0)&&view==="home"&&h(Welcome,{teams,onAdd:()=>setShowModal(true),onPick:addQuick,onDone:()=>setWelcome(false)}),
+    (welcome||teams.length===0)&&view==="home"&&acct.ok&&!acct.user&&h("div",{style:{maxWidth:520,margin:"0 auto",padding:"0 16px 16px"}},h(AccountCard,{acct,onLogin,onLogout})),
     view==="home"&&h(RequestDone,{teams,onAdd:addQuick}),
     !(welcome||teams.length===0)&&view==="home"&&h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
       h(WhatsNew,{hasTeams:teams.length>0}),
@@ -2268,7 +2332,8 @@ function App(){
       ),
       h(SportsWeek,{teams:teams.map(t=>mergeLive(t,live[t.name])),onOpen:t=>handleSelect((teams.find(x=>x.name===t.name)||{}).id),onLive:t=>{handleSelect((teams.find(x=>x.name===t.name)||{}).id);if(t.liveGame&&t.liveGame.ev&&t.liveGame.sp)setTimeout(()=>setMatch({...t.liveGame,live:true,date:""}),50);}}),
       h("button",{onClick:()=>setShowFeedback(true),style:{marginTop:16,width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:12,padding:12,color:"#eef2f8",fontSize:"0.88rem",cursor:"pointer",fontFamily:"Roboto,'Google Sans',Arial,sans-serif"}},"💬 Ideas & feedback – tell us what to improve"),
-      teams.length>0&&h(SyncCard,{teams}),
+      acct.ok&&h(AccountCard,{acct,onLogin,onLogout}),
+      teams.length>0&&!acct.user&&h(SyncCard,{teams}),
       h("div",{style:{height:30}})
     ),
     view==="team"&&team&&h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},

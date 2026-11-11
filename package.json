@@ -1,0 +1,6 @@
+{
+  "name": "my-sports-hub",
+  "private": true,
+  "type": "module",
+  "engines": { "node": ">=20" }
+}
