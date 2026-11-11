@@ -1075,7 +1075,9 @@ function loadTeams(){
 function teamsFromLink(teams){
   try{
     const raw=new URLSearchParams(location.search).get("teams");
-    if(!raw||localStorage.getItem("msh-link-applied")===raw)return teams;
+    if(!raw)return teams;
+    if(new URLSearchParams(location.search).has("restore")){try{localStorage.removeItem("msh-sync");}catch(e){}}
+    else if(localStorage.getItem("msh-link-applied")===raw)return teams;
     localStorage.setItem("msh-link-applied",raw);
     const out=[...teams];
     raw.split(",").map(x=>x.trim()).filter(Boolean).forEach((n,i)=>{
@@ -1095,7 +1097,7 @@ function loadSel(){
 const SYNC_TOPIC="msh-sync-7f3k9q";let _snapSync={},_syncQuiet=false;
 async function syncKey(code){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("msh:"+code));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("").slice(0,16);}
 async function syncPush(teams,force){
-  const st=lsGet("msh-sync");if(!st||!st.code)return;
+  const st=lsGet("msh-sync");if(!st||!st.code||st.joined)return;
   const names=teams.map(t=>t.name);if(!force&&JSON.stringify(names)===JSON.stringify(st.last||[]))return;
   const ts=Date.now();lsSet("msh-sync",{...st,ts,last:names});
   try{await fetch("https://ntfy.sh/"+SYNC_TOPIC,{method:"POST",body:JSON.stringify({k:await syncKey(st.code),t:names.slice(0,60),ts})});}catch(e){}
@@ -1104,15 +1106,16 @@ async function syncPush(teams,force){
 async function syncPull(teams){
   const st=lsGet("msh-sync");if(!st||!st.code)return null;
   const e=_snapSync[await syncKey(st.code)];
-  if(!e){if(!st.ts)syncPush(teams,true);return null;}
+  if(!e){if(!st.ts&&!st.joined)syncPush(teams,true);return null;}
   if(!(e.ts>(st.ts||0)))return null;
-  lsSet("msh-sync",{...st,ts:e.ts,last:e.t});
+  lsSet("msh-sync",{...st,ts:e.ts,last:e.t,joined:false});
+  if(!e.t||!e.t.length)return null;
   if(JSON.stringify(e.t)===JSON.stringify(teams.map(t=>t.name)))return null;
   return e.t.map((n,i)=>{const have=teams.find(t=>t.name===n);if(have)return have;const x=lookup(n,"");return x&&!x._unknown?{...x,id:norm(x.name).replace(/\s+/g,"-")+"-"+Date.now()+i}:null;}).filter(Boolean);
 }
 // ?sync=CODE (the link from "Same teams on all devices") joins this device to the code once.
 (function(){try{const c=new URLSearchParams(location.search).get("sync");const st=lsGet("msh-sync");
-  if(c&&/^[a-z0-9]{6,20}$/.test(c)&&(!st||st.code!==c))lsSet("msh-sync",{code:c,ts:0,last:[]});}catch(e){}})();
+  if(c&&/^[a-z0-9]{6,20}$/.test(c)&&(!st||st.code!==c))lsSet("msh-sync",{code:c,ts:0,last:[],joined:true});}catch(e){}})();
 function persist(teams,sel){
   const toSave=teams.map(t=>({id:t.id,name:t.name,shortName:t.shortName,
     sport:t.sport,league:t.league,country:t.country,
