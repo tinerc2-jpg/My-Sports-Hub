@@ -2109,7 +2109,7 @@ function App(){
   const onLogout=()=>{api("/api/auth",{method:"POST",body:JSON.stringify({action:"logout"})}).catch(()=>{});_acct={ok:true,user:null};setAcct(_acct);};
   useEffect(()=>{
     let stop=false;
-    const adopt=n=>{if(stop||!n||!n.length)return;_syncQuiet=true;setTeams(n);persist(n,n[0].id);_syncQuiet=false;};
+    const adopt=n=>{if(stop||!n||!n.length)return;_syncQuiet=true;setTeams(n);persist(n,n[0].id);_syncQuiet=false;setWelcome(false);};
     const check=()=>(_acct.user?acctPull(teamsRef.current):getSnapshot().then(()=>syncPull(teamsRef.current))).then(adopt).catch(()=>{});
     acctInit().then(a=>{if(stop)return;setAcct(a);
       // Logged in on load: merge this device's teams into the account (a ?teams= link opened before login state was known).
@@ -2312,6 +2312,7 @@ function App(){
             "My Sports ",h("span",{style:{color:"#ff7ac0"}},"Hub"),
             window.innerWidth>=460&&h("span",{style:{fontSize:"0.5rem",marginLeft:8,opacity:0.65,letterSpacing:"3px",fontFamily:"Roboto,'Google Sans',Arial,sans-serif",fontWeight:400,whiteSpace:"nowrap"}},"FAN DASHBOARD")
           ),
+        acct.user&&acct.user.admin&&h("a",{href:"admin.html",title:"Admin dashboard",style:{flexShrink:0,background:"rgba(255,255,255,0.1)",color:"#ffffff",borderRadius:20,padding:"6px 12px",fontSize:"0.72rem",fontWeight:700,fontFamily:"Roboto,'Google Sans',Arial,sans-serif",textDecoration:"none",whiteSpace:"nowrap",marginLeft:"auto",marginRight:6}},"📊 Dashboard"),
         h("button",{onClick:handleShareApp,title:"Share My Sports Hub",style:{flexShrink:0,background:"#e8409a",color:"#ffffff",border:"none",borderRadius:20,padding:"6px 12px",fontSize:"0.72rem",fontWeight:700,fontFamily:"Roboto,'Google Sans',Arial,sans-serif",cursor:"pointer",whiteSpace:"nowrap"}},"📲 Share app")
       )
     ),
