@@ -1075,7 +1075,9 @@ function loadTeams(){
 function teamsFromLink(teams){
   try{
     const raw=new URLSearchParams(location.search).get("teams");
-    if(!raw||localStorage.getItem("msh-link-applied")===raw)return teams;
+    if(!raw)return teams;
+    if(new URLSearchParams(location.search).has("restore")){try{localStorage.removeItem("msh-sync");}catch(e){}}
+    else if(localStorage.getItem("msh-link-applied")===raw)return teams;
     localStorage.setItem("msh-link-applied",raw);
     const out=[...teams];
     raw.split(",").map(x=>x.trim()).filter(Boolean).forEach((n,i)=>{
