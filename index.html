@@ -1095,7 +1095,7 @@ function loadSel(){
 const SYNC_TOPIC="msh-sync-7f3k9q";let _snapSync={},_syncQuiet=false;
 async function syncKey(code){const b=await crypto.subtle.digest("SHA-256",new TextEncoder().encode("msh:"+code));return [...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("").slice(0,16);}
 async function syncPush(teams,force){
-  const st=lsGet("msh-sync");if(!st||!st.code)return;
+  const st=lsGet("msh-sync");if(!st||!st.code||st.joined)return;
   const names=teams.map(t=>t.name);if(!force&&JSON.stringify(names)===JSON.stringify(st.last||[]))return;
   const ts=Date.now();lsSet("msh-sync",{...st,ts,last:names});
   try{await fetch("https://ntfy.sh/"+SYNC_TOPIC,{method:"POST",body:JSON.stringify({k:await syncKey(st.code),t:names.slice(0,60),ts})});}catch(e){}
