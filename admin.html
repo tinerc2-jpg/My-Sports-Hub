@@ -1,0 +1,109 @@
+<!doctype html>
+<html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="robots" content="noindex">
+<title>Sports Hub Admin</title>
+<link rel="icon" href="icon.svg">
+<link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#0f1b33;--card:#16264a;--line:rgba(255,255,255,.1);--txt:#fff;--sub:#d5deee;--pink:#e8409a;--pinkt:#ff9fd0;--bar:#e8409a}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--txt);font-family:Roboto,Arial,sans-serif;font-size:15px}
+header{background:#0a1326;padding:14px 16px;display:flex;align-items:center;gap:10px;position:sticky;top:0;z-index:2}
+header h1{font-size:18px;margin:0;font-weight:500;flex:1}header h1 b{color:var(--pinkt);font-weight:500}
+header a,header button{color:var(--sub);background:rgba(255,255,255,.08);border:none;border-radius:10px;padding:8px 12px;font:inherit;font-size:13px;cursor:pointer;text-decoration:none}
+main{max-width:1000px;margin:0 auto;padding:16px}
+.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:14px}
+.kpi,.card{background:var(--card);border-radius:16px;padding:14px}
+.kpi .v{font-size:28px;font-weight:700}.kpi .l{font-size:12px;opacity:.75;text-transform:uppercase;letter-spacing:.04em}.kpi .s{font-size:12px;color:var(--sub);margin-top:2px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.card h2{font-size:14px;font-weight:500;margin:0 0 10px;opacity:.85;text-transform:uppercase;letter-spacing:.04em}
+.row{display:flex;align-items:center;gap:8px;padding:5px 0;font-size:14px}
+.row .n{flex:0 0 42%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.row .b{flex:1;height:10px;border-radius:5px;background:rgba(255,255,255,.06);overflow:hidden}.row .b i{display:block;height:100%;background:var(--bar);border-radius:5px}
+.row .c{flex:0 0 40px;text-align:right;color:var(--sub);font-variant-numeric:tabular-nums}
+table{width:100%;border-collapse:collapse;font-size:14px}th,td{text-align:left;padding:8px 6px;border-top:1px solid var(--line);vertical-align:top}th{font-weight:500;opacity:.7;font-size:12px;border-top:none}
+.tw{overflow-x:auto}.chips span{display:inline-block;background:rgba(255,255,255,.08);border-radius:8px;padding:2px 7px;margin:2px 3px 2px 0;font-size:12px}
+.muted{color:var(--sub);font-size:13px}.err{color:#ffb4b4}
+.wide{grid-column:1/-1}
+svg text{fill:var(--sub);font-size:10px}
+form{max-width:340px;margin:40px auto;background:var(--card);padding:20px;border-radius:16px;display:grid;gap:10px}
+input{font:inherit;font-size:16px;padding:10px 12px;border-radius:10px;border:1px solid var(--line);background:#0f1b33;color:#fff}
+form button{background:var(--pink);color:#fff;border:none;border-radius:10px;padding:11px;font:inherit;font-weight:500;cursor:pointer}
+.list li{padding:6px 0;border-top:1px solid var(--line);font-size:14px;list-style:none}.list{padding:0;margin:0}.list li:first-child{border-top:none}
+</style></head>
+<body>
+<header><h1>My Sports Hub · <b>Admin</b></h1><a href="./?app">Appen</a><button id="out" hidden>Log ud</button></header>
+<main id="m"><p class="muted">Henter…</p></main>
+<script>
+const SNAP="https://raw.githubusercontent.com/tinerc2-jpg/My-Sports-Hub/live-data/live.json";
+const $=s=>document.querySelector(s),m=$("#m");
+const esc=s=>String(s??"").replace(/[&<>"]/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;"}[c]));
+const TZ="Europe/Copenhagen";
+const day=ts=>ts?new Date(ts).toLocaleDateString("da-DK",{timeZone:TZ,day:"numeric",month:"short",year:"2-digit"}):"–";
+const ago=ts=>{if(!ts)return "–";const d=(Date.now()-ts)/864e5;return d<1?"i dag":d<2?"i går":Math.floor(d)+" dage siden";};
+function bars(items,max=10){
+  items=(items||[]).filter(x=>x.count>0).slice(0,max);if(!items.length)return '<p class="muted">Ingen data endnu.</p>';
+  const top=Math.max(...items.map(x=>x.count));
+  return items.map(x=>`<div class="row"><span class="n" title="${esc(x.name)}">${esc(x.name)}</span><span class="b"><i style="width:${(x.count/top*100).toFixed(1)}%"></i></span><span class="c">${x.count}</span></div>`).join("");
+}
+function daily(d){
+  if(!d||!d.length)return '<p class="muted">Ingen data endnu.</p>';
+  const W=600,H=140,P=18,n=d.length,mx=Math.max(1,...d.map(x=>x.count)),bw=(W-P)/n;
+  const r=d.map((x,i)=>{const h=(x.count/mx)*(H-P-14);return `<rect x="${P+i*bw+1}" y="${H-P-h}" width="${Math.max(1,bw-2)}" height="${h}" rx="2" fill="#e8409a"><title>${x.day}: ${x.count}</title></rect>`;}).join("");
+  const lab=[0,Math.floor(n/2),n-1].map(i=>`<text x="${P+i*bw+bw/2}" y="${H-4}" text-anchor="${i?i==n-1?"end":"middle":"start"}">${d[i].day.slice(5).split("-").reverse().join("/")}</text>`).join("");
+  return `<svg viewBox="0 0 ${W} ${H}" width="100%" role="img" aria-label="Besøgende pr. dag"><text x="0" y="10">${mx}</text><line x1="${P}" x2="${W}" y1="${H-P}" y2="${H-P}" stroke="rgba(255,255,255,.15)"/>${r}${lab}</svg>`;
+}
+function loginForm(msg){
+  m.innerHTML=`<form id="f"><h2 style="margin:0">Log ind som admin</h2><input name="name" placeholder="Navn" autocomplete="username"><input name="password" type="password" placeholder="Adgangskode" autocomplete="current-password"><button>Log ind</button><p class="err">${esc(msg||"")}</p></form>`;
+  $("#f").onsubmit=async e=>{e.preventDefault();const f=new FormData(e.target);
+    const r=await fetch("api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"login",name:f.get("name"),password:f.get("password")})});
+    const j=await r.json().catch(()=>({}));if(!r.ok)return loginForm(j.error||"Login fejlede.");load();};
+}
+async function load(){
+  let r,j;
+  try{r=await fetch("api/admin",{cache:"no-store"});j=await r.json();}catch(e){m.innerHTML='<p class="err">API\'et svarer ikke (dashboardet virker kun på Vercel-adressen).</p>';return;}
+  if(r.status===401)return loginForm();
+  if(r.status===403)return loginForm("Den bruger er ikke admin. Log ind som Admin.");
+  if(!r.ok){m.innerHTML=`<p class="err">${esc(j.error)}</p>`;return;}
+  $("#out").hidden=false;
+  let snap={};try{snap=await (await fetch(SNAP+"?t="+Date.now())).json();}catch(e){}
+  render(j.users,snap);
+}
+function render(users,snap){
+  const u=snap.usage||{},req=snap.requests||{};
+  const now=Date.now(),act=x=>Math.max(x.lastSeen,x.lastLogin,x.teamsTs);
+  const active7=users.filter(x=>now-act(x)<7*864e5).length,new30=users.filter(x=>now-x.created<30*864e5).length;
+  const tc={};users.forEach(x=>x.teams.forEach(t=>tc[t]=(tc[t]||0)+1));
+  const topTeams=Object.entries(tc).map(([name,count])=>({name,count})).sort((a,b)=>b.count-a.count);
+  const avg=users.length?(users.reduce((a,x)=>a+x.teams.length,0)/users.length).toFixed(1):"0";
+  const weeks={};users.forEach(x=>{if(!x.created)return;const d=new Date(x.created);d.setDate(d.getDate()-((d.getDay()+6)%7));const k=d.toISOString().slice(0,10);weeks[k]=(weeks[k]||0)+1;});
+  const wk=Object.entries(weeks).sort().slice(-8).map(([k,c])=>({name:"Uge fra "+k.slice(8)+"/"+k.slice(5,7),count:c}));
+  const reqs=[...(req.list||[]).map(x=>({name:x.path.replace("/"," · "),count:x.count}))];
+  const fb=(req.ntfy||[]).slice().sort((a,b)=>(b.ts||0)-(a.ts||0)).slice(0,15);
+  m.innerHTML=`
+  <div class="kpis">
+    <div class="kpi"><div class="l">Konti</div><div class="v">${users.length}</div><div class="s">${new30} nye de sidste 30 dage</div></div>
+    <div class="kpi"><div class="l">Aktive konti</div><div class="v">${active7}</div><div class="s">brugt de sidste 7 dage</div></div>
+    <div class="kpi"><div class="l">Besøgende</div><div class="v">${u.total??"–"}</div><div class="s">sidste 30 dage (alle, også uden konto)</div></div>
+    <div class="kpi"><div class="l">Hold pr. konto</div><div class="v">${avg}</div><div class="s">${topTeams.length} forskellige hold fulgt</div></div>
+    <div class="kpi"><div class="l">Åbnet fra notifikation</div><div class="v">${u.notifOpens??"–"}</div><div class="s">sidste 30 dage</div></div>
+  </div>
+  <div class="grid">
+    <div class="card wide"><h2>Besøgende pr. dag</h2>${daily(u.daily)}<p class="muted">Kilde: GoatCounter, opdateret ${u.ts?day(u.ts)+" "+new Date(u.ts).toLocaleTimeString("da-DK",{timeZone:TZ,hour:"2-digit",minute:"2-digit"}):"–"}.</p></div>
+    <div class="card"><h2>Mest fulgte hold (konti)</h2>${bars(topTeams,12)}</div>
+    <div class="card"><h2>Nye konti pr. uge</h2>${bars(wk,8)}</div>
+    <div class="card"><h2>Lande</h2>${bars(u.countries,8)}</div>
+    <div class="card"><h2>Telefoner / systemer</h2>${bars(u.systems,8)}</div>
+    <div class="card"><h2>Hvor de kommer fra</h2>${bars((u.referrers||[]).map(x=>({...x,name:x.name==="?"?"Direkte (link/ikon)":x.name})),8)}</div>
+    <div class="card"><h2>Ønskede hold</h2>${bars(reqs,10)}</div>
+    <div class="card wide"><h2>Seneste ønsker & feedback</h2>${fb.length?`<ul class="list">${fb.map(x=>`<li>${esc(x.text||x.message||JSON.stringify(x))} <span class="muted">· ${day(x.ts?(x.ts<1e12?x.ts*1000:x.ts):0)}</span></li>`).join("")}</ul>`:'<p class="muted">Ingen endnu.</p>'}</div>
+    <div class="card wide"><h2>Konti (${users.length})</h2><div class="tw"><table><thead><tr><th>Navn</th><th>Oprettet</th><th>Sidst aktiv</th><th>Hold</th></tr></thead><tbody>
+      ${users.map(x=>`<tr><td>${esc(x.name)}</td><td>${day(x.created)}</td><td>${ago(act(x))}</td><td class="chips">${x.teams.map(t=>`<span>${esc(t)}</span>`).join("")||'<span class="muted">ingen</span>'}</td></tr>`).join("")||'<tr><td colspan="4" class="muted">Ingen konti endnu.</td></tr>'}
+    </tbody></table></div></div>
+  </div>
+  <p class="muted" style="margin-top:14px">Holdene tælles kun for brugere med konto – de andre gemmer holdene i deres egen telefon.</p>`;
+}
+$("#out").onclick=async()=>{await fetch("api/auth",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"logout"})});$("#out").hidden=true;loginForm();};
+load();
+</script>
+</body></html>
