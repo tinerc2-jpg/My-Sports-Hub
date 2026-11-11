@@ -1,9 +1,9 @@
-name: Deploy app to GitHub Pages
+name: GitHub Pages redirect (app moved to Vercel)
 
 on:
   push:
     branches: [main]
-    paths: [index.html, sw.js, scripts/check-fixtures.mjs, manifest.webmanifest, "icon*", apple-touch-icon.png, .github/workflows/pages.yml]
+    paths: [pages-redirect/**, index.html, sw.js, scripts/check-fixtures.mjs, manifest.webmanifest, "icon*", apple-touch-icon.png, .github/workflows/pages.yml]
   workflow_dispatch:
 
 permissions:
@@ -27,8 +27,8 @@ jobs:
       - run: node scripts/check-html.mjs
       # home/away must read right (home team first) – never deploy if not
       - run: node scripts/check-fixtures.mjs
-      # Publish only the app's own files (not scripts/ or notes)
-      - run: mkdir site && cp index.html sw.js manifest.webmanifest icon.svg icon-192.png icon-512.png apple-touch-icon.png site/
+      # The app lives on Vercel now (owner, 11 Nov 2026): Pages only forwards old links there
+      - run: mkdir site && cp pages-redirect/index.html sw.js icon.svg icon-192.png icon-512.png apple-touch-icon.png site/
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v3
         with:
