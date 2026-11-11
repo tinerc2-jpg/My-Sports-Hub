@@ -125,7 +125,7 @@ async function sendPush(name,kind,payload,only){
   if(!VAPID)return;
   const to=only||pushSubs.filter(s=>s.teams.some(t=>t.n===name&&t[kind]));
   if(!to.length)return;
-  if(!_webpush){_webpush=(await import("web-push")).default;_webpush.setVapidDetails("https://tinerc2-jpg.github.io/My-Sports-Hub/",VAPID.publicKey,VAPID.privateKey);}
+  if(!_webpush){_webpush=(await import("web-push")).default;_webpush.setVapidDetails("https://sportshubdk-sigma.vercel.app/",VAPID.publicKey,VAPID.privateKey);}
   let ok=0,gone=0;
   for(const s of to){
     try{await _webpush.sendNotification(s.sub,JSON.stringify(payload),{TTL:3600,urgency:"high"});ok++;}
@@ -1117,10 +1117,10 @@ for(const [name,e] of Object.entries(teams)){
   if(!title)continue;
   // JSON publish: headers can't carry emoji / ø
   try{const r=await fetch("https://ntfy.sh/",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({topic:api.notifyTopic(name),title,message:body,tags:tags.split(","),click:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"})});
+      body:JSON.stringify({topic:api.notifyTopic(name),title,message:body,tags:tags.split(","),click:"https://sportshubdk-sigma.vercel.app/?app"})});
     console.log("notify "+name+": "+title+" (HTTP "+r.status+")");}
   catch(err){console.log("notify "+name+": "+err.message);}
-  await sendPush(name,"live",{title,body,tag:"live-"+name,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"});
+  await sendPush(name,"live",{title,body,tag:"live-"+name,url:"https://sportshubdk-sigma.vercel.app/?app"});
 }
 // Start reminders (all sports): about 60 min before the next game / race / round, once per start time
 // (runs every 15 min and are often late, so anything 10–70 min ahead counts).
@@ -1135,7 +1135,7 @@ for(const [name,e] of Object.entries(teams)){
     d.lineupNotified=d.lineup.ev;
     const me=d.lineup.teams.find(x=>x.me)||d.lineup.teams[0];
     const body=(me.formation?me.formation+": ":"")+me.starters.map(x=>x.n.split(" ").slice(-1)[0]).join(", ");
-    await sendPush(name,"start",{title:"📋 "+t.shortName+" – holdopstillingen er klar",body,tag:"lineup-"+name,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"});
+    await sendPush(name,"start",{title:"📋 "+t.shortName+" – holdopstillingen er klar",body,tag:"lineup-"+name,url:"https://sportshubdk-sigma.vercel.app/?app"});
     console.log("notify "+name+": line-up");
     continue;
   }
@@ -1148,10 +1148,10 @@ for(const [name,e] of Object.entries(teams)){
   const lu=d.lineup&&g.ev&&d.lineup.ev===String(g.ev)?" · 📋 Holdopstillingen er klar":"";
   if(lu)d.lineupNotified=d.lineup.ev;
   try{const r=await fetch("https://ntfy.sh/",{method:"POST",headers:{"Content-Type":"application/json"},
-      body:JSON.stringify({topic:api.startTopic(name),title:"⏰ "+t.shortName+" starter kl. "+hm,message:what+" starter om "+Math.round(left)+" min"+tv+lu,tags:["alarm_clock"],click:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"})});
+      body:JSON.stringify({topic:api.startTopic(name),title:"⏰ "+t.shortName+" starter kl. "+hm,message:what+" starter om "+Math.round(left)+" min"+tv+lu,tags:["alarm_clock"],click:"https://sportshubdk-sigma.vercel.app/?app"})});
     console.log("notify "+name+": start reminder "+hm+" (HTTP "+r.status+")");}
   catch(err){console.log("notify "+name+": "+err.message);}
-  await sendPush(name,"start",{title:"⏰ "+t.shortName+" starter kl. "+hm,body:what+" starter om "+Math.round(left)+" min"+tv+lu,tag:"start-"+name,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"});
+  await sendPush(name,"start",{title:"⏰ "+t.shortName+" starter kl. "+hm,body:what+" starter om "+Math.round(left)+" min"+tv+lu,tag:"start-"+name,url:"https://sportshubdk-sigma.vercel.app/?app"});
 }
 // Morning summary (☀️ at about 8:00 Danish time, once a day): each phone that turned it on gets its favourites' games today.
 let morningSent=(LIVE&&existsSync("out/live.json")?(JSON.parse(readFileSync("out/live.json","utf8")).push||{}).morningSent:prevFull&&prevFull.push&&prevFull.push.morningSent)||null;
@@ -1176,7 +1176,7 @@ let morningSent=(LIVE&&existsSync("out/live.json")?(JSON.parse(readFileSync("out
       }
       if(!lines.length)continue;
       lines.sort((a,b)=>a.ts-b.ts);
-      await sendPush("","morning",{title:"☀️ Din sportsdag – "+lines.length+(lines.length===1?" kamp":" kampe"),body:lines.map(l=>l.txt).join("\n"),tag:"morning-"+day,url:"https://tinerc2-jpg.github.io/My-Sports-Hub/?app"},[sub]);
+      await sendPush("","morning",{title:"☀️ Din sportsdag – "+lines.length+(lines.length===1?" kamp":" kampe"),body:lines.map(l=>l.txt).join("\n"),tag:"morning-"+day,url:"https://sportshubdk-sigma.vercel.app/?app"},[sub]);
       sent++;
     }
     console.log(`morning summary ${day}: ${sent} phones`);

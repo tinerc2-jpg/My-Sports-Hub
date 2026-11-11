@@ -1183,7 +1183,7 @@ function AccountCard({acct,onLogin,onLogout}){
 }
 function SyncCard({teams}){
   const [st,setSt]=useState(()=>lsGet("msh-sync")),[copied,setCopied]=useState(false);
-  const base=/^https?:/.test(location.protocol)&&!/^(localhost|127\.)/.test(location.hostname)?location.origin+location.pathname.replace(/index\.html$/,""):"https://tinerc2-jpg.github.io/My-Sports-Hub/";
+  const base=/^https?:/.test(location.protocol)&&!/^(localhost|127\.)/.test(location.hostname)?location.origin+location.pathname.replace(/index\.html$/,""):"https://sportshubdk-sigma.vercel.app/";
   const on=()=>{const code=Array.from(crypto.getRandomValues(new Uint8Array(8)),b=>"abcdefghjkmnpqrstuvwxyz23456789"[b%31]).join("");const v={code,ts:0,last:[]};lsSet("msh-sync",v);setSt(v);syncPush(teams,true);};
   const off=()=>{try{localStorage.removeItem("msh-sync");}catch(e){}setSt(null);};
   const [code,setCode]=useState("");
@@ -2248,7 +2248,7 @@ function App(){
     }
   }
   // The public address (GitHub Pages), also when the file is opened locally.
-  function appUrl(){return /^https?:/.test(location.protocol)&&!/^(localhost|127\.)/.test(location.hostname)?location.origin+location.pathname.replace(/index\.html$/,""):"https://tinerc2-jpg.github.io/My-Sports-Hub/";}
+  function appUrl(){return /^https?:/.test(location.protocol)&&!/^(localhost|127\.)/.test(location.hostname)?location.origin+location.pathname.replace(/index\.html$/,""):"https://sportshubdk-sigma.vercel.app/";}
   function handleShareApp(){
     // Danish how-to for new users, sent with every app share (owner's request)
     const url=appUrl(),text="Hej! 👋 Prøv My Sports Hub – så kan du følge dine yndlingshold ⚽🤾🎾\n\n"+
