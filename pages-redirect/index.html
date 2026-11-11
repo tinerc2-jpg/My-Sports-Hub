@@ -1,5 +1,12 @@
 <!doctype html><html lang="da"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <title>My Sports Hub er flyttet</title>
-<script>location.replace("https://sportshubdk-sigma.vercel.app/"+location.search+location.hash);</script>
+<script>
+// Carry this browser's saved teams to the new address (localStorage doesn't move between sites).
+var q=new URLSearchParams(location.search);
+try{var t=JSON.parse(localStorage.getItem("msh-teams")||"[]").map(function(x){return x&&x.name;}).filter(Boolean);
+  if(t.length&&!q.has("teams")){q.set("app","");q.set("teams",t.join(","));}}catch(e){}
+var qs=q.toString().replace(/^app=&|&app=(?=&|$)/,function(m){return m[0]==="&"?"&app":"app&";}).replace(/^app=$/,"app");
+location.replace("https://sportshubdk-sigma.vercel.app/"+(qs?"?"+qs:"")+location.hash);
+</script>
 <style>body{margin:0;background:#0f1b33;color:#fff;font-family:Roboto,Arial,sans-serif;display:grid;place-items:center;min-height:100vh;text-align:center;padding:16px}a{color:#ff9fd0}</style>
 </head><body><div><h1>My Sports Hub er flyttet</h1><p><a href="https://sportshubdk-sigma.vercel.app/">Gå til den nye adresse</a></p></div></body></html>

@@ -1515,12 +1515,11 @@ function SportsWeek({teams,onOpen,onLive}){
 }
 
 // "What's new": shown on the home screen until the visitor closes it; bump WHATS_NEW.id for the next round of news.
-const WHATS_NEW={id:"2026-10-18",items:[
-  ["📅","My sports week","All your teams' games for the next 7 days – scroll down on the home screen."],
-  ["📲","Add to your calendar","One tap on ＋ Calendar puts the week's games in your phone's calendar."],
-  ["☀️","Morning summary","Turn it on to get your sports day at 8:00."],
-  ["🔔","Start reminders","Turn on ⏰ on a team's page to get a message an hour before the start."],
-  ["📊","Live stats & line-ups","Tap the LIVE box during a football game. Line-ups appear an hour before kick-off."],
+const WHATS_NEW={id:"2026-11-11",items:[
+  ["🏠","New address","The app now lives at sportshubdk-sigma.vercel.app. Your teams came with you."],
+  ["📲","Add it to your home screen again","Share ⬆️ → Add to Home Screen (iPhone) or ⋮ → Install app (Android). Delete the old icon."],
+  ["👤","Log in – keep your teams safe","Create an account in the card below: your teams are saved and show up on every phone and computer where you log in."],
+  ["🔔","Turn notifications on again","Start reminders and goal alerts belong to the old address – tap ⏰/⚽ on your teams' pages once more."],
 ]};
 function WhatsNew({hasTeams}){
   const [seen,setSeen]=useState(()=>{try{return localStorage.getItem("msh-news-seen")===WHATS_NEW.id;}catch(e){return false;}});
