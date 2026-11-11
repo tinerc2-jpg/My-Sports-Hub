@@ -10,5 +10,5 @@
 - Sync-fejl 11/11 tømte Tines hold; rettet, liste gendannet.
 
 **Åbne opgaver:**
-- Login-kort flyttet øverst på velkomstskærmen. Tine skal teste login på Vercel-adressen og lægge appen på hjemmeskærmen derfra.
+- Login virker (bruger Admin), alle hold er på kontoen. Tine kan lægge Vercel-appen på hjemmeskærmen.
 - Spørg om GitHub Pages skal blive ved.
