@@ -1130,6 +1130,8 @@ function SyncCard({teams}){
   const base=/^https?:/.test(location.protocol)&&!/^(localhost|127\.)/.test(location.hostname)?location.origin+location.pathname.replace(/index\.html$/,""):"https://tinerc2-jpg.github.io/My-Sports-Hub/";
   const on=()=>{const code=Array.from(crypto.getRandomValues(new Uint8Array(8)),b=>"abcdefghjkmnpqrstuvwxyz23456789"[b%31]).join("");const v={code,ts:0,last:[]};lsSet("msh-sync",v);setSt(v);syncPush(teams,true);};
   const off=()=>{try{localStorage.removeItem("msh-sync");}catch(e){}setSt(null);};
+  const [code,setCode]=useState("");
+  const join=()=>{const c=code.trim().toLowerCase().replace(/[^a-z0-9]/g,"");if(c.length<6)return;const v={code:c,ts:0,last:[],joined:true};lsSet("msh-sync",v);setSt(v);};
   const link=st&&st.code?base+"?app&sync="+st.code:"";
   const copy=()=>{const done=()=>{setCopied(true);setTimeout(()=>setCopied(false),2000);};
     if(navigator.share){navigator.share({title:"My Sports Hub",url:link}).catch(()=>{});return;}
@@ -1145,7 +1147,11 @@ function SyncCard({teams}){
       "Open this link once on your other phone or computer:",
       h("div",{style:{marginTop:6,display:"flex",gap:8,alignItems:"center"}},
         h("code",{style:{flex:1,minWidth:0,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",background:"rgba(255,255,255,0.06)",borderRadius:8,padding:"7px 9px",color:"#ff9fd0",userSelect:"all"}},link),
-        h("button",{onClick:copy,style:{...btn,background:"#e8409a",color:"#fff",flexShrink:0}},copied?"✓ Copied":navigator.share?"Send":"Copy"))));
+        h("button",{onClick:copy,style:{...btn,background:"#e8409a",color:"#fff",flexShrink:0}},copied?"✓ Copied":navigator.share?"Send":"Copy")),
+      h("div",{style:{marginTop:6}},"Code: ",h("b",{style:{color:"#ff9fd0",userSelect:"all",letterSpacing:1}},st.code),st.joined?" · waiting for the other device's teams (up to ~15 min)":"")),
+    !(st&&st.code)&&h("div",{style:{marginTop:10,display:"flex",gap:8,alignItems:"center"}},
+      h("input",{value:code,onChange:e=>setCode(e.target.value),placeholder:"Have a code? Type it here",autoCapitalize:"none",autoCorrect:"off",style:{flex:1,minWidth:0,fontSize:16,padding:"7px 9px",borderRadius:8,border:"1px solid rgba(255,255,255,0.15)",background:"rgba(255,255,255,0.06)",color:"#eef2f8"}}),
+      h("button",{onClick:join,style:{...btn,background:"#e8409a",color:"#fff",flexShrink:0}},"Join")));
 }
 add(["fc fredericia","fredericia fodbold"],{name:"FC Fredericia",shortName:"FC Fredericia",sport:"Football",league:"1. division",country:"🇩🇰",color:"#c8102e",accent:"#1d3360",emoji:"⚽",standing:{rank:null,points:null,wins:null,draws:null,losses:null},recentResults:[],nextGame:null,news:[]});
 add(["brentford","brentford fc"],{name:"Brentford FC",shortName:"Brentford",sport:"Football",league:"Premier League",country:"🇬🇧",color:"#E30613",accent:"#1C1C1C",emoji:"⚽",standing:{rank:9,points:49,wins:14,draws:7,losses:16},recentResults:[{opponent:"Liverpool (A)",score:"1-1",result:"D",date:"May 24"},{opponent:"Crystal Palace (H)",score:"2-2",result:"D",date:"May 17"},{opponent:"Man City (A)",score:"0-3",result:"L",date:"May 9"}],nextGame:{opponent:"Season complete - 9th place finish",date:"Season complete",time:"-",tv:"-"},news:[{title:"Brentford 9th - solid PL season done, drew 1-1 at Liverpool",time:"today",hot:false},{title:"Igor Thiago top scorer 21 PL goals - breakthrough season",time:"today",hot:true},{title:"Keith Andrews confirmed as permanent head coach",time:"today",hot:false}]});
