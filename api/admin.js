@@ -4,7 +4,7 @@ import { redis, getJSON, requireUser, isAdmin } from "./_lib.js";
 
 export default async function handler(req, res) {
   const u = await requireUser(req, res); if (!u) return;
-  if (!isAdmin(u)) return res.status(403).json({ error: "Only the admin can see this." });
+  if (!isAdmin(u)) return res.status(403).json({ error: "Kun admin kan se dette." });
   try {
     const ids = (await redis("SMEMBERS", "users")) || [];
     const users = [];
@@ -19,6 +19,6 @@ export default async function handler(req, res) {
     res.status(200).json({ ts: Date.now(), users });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message || "Server error." });
+    res.status(500).json({ error: e.message || "Serverfejl." });
   }
 }
