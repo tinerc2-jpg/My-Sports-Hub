@@ -99,6 +99,6 @@ export async function currentUser(req) {
 export async function requireUser(req, res) {
   let u;
   try { u = await currentUser(req); } catch (e) { res.status(500).json({ error: e.message }); return null; }
-  if (!u) { res.status(401).json({ error: "Please log in." }); return null; }
+  if (!u) { res.status(401).json({ error: "Log venligst ind." }); return null; }
   return u;
 }

@@ -9,19 +9,19 @@ export default async function handler(req, res) {
       const u = await currentUser(req);
       return res.status(200).json({ user: u ? publicUser(u) : null });
     }
-    if (req.method !== "POST") return res.status(405).json({ error: "Use POST." });
+    if (req.method !== "POST") return res.status(405).json({ error: "Brug POST." });
     const { action, name, password } = req.body || {};
     if (action === "logout") { clearSession(res); return res.status(200).json({ ok: true }); }
 
     const id = userId(name);
-    if (!id || id.length < 2 || !password) return res.status(400).json({ error: "Type a name and a password." });
+    if (!id || id.length < 2 || !password) return res.status(400).json({ error: "Skriv et navn og en adgangskode." });
 
     if (action === "signup") {
-      if (String(password).length < MIN_PW) return res.status(400).json({ error: `The password must be at least ${MIN_PW} characters.` });
+      if (String(password).length < MIN_PW) return res.status(400).json({ error: `Adgangskoden skal være mindst ${MIN_PW} tegn.` });
       const ip = String(req.headers["x-forwarded-for"] || "").split(",")[0].trim() || "x";
       const k = "signups:" + ip;
-      if (Number(await redis("GET", k)) >= 10) return res.status(429).json({ error: "Too many new accounts. Try again later." });
-      if (await getUser(id)) return res.status(409).json({ error: "That name is taken – pick another, or log in." });
+      if (Number(await redis("GET", k)) >= 10) return res.status(429).json({ error: "For mange nye konti. Prøv igen senere." });
+      if (await getUser(id)) return res.status(409).json({ error: "Navnet er taget – vælg et andet, eller log ind." });
       await redis("INCR", k); await redis("EXPIRE", k, 3600);
       const u = { id, name: String(name).trim().slice(0, 40), sv: 0, created: Date.now(), ...hashPassword(password) };
       await saveUser(u);
@@ -31,20 +31,20 @@ export default async function handler(req, res) {
 
     if (action === "login") {
       const failKey = "fail:" + id;
-      if (Number(await redis("GET", failKey)) >= 10) return res.status(429).json({ error: "Too many wrong tries. Wait 15 minutes." });
+      if (Number(await redis("GET", failKey)) >= 10) return res.status(429).json({ error: "For mange forkerte forsøg. Vent 15 minutter." });
       const u = await getUser(id);
       if (!u || !checkPassword(u, password)) {
         await redis("INCR", failKey); await redis("EXPIRE", failKey, 900);
-        return res.status(401).json({ error: "Wrong name or password." });
+        return res.status(401).json({ error: "Forkert navn eller adgangskode." });
       }
       await redis("DEL", failKey);
       u.lastLogin = Date.now(); await saveUser(u);
       setSession(res, u);
       return res.status(200).json({ user: publicUser(u) });
     }
-    res.status(400).json({ error: "Unknown action." });
+    res.status(400).json({ error: "Ukendt handling." });
   } catch (e) {
     console.error(e);
-    res.status(500).json({ error: e.message || "Server error." });
+    res.status(500).json({ error: e.message || "Serverfejl." });
   }
 }
