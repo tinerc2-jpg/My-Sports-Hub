@@ -1146,7 +1146,7 @@ for(const [name,e] of Object.entries(teams)){
   await sendPush(name,"live",{title,body,tag:"live-"+name,url:"https://sportshubdk-sigma.vercel.app/?app"});
 }
 // Start reminders (all sports): about 60 min before the next game / race / round, once per start time
-// (runs every 15 min and are often late, so anything 10–70 min ahead counts).
+// (sent by the --live runs, which start 60 min before kick-off – scripts/robot-when.mjs; anything 10–70 min ahead counts).
 for(const [name,e] of Object.entries(teams)){
   const d=e&&e.data,p=prev[name]&&prev[name].data,t=api.DB[Object.keys(api.DB).find(k=>api.DB[k].name===name)]||extraTeams.find(x=>x.name===name);
   if(!d||!t||d.newsOnly)continue;
@@ -1206,7 +1206,9 @@ let morningSent=(LIVE&&existsSync("out/live.json")?(JSON.parse(readFileSync("out
   }
 }
 mkdirSync("out",{recursive:true});
-writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),teams,leagueTeams:extraTeams,requests,usage,sync,kickoffDebug:kickoffDebug.slice(0,40),push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length,morningSent}:null}));
+// fullTs: when the last full run was (scripts/robot-when.mjs plans the next one from it)
+const fullTs=LIVE&&existsSync("out/live.json")?JSON.parse(readFileSync("out/live.json","utf8")).fullTs||null:Date.now();
+writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),fullTs,teams,leagueTeams:extraTeams,requests,usage,sync,kickoffDebug:kickoffDebug.slice(0,40),push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length,morningSent}:null}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
 const liveNow=Object.entries(teams).filter(([,e])=>needsLive(e)).map(([n,e])=>n+(e.data.liveGame?" "+e.data.liveGame.score:" (kick-off soon)"));
 if(liveNow.length){writeFileSync("out/live-needed",liveNow.join("\n"));console.log("live: "+liveNow.join(" · "));}
