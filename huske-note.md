@@ -10,4 +10,6 @@
 
 **Gjort 12/11:** login/admin-rettelser; hele appen på dansk; del resultat/live som billede.
 
-**Næste idéer:** eget domæne (fx mysportshub.dk), påmindelser lige efter holdvalg, del i fangrupper (GOG, FC Fredericia).
+**Gjort 12/11 (2), live:** påmindelseskort efter holdvalg; Rune-rangering fra Wikipedia (#433); Opdatér-knap giver besked; "Forstået – log ind" fører til konto-kortet.
+
+**Næste idéer:** eget domæne (fx mysportshub.dk), del i fangrupper (GOG, FC Fredericia).
