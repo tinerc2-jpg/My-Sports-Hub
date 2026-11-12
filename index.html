@@ -415,6 +415,9 @@ const TZ="Europe/Copenhagen";
 function fmtDay(d){return d.toLocaleDateString("en-GB",{weekday:"short",day:"numeric",month:"short",timeZone:TZ});}
 function fmtShort(d){return d.toLocaleDateString("en-GB",{day:"numeric",month:"short",timeZone:TZ});}
 function fmtTime(d){return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"2-digit",timeZone:TZ});}
+// Live/match text from the data sources in Danish (owner 12 Nov): "Half-time" → "Pause", "1,193 spectators" → "1.193 tilskuere"
+function daDetail(x){const t=String(x||"");return /^(half.?time|ht)$/i.test(t.trim())?"Pause":/^(full.?time|ft|final)$/i.test(t.trim())?"Slut":/^in progress$/i.test(t.trim())?"I gang":t;}
+function daInfo(x){return String(x||"").replace(/Half-?time/gi,"Pause").replace(/(\d{1,3}(?:,\d{3})+|\d+) spectators/i,(m,n)=>n.replace(/,/g,".")+" tilskuere");}
 function timeAgo(ts){const m=Math.round((Date.now()-ts)/60000);if(m<1)return "lige nu";if(m<60)return "for "+m+" min siden";const hr=Math.round(m/60);return hr<24?"for "+hr+" t siden":"for "+Math.round(hr/24)+" d siden";}
 // Dates in the data are English ("Sat 14 Nov", "May 24"); daD shows them in Danish ("lør 14. nov").
 const DA_WD={Mon:"man",Tue:"tir",Wed:"ons",Thu:"tor",Fri:"fre",Sat:"lør",Sun:"søn"},DA_MO={Jan:"jan",Feb:"feb",Mar:"mar",Apr:"apr",May:"maj",Jun:"jun",Jul:"jul",Aug:"aug",Sep:"sep",Oct:"okt",Nov:"nov",Dec:"dec"};
@@ -1600,14 +1603,14 @@ function MatchSheet({r,team,onClose}){
   const col=(a,b)=>home?[a,b]:[b,a]; // show home team on the left
   const [L,R]=col({n:me,s:sc[0],me:1},{n:op,s:sc[1]});
   const cond="'Google Sans',Roboto,Arial,sans-serif";
-  return h(Sheet,{title:r.live?"🔴 Live \xB7 "+(r.detail||""):(tag?tag+" \xB7 ":"")+daD(r.date),onClose},
+  return h(Sheet,{title:r.live?"🔴 Live \xB7 "+daDetail(r.detail):(tag?tag+" \xB7 ":"")+daD(r.date),onClose},
     h("div",{style:{display:"flex",alignItems:"center",justifyContent:"center",gap:12,background:"rgba(255,255,255,0.06)",borderRadius:14,padding:"14px 10px",marginBottom:14}},
       h("div",{style:{flex:1,textAlign:"right",fontFamily:cond,fontSize:"1.1rem",fontWeight:700,color:L.me?"#ff9fd0":"#fff"}},L.n),
       h("div",{style:{fontFamily:cond,fontSize:"2rem",fontWeight:900,color:"#fff",whiteSpace:"nowrap"}},(L.s||"–")+" – "+(R.s||"–")),
       h("div",{style:{flex:1,fontFamily:cond,fontSize:"1.1rem",fontWeight:700,color:R.me?"#ff9fd0":"#fff"}},R.n)
     ),
     h("div",{style:{marginTop:-6,marginBottom:14}},h(ShareResult,{team,r:{...r,stats:st||r.stats}})),
-    st&&st.info&&h("div",{style:{textAlign:"center",color:"#d5deee",fontSize:"0.74rem",margin:"-6px 0 14px"}},st.info),
+    st&&st.info&&h("div",{style:{textAlign:"center",color:"#d5deee",fontSize:"0.74rem",margin:"-6px 0 14px"}},daInfo(st.info)),
     !st&&(!err||r.live)&&h("div",{style:{textAlign:"center",color:"#d5deee",fontSize:"0.8rem",padding:20}},r.live?"Live-statistik kommer som regel et par minutter inde i kampen…":"Henter kampstatistik…"),
     err&&h("div",{style:{textAlign:"center",color:"#d5deee",fontSize:"0.8rem",padding:20}},"Der er ingen statistik for denne kamp endnu."),
     st&&st.goals&&st.goals.length>0&&h("div",{style:{marginBottom:14}},
@@ -1873,7 +1876,7 @@ function LiveGame({team,onStats}){
   const can=onStats&&g.ev&&g.sp;
   return h(can?"button":"div",{onClick:can?onStats:undefined,style:{width:"100%",textAlign:"left",font:"inherit",color:"inherit",cursor:can?"pointer":"default",display:"block",background:"linear-gradient(135deg,rgba(239,68,68,0.18),rgba(239,68,68,0.06))",border:"1px solid rgba(239,68,68,0.45)",borderRadius:14,padding:14,marginBottom:8}},
     h("div",{style:{display:"flex",alignItems:"center",gap:6,fontSize:"0.58rem",letterSpacing:"2px",color:"#f87171",fontFamily:"Roboto,'Google Sans',Arial,sans-serif",textTransform:"uppercase",fontWeight:700,marginBottom:6}},
-      h("span",{className:"live-dot"}),"Live"+(g.detail&&g.detail!=="Live"?" \xB7 "+g.detail:"")),
+      h("span",{className:"live-dot"}),"Live"+(g.detail&&g.detail!=="Live"?" \xB7 "+daDetail(g.detail):"")),
     h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
       h("div",{style:{fontFamily:"'Google Sans',Roboto,Arial,sans-serif",fontSize:"1.05rem",fontWeight:700,color:"#fff"}},team.sport==="Trav"?g.opponent:fixture(team,g.opponent).title),
       h("div",{style:{fontFamily:"'Google Sans',Roboto,Arial,sans-serif",fontSize:"1.6rem",fontWeight:900,color:"#fff",whiteSpace:"nowrap"}},team.sport==="Trav"?g.score:fixture(team,g.opponent,g.score).score)
@@ -2207,7 +2210,7 @@ function TeamTile({t,onClick}){
     lg?h("div",{style:{...line,fontWeight:700}},h("span",{className:"live-dot",style:{marginRight:5}}),"LIVE "+(scoreLine(t,lg.opponent,lg.score)||lg.score+" "+clean(lg.opponent)))
       :r?h("div",{style:line},h("b",{style:{color:RC[r.result]||"#fff",marginRight:5}},r.label||({W:"V",L:"T",D:"U"}[r.result])||r.result),scoreLine(t,r.opponent,r.score)||((r.score&&r.score!==r.label?r.score+" ":"")+clean(r.opponent)))
       :h("div",{style:{...line,opacity:0.7}},"Ingen resultater endnu"),
-    lg?h("div",{style:{...line,color:"#ffd0e6",fontSize:"0.72rem"}},lg.detail||"Live")
+    lg?h("div",{style:{...line,color:"#ffd0e6",fontSize:"0.72rem"}},daDetail(lg.detail)||"Live")
       :next&&h("div",{style:{...line,color:"#ffd0e6",fontSize:"0.72rem"}},next)
   );
 }

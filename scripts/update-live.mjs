@@ -384,7 +384,7 @@ async function hbProgramFor(team,tableNames){
       if(!started)continue;
       const [hs,as]=String(j.score||"0-0").split("-").map(Number),home=isMe(g.home),min=parseInt(String(j.time||"0"),10);
       live={opponent:(home?g.away:g.home)+(home?" (H)":" (A)"),score:(home?hs+"–"+as:as+"–"+hs),
-        detail:/pause|halvleg|half/i.test(st)?"Half-time":min?min+"'":"Live",mid:g.mid};
+        detail:/pause|halvleg|half/i.test(st)?"Pause":min?min+"'":"Live",mid:g.mid};
       g.hs=null; // not a result yet
     }catch(e){console.log("    handball live check: "+e.message);kickoffDebug.push(team.name+": handball live check error "+e.message);}
   }
@@ -467,7 +467,7 @@ async function ehfFor(team){
     if(_ehfLogged++<4)console.log("    EHF game: "+JSON.stringify({day:x.day,matchStats:st,hg,gg,home:h&&h.fullName,guest:g&&g.fullName}));
     if(st.isLive){
       const min=parseInt(String(st.time||""),10);
-      out.live={opponent:name,score:(me??0)+"–"+(op??0),detail:/half.?time|pause|^ht$/i.test(String(st.phase||""))?"Half-time":min?min+"'":String(st.phase||"Live")};
+      out.live={opponent:name,score:(me??0)+"–"+(op??0),detail:/half.?time|pause|^ht$/i.test(String(st.phase||""))?"Pause":min?min+"'":String(st.phase||"Live")};
     }else if(me!=null&&op!=null&&when.getTime()<now)
       out.results.push({opponent:name,score:me+"–"+op,result:me>op?"W":me<op?"L":"D",date:fmtDK(when,{day:"numeric",month:"short"}),ts:when.getTime(),ehm:m.matchID,home:home?1:0});
     else if(when.getTime()>now-3*3600e3&&(!out.next||when<out.next.d))out.next={d:when,name,id:m.matchID};

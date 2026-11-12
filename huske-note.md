@@ -10,6 +10,6 @@
 
 **Gjort 12/11:** login/admin-rettelser; hele appen på dansk; del resultat/live som billede.
 
-**Gjort 12/11 (2):** `ReminderOffer` på forsiden: ét tryk = startpåmindelse for alle hold + morgenoversigt; nye hold får den automatisk (`msh-remind-all`). Ligger på branch, ikke merget endnu.
+**Gjort 12/11 (2), live:** påmindelseskort efter holdvalg; Rune-rangering fra Wikipedia (#433); Opdatér-knap giver besked; "Forstået – log ind" fører til konto-kortet.
 
 **Næste idéer:** eget domæne (fx mysportshub.dk), del i fangrupper (GOG, FC Fredericia).
