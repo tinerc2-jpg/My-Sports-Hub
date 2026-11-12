@@ -1902,7 +1902,7 @@ const pushOK=()=>"serviceWorker" in navigator&&"PushManager" in window&&"Notific
 const isIOS=()=>/iphone|ipad|ipod/i.test(navigator.userAgent);
 const MORNING_KEY="__morning__";
 function pushPrefs(){return lsGet("msh-push")||{};}
-async function setPush(name,kind,on,quiet){
+async function setPush(name,kind,on,quiet,note){
   if(on&&!quiet){
     const perm=await Notification.requestPermission();
     if(perm!=="granted")throw new Error("denied");
@@ -1916,7 +1916,35 @@ async function setPush(name,kind,on,quiet){
   const teams=Object.entries(prefs).filter(([n])=>n!==MORNING_KEY).map(([n,v])=>({n,start:!!v.start,live:!!v.live})).filter(t=>t.start||t.live);
   const morning=!!(prefs[MORNING_KEY]||{}).morning,favs=morning?(lsGet("msh-teams")||[]).map(t=>t&&t.name).filter(Boolean).slice(0,60):[];
   await fetch("https://ntfy.sh/"+PUSH_SUBS_TOPIC,{method:"POST",body:JSON.stringify({sub:sub.toJSON(),teams,morning,favs,ts:Date.now()})});
-  if(on&&!quiet){const t="🔔 Notifikationer er slået til",b=kind==="morning"?"Du får din sportsdag hver morgen kl. 8:00, når der er kampe.":name+": "+(kind==="start"?"du får en påmindelse ca. 60 min før start.":"kampstart, mål og slutresultat.");reg.showNotification(t,{body:b,icon:"icon-192.png",data:{url:"./?app",title:t,body:b}});}
+  if(on&&!quiet){const t="🔔 Notifikationer er slået til",b=note?note:kind==="morning"?"Du får din sportsdag hver morgen kl. 8:00, når der er kampe.":name+": "+(kind==="start"?"du får en påmindelse ca. 60 min før start.":"kampstart, mål og slutresultat.");reg.showNotification(t,{body:b,icon:"icon-192.png",data:{url:"./?app",title:t,body:b}});}
+}
+// Offer right after picking teams (owner 12 Nov): one tap = start reminder for every favourite + morning summary.
+// "msh-remind-all" makes teams added later get the start reminder too (favKey effect in App).
+function remindAllPrefs(names){const prefs=pushPrefs();names.forEach(n=>{if(!prefs[n]||prefs[n].start===undefined)prefs[n]={...(prefs[n]||{}),start:true};});lsSet("msh-push",prefs);}
+function ReminderOffer({teams}){
+  const [hide,setHide]=useState(()=>!!lsGet("msh-remind-offer")||Object.entries(pushPrefs()).some(([,v])=>v&&(v.start||v.live||v.morning))),[busy,setBusy]=useState(false),[msg,setMsg]=useState(null);
+  if(hide||!teams.length)return null;
+  const ios=!pushOK()&&isIOS();
+  if(!pushOK()&&!ios)return null;
+  const close=()=>{lsSet("msh-remind-offer",1);setHide(true);};
+  const on=async()=>{
+    setBusy(true);setMsg(null);
+    try{remindAllPrefs(teams.map(t=>t.name));lsSet("msh-remind-all",1);
+      await setPush(MORNING_KEY,"morning",true,false,"Du får en påmindelse ca. 60 min før dine holds kampe og din sportsdag hver morgen.");
+      setMsg("ok");lsSet("msh-remind-offer",1);setTimeout(()=>setHide(true),3500);}
+    catch(e){try{localStorage.removeItem("msh-remind-all");localStorage.removeItem("msh-push");}catch(x){}setMsg(e.message==="denied"?"denied":"error");}
+    setBusy(false);
+  };
+  const txt={ok:"✓ Slået til! Du kan ændre det på hvert holds side.",denied:"Notifikationer er blokeret. Tillad dem i telefonens Indstillinger → Notifikationer → My Sports Hub, og prøv igen.",error:"Noget gik galt – prøv igen om lidt."};
+  const n=teams.length;
+  return h("div",{style:{position:"relative",marginBottom:14,borderRadius:18,padding:"14px",background:"#16264a",border:"1px solid rgba(232,64,154,0.5)",fontFamily:"Roboto,'Google Sans',Arial,sans-serif"}},
+    h("button",{onClick:close,"aria-label":"Luk",style:{position:"absolute",top:10,right:10,width:32,height:32,borderRadius:"50%",border:"none",background:"rgba(255,255,255,0.12)",color:"#fff",cursor:"pointer"}},"✕"),
+    h("div",{style:{fontFamily:"'Google Sans',Roboto,Arial,sans-serif",fontWeight:800,fontSize:"1.15rem",color:"#fff",marginBottom:6,paddingRight:36}},"🔔 Gå aldrig glip af en kamp"),
+    h("div",{style:{fontSize:"0.82rem",color:"#eef2f8",lineHeight:1.45,marginBottom:10}},ios?"På iPhone virker påmindelser fra appen på hjemmeskærmen: tryk Del ⬆️ → \"Føj til hjemmeskærm\", og åbn My Sports Hub derfra.":"⏰ Påmindelse ca. 60 min før "+(n===1?teams[0].shortName||teams[0].name:"dine "+n+" holds")+" kampe og ☀️ din sportsdag hver morgen."),
+    msg?h("div",{style:{fontSize:"0.8rem",color:msg==="ok"?"#86efac":"#eef2f8",lineHeight:1.45}},txt[msg])
+      :h("div",{style:{display:"flex",gap:8}},
+        !ios&&h("button",{onClick:on,disabled:busy,style:{flex:1,border:"none",borderRadius:10,padding:"10px",fontWeight:700,fontSize:"0.85rem",background:"#e8409a",color:"#fff",cursor:"pointer",opacity:busy?0.6:1}},busy?"…":"Slå påmindelser til"),
+        h("button",{onClick:close,style:{flex:ios?1:"0 0 auto",border:"none",borderRadius:10,padding:"10px 14px",fontWeight:700,fontSize:"0.85rem",background:"rgba(255,255,255,0.1)",color:"#fff",cursor:"pointer"}},ios?"Forstået":"Ikke nu")));
 }
 function NotifyRow({team,topic,icon,title,sub,kind}){
   const [on,setOn]=useState(()=>!!(pushPrefs()[team.name]||{})[kind]),[busy,setBusy]=useState(false),[msg,setMsg]=useState(null);
@@ -2199,7 +2227,8 @@ function App(){
   const [removing,setRemoving]=useState(null);
   // Morning summary: when the favourites change, tell the robot the new list (quietly).
   const favKey=teams.map(t=>t.name).join("|");
-  useEffect(()=>{try{if((pushPrefs()[MORNING_KEY]||{}).morning&&pushOK()&&Notification.permission==="granted")setPush(MORNING_KEY,"morning",true,true).catch(()=>{});}catch(e){}},[favKey]);
+  useEffect(()=>{try{if(!pushOK()||Notification.permission!=="granted")return;const all=!!lsGet("msh-remind-all"),m=!!(pushPrefs()[MORNING_KEY]||{}).morning;
+    if(all)remindAllPrefs(teams.map(t=>t.name));if(m||all)setPush(MORNING_KEY,"morning",m,true).catch(()=>{});}catch(e){}},[favKey]);
   const [match,setMatch]=useState(null),[showTable,setShowTable]=useState(false),[showFeedback,setShowFeedback]=useState(false),[showLineup,setShowLineup]=useState(false);
   // "home" = grid of all favourites, "team" = one team's page
   const [view,setView]=useState("home");
@@ -2398,6 +2427,7 @@ function App(){
     (welcome||teams.length===0)&&view==="home"&&h(Welcome,{teams,onAdd:()=>setShowModal(true),onPick:addQuick,onDone:()=>setWelcome(false)}),
     view==="home"&&h(RequestDone,{teams,onAdd:addQuick}),
     !(welcome||teams.length===0)&&view==="home"&&h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
+      h(ReminderOffer,{teams}),
       h(WhatsNew,{hasTeams:teams.length>0}),
       h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:8}},
         h(Lbl,{c:"Mine hold \xB7 "+teams.length}),
