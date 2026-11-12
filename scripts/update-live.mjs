@@ -634,6 +634,24 @@ async function espnAthleteRank(id,tour){
   return null;
 }
 
+// Players outside ESPN's top 150 (Holger Rune, Nov 2026) and without a rank on ESPN's athlete pages:
+// the en.wikipedia infobox "currentsinglesranking = No. 154 (10 November 2026)", kept by editors weekly.
+async function wikiTennisRank(name){
+  let title=name.replace(/ /g,"_");
+  for(let hop=0;hop<2;hop++){
+    try{
+      const r=await fetch(`https://en.wikipedia.org/w/index.php?title=${encodeURIComponent(title)}&action=raw`,{headers:{"User-Agent":"MySportsHub/1.0 (sports dashboard)"}});
+      if(!r.ok){console.log(`    wiki rank ${name}: HTTP ${r.status}`);return null;}
+      const txt=await r.text(),red=txt.match(/^#REDIRECT\s*\[\[([^\]|#]+)/i);
+      if(red){title=red[1].trim().replace(/ /g,"_");continue;}
+      const m=txt.match(/\|\s*currentsinglesranking\s*=([^\n]*)/i),n=m&&m[1].match(/No\.?\s*(\d+)/i);
+      console.log(`    wiki rank ${name}: ${n?"#"+n[1]:"not found"}`+(m?" · "+m[1].trim().slice(0,60):""));
+      return n?{rank:+n[1],points:null,from:"Wikipedia"}:null;
+    }catch(e){console.log(`    wiki rank ${name}:`,e.message);return null;}
+  }
+  return null;
+}
+
 // ── Cycling: ProCyclingStats rider page (no free cycling API covers results/rankings) ──
 // Reads the UCI World ranking and the latest results table from the public page.
 // The page layout isn't documented, so everything found (or not) is logged.
@@ -910,6 +928,11 @@ for(const t of [...Object.values(api.DB),...extraTeams]){
         const pd=prev[t.name]&&prev[t.name].data;
         data.athleteId=data.athleteId||(pd&&pd.athleteId)||null; // remember the id in weeks without a match
         if(!data.standing&&data.athleteId){const s=await espnAthleteRank(data.athleteId,/wta/i.test(t.league)?"wta":"atp");if(s)data.standing=s;}
+        if(!data.standing){
+          // Wikipedia at most every 6 h; keep the previous answer in between
+          if(pd&&pd.standing&&pd.standing.from==="Wikipedia"&&Date.now()-(pd.wikiRankTs||0)<6*3600e3){data.standing=pd.standing;data.wikiRankTs=pd.wikiRankTs;data.standingFrom="Wikipedia";}
+          else{const s=await wikiTennisRank(t.name);if(s){data.standing=s;data.wikiRankTs=Date.now();data.standingFrom="Wikipedia";}}
+        }
       }
       if(t.sport==="Golf"&&!data.standing){
         const women=/LPGA|LET/.test(t.league);

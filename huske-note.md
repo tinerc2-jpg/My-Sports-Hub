@@ -10,4 +10,6 @@
 
 **Gjort 12/11:** login/admin-rettelser; hele appen på dansk; del resultat/live som billede.
 
-**Næste idéer:** eget domæne (fx mysportshub.dk), påmindelser lige efter holdvalg, del i fangrupper (GOG, FC Fredericia).
+**Gjort 12/11 (2):** `ReminderOffer` på forsiden: ét tryk = startpåmindelse for alle hold + morgenoversigt; nye hold får den automatisk (`msh-remind-all`). Ligger på branch, ikke merget endnu.
+
+**Næste idéer:** eget domæne (fx mysportshub.dk), del i fangrupper (GOG, FC Fredericia).
