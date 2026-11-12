@@ -1154,7 +1154,7 @@ function persist(teams,sel){
     localStorage.setItem("msh-sel",sel);}catch(e){}
   if(!_syncQuiet){syncPush(teams);acctPush(teams);}
 }
-function AccountCard({acct,onLogin,onLogout}){
+function AccountCard({acct,onLogin,onLogout,onWelcome}){
   const [mode,setMode]=useState(null),[name,setName]=useState(""),[pw,setPw]=useState(""),[err,setErr]=useState(""),[busy,setBusy]=useState(false);
   const F="Roboto,'Google Sans',Arial,sans-serif";
   const btn={border:"none",borderRadius:10,padding:"8px 12px",fontWeight:700,fontSize:"0.75rem",cursor:"pointer",fontFamily:F};
@@ -1164,7 +1164,8 @@ function AccountCard({acct,onLogin,onLogout}){
   const box={marginTop:10,background:"#16264a",border:"1px solid rgba(255,255,255,0.1)",borderRadius:14,padding:"12px 14px",fontFamily:F};
   if(acct.user)return h("div",{style:{...box,display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
     h("div",{style:{fontSize:"0.85rem",fontWeight:600}},"👤 "+acct.user.name,
-      h("div",{style:{fontSize:"0.7rem",color:"#d5deee",fontWeight:400,marginTop:2}},"✓ Your teams are saved to your account – log in on any device")),
+      h("div",{style:{fontSize:"0.7rem",color:"#d5deee",fontWeight:400,marginTop:2}},"✓ Your teams are saved to your account – log in on any device"),
+      onWelcome&&h("button",{onClick:onWelcome,style:{background:"none",border:"none",padding:0,marginTop:6,color:"#ff9fd0",fontSize:"0.72rem",fontWeight:600,cursor:"pointer",fontFamily:F}},"👋 Show the welcome screen")),
     h("button",{onClick:onLogout,style:{...btn,whiteSpace:"nowrap",flexShrink:0,background:"rgba(255,255,255,0.08)",color:"#eef2f8"}},"Log out"));
   return h("div",{style:box},
     h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
@@ -2308,15 +2309,15 @@ function App(){
       h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
         view==="team"
           ?h("button",{onClick:goHome,style:{background:"rgba(255,255,255,0.09)",border:"none",borderRadius:20,color:"#fff",fontSize:"0.9rem",fontWeight:700,cursor:"pointer",padding:"8px 14px",fontFamily:"Roboto,'Google Sans',Arial,sans-serif",whiteSpace:"nowrap"}},"← My teams")
-          :h("div",{style:{fontFamily:"'Google Sans',Roboto,Arial,sans-serif",fontSize:"1.3rem",fontWeight:500,color:"#fff"}},
+          :h("div",{style:{fontFamily:"'Google Sans',Roboto,Arial,sans-serif",fontSize:"1.3rem",fontWeight:500,color:"#fff",whiteSpace:"nowrap"}},
             "My Sports ",h("span",{style:{color:"#ff7ac0"}},"Hub"),
             window.innerWidth>=460&&h("span",{style:{fontSize:"0.5rem",marginLeft:8,opacity:0.65,letterSpacing:"3px",fontFamily:"Roboto,'Google Sans',Arial,sans-serif",fontWeight:400,whiteSpace:"nowrap"}},"FAN DASHBOARD")
           ),
-        acct.user&&acct.user.admin&&h("a",{href:"admin.html",title:"Admin dashboard",style:{flexShrink:0,background:"rgba(255,255,255,0.1)",color:"#ffffff",borderRadius:20,padding:"6px 12px",fontSize:"0.72rem",fontWeight:700,fontFamily:"Roboto,'Google Sans',Arial,sans-serif",textDecoration:"none",whiteSpace:"nowrap",marginLeft:"auto",marginRight:6}},"📊 Dashboard"),
+        acct.user&&acct.user.admin&&h("a",{href:"admin.html",title:"Admin dashboard",style:{flexShrink:0,background:"rgba(255,255,255,0.1)",color:"#ffffff",borderRadius:20,padding:"6px 12px",fontSize:"0.72rem",fontWeight:700,fontFamily:"Roboto,'Google Sans',Arial,sans-serif",textDecoration:"none",whiteSpace:"nowrap",marginLeft:"auto",marginRight:6}},window.innerWidth<420?"📊":"📊 Dashboard"),
         h("button",{onClick:handleShareApp,title:"Share My Sports Hub",style:{flexShrink:0,background:"#e8409a",color:"#ffffff",border:"none",borderRadius:20,padding:"6px 12px",fontSize:"0.72rem",fontWeight:700,fontFamily:"Roboto,'Google Sans',Arial,sans-serif",cursor:"pointer",whiteSpace:"nowrap"}},"📲 Share app")
       )
     ),
-    (welcome||teams.length===0)&&view==="home"&&acct.ok&&!acct.user&&h("div",{style:{maxWidth:520,margin:"0 auto",padding:"16px 16px 0"}},h(AccountCard,{acct,onLogin,onLogout})),
+    (welcome||teams.length===0)&&view==="home"&&acct.ok&&h("div",{style:{maxWidth:520,margin:"0 auto",padding:"16px 16px 0"}},h(AccountCard,{acct,onLogin,onLogout})),
     (welcome||teams.length===0)&&view==="home"&&h(Welcome,{teams,onAdd:()=>setShowModal(true),onPick:addQuick,onDone:()=>setWelcome(false)}),
     view==="home"&&h(RequestDone,{teams,onAdd:addQuick}),
     !(welcome||teams.length===0)&&view==="home"&&h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
@@ -2334,7 +2335,7 @@ function App(){
       ),
       h(SportsWeek,{teams:teams.map(t=>mergeLive(t,live[t.name])),onOpen:t=>handleSelect((teams.find(x=>x.name===t.name)||{}).id),onLive:t=>{handleSelect((teams.find(x=>x.name===t.name)||{}).id);if(t.liveGame&&t.liveGame.ev&&t.liveGame.sp)setTimeout(()=>setMatch({...t.liveGame,live:true,date:""}),50);}}),
       h("button",{onClick:()=>setShowFeedback(true),style:{marginTop:16,width:"100%",background:"rgba(255,255,255,0.06)",border:"1px solid rgba(255,255,255,0.12)",borderRadius:12,padding:12,color:"#eef2f8",fontSize:"0.88rem",cursor:"pointer",fontFamily:"Roboto,'Google Sans',Arial,sans-serif"}},"💬 Ideas & feedback – tell us what to improve"),
-      acct.ok&&h(AccountCard,{acct,onLogin,onLogout}),
+      acct.ok&&h(AccountCard,{acct,onLogin,onLogout,onWelcome:acct.user&&acct.user.admin?()=>{setWelcome(true);window.scrollTo(0,0);}:null}),
       teams.length>0&&!acct.user&&h(SyncCard,{teams}),
       h("div",{style:{height:30}})
     ),
