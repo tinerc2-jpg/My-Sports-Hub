@@ -1,12 +1,18 @@
 name: Update live sports data
 
+# When the robot fetches data (owner, 12 Nov 2026: not every 15 min all day – only the morning calendar,
+# reminders before games and live data). scripts/robot-when.mjs decides, from the last live.json, without any API call:
+#   full  – at 06, 08, 14 and 20 Danish time (calendar, ☀️ morning summary 8–11, afternoon changes, ntfy messages)
+#   live  – from 60 min before a favourite's kick-off (Trav 2 h) until the game is over: every ~15 s.
+#           The start reminders (⏰, 10–70 min before) and line-ups are sent by these runs.
+#   sleep – otherwise: the job just waits, no API calls.
 on:
   schedule:
-    - cron: "*/15 * * * *"
+    - cron: "7 * * * *"   # only a fallback: the job starts its own successor (GitHub skipped cron for 2 h on 26 Oct)
   workflow_dispatch:
   push:
     branches: [main]
-    paths: [index.html, scripts/update-live.mjs]
+    paths: [index.html, scripts/update-live.mjs, scripts/robot-when.mjs]
 
 permissions:
   contents: write
@@ -27,44 +33,46 @@ jobs:
           node-version: 20
       # Web Push sender (notifications straight from the app)
       - run: npm install --no-save --no-audit --no-fund web-push@3.6.7
-      - run: node scripts/update-live.mjs
-        env:
-          APISPORTS_KEY: ${{ secrets.APISPORTS_KEY }}
-          GOATCOUNTER_TOKEN: ${{ secrets.GOATCOUNTER_TOKEN }}
-      # Publish as a single commit on the live-data branch so main's history stays clean.
-      - name: Publish to live-data branch
+      # The job keeps itself going instead of trusting GitHub's cron (26 Oct: no scheduled run for 2 h 10 min,
+      # just before Rune's match). Every ~15 s it asks robot-when.mjs: full / live / sleep. Then it starts the next job.
+      - name: Keep updating (full at 06/08/14/20, live around games, otherwise sleep)
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          APISPORTS_KEY: ${{ secrets.APISPORTS_KEY }}
+          GOATCOUNTER_TOKEN: ${{ secrets.GOATCOUNTER_TOKEN }}
         run: |
+          # start from the published snapshot (the plan and --live runs read out/live.json)
+          mkdir -p out
+          git fetch -q --depth=1 origin live-data && git show origin/live-data:live.json > out/live.json || rm -f out/live.json
+          # Publish as a single commit on the live-data branch so main's history stays clean.
           cd out
           git init -q -b live-data
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           # Vercel only reads vercel.json from the pushed branch: without it every live-data push became 3 Vercel deployments (hit 100/day on 10 Nov)
           echo '{"git":{"deploymentEnabled":false}}' > vercel.json
-          git add live.json vercel.json
-          git commit -qm "Live data $(date -u +%Y-%m-%dT%H:%MZ)"
-          for i in 1 2 3; do git push -qf "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" live-data && break; echo "push failed ($i) – retrying"; sleep 10; done
-      # The job keeps itself going instead of trusting GitHub's cron (26 Oct: no scheduled run for 2 h 10 min,
-      # just before Rune's match). For up to 110 min: while a favourite is playing (or kicks off within 60 min,
-      # out/live-needed) re-run --live every ~15 s; otherwise a full run every 15 min. Then it starts the next job.
-      - name: Keep updating (live every ~15 s during games, full run every 15 min)
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          APISPORTS_KEY: ${{ secrets.APISPORTS_KEY }}
-          GOATCOUNTER_TOKEN: ${{ secrets.GOATCOUNTER_TOKEN }}
-        run: |
-          # 110 min, but never hand over to the next job during a game: a new job can wait 10+ min for a runner
-          # (31 Oct: 13 min without updates right at Barça's kick-off) – keep going while live, up to 5½ h in total
-          start=$(date +%s); end=$(( start + 110*60 )); hard=$(( start + 330*60 )); last_full=$(date +%s)
-          while [ "$(date +%s)" -lt "$end" ] || { [ -f out/live-needed ] && [ "$(date +%s)" -lt "$hard" ]; }; do
-            sleep 15
-            # every full run picks up the newest code from main, so a fix doesn't wait for the loop to end
-            if [ $(( $(date +%s) - last_full )) -ge 900 ]; then last_full=$(date +%s); git fetch -q origin main && git checkout -q origin/main -- index.html scripts || true; node scripts/update-live.mjs || continue
-            elif [ -f out/live-needed ]; then node scripts/update-live.mjs --live || continue
+          cd ..
+          # 110 min, but never hand over to the next job during a game or just before one: a new job can wait 10+ min
+          # for a runner (31 Oct: 13 min without updates right at Barça's kick-off) – keep going, up to 5½ h in total
+          start=$(date +%s); end=$(( start + 110*60 )); hard=$(( start + 330*60 )); last_full=0; first=1
+          while :; do
+            now=$(date +%s)
+            if [ "$now" -ge "$end" ]; then
+              [ "$now" -lt "$hard" ] && [ "$(node scripts/robot-when.mjs soon)" = yes ] || break
+            fi
+            [ "$first" = 1 ] || sleep 15; first=0
+            what=$(node scripts/robot-when.mjs)
+            if [ "$what" = full ]; then
+              # a failed full run is tried again after 15 min, not every 15 s
+              [ $(( $(date +%s) - last_full )) -ge 900 ] || continue
+              last_full=$(date +%s)
+              # pick up the newest code from main, so a fix doesn't wait for the loop to end
+              git fetch -q origin main && git checkout -q origin/main -- index.html scripts || true
+              echo "full run $(date -u +%H:%MZ)"; node scripts/update-live.mjs || continue
+            elif [ "$what" = live ]; then node scripts/update-live.mjs --live || continue
             else continue; fi
             cd out
-            git add live.json
+            git add live.json vercel.json
             git commit -qm "Live data $(date -u +%Y-%m-%dT%H:%MZ)" || true
             # a GitHub hiccup (500 on push, 23 Oct) must not end the loop: try again next round
             git push -qf "https://x-access-token:${GITHUB_TOKEN}@github.com/${GITHUB_REPOSITORY}.git" live-data || echo "push failed – retrying next round"
