@@ -2308,15 +2308,15 @@ function App(){
       h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
         view==="team"
           ?h("button",{onClick:goHome,style:{background:"rgba(255,255,255,0.09)",border:"none",borderRadius:20,color:"#fff",fontSize:"0.9rem",fontWeight:700,cursor:"pointer",padding:"8px 14px",fontFamily:"Roboto,'Google Sans',Arial,sans-serif",whiteSpace:"nowrap"}},"← My teams")
-          :h("div",{style:{fontFamily:"'Google Sans',Roboto,Arial,sans-serif",fontSize:"1.3rem",fontWeight:500,color:"#fff"}},
+          :h("div",{style:{fontFamily:"'Google Sans',Roboto,Arial,sans-serif",fontSize:"1.3rem",fontWeight:500,color:"#fff",whiteSpace:"nowrap"}},
             "My Sports ",h("span",{style:{color:"#ff7ac0"}},"Hub"),
             window.innerWidth>=460&&h("span",{style:{fontSize:"0.5rem",marginLeft:8,opacity:0.65,letterSpacing:"3px",fontFamily:"Roboto,'Google Sans',Arial,sans-serif",fontWeight:400,whiteSpace:"nowrap"}},"FAN DASHBOARD")
           ),
-        acct.user&&acct.user.admin&&h("a",{href:"admin.html",title:"Admin dashboard",style:{flexShrink:0,background:"rgba(255,255,255,0.1)",color:"#ffffff",borderRadius:20,padding:"6px 12px",fontSize:"0.72rem",fontWeight:700,fontFamily:"Roboto,'Google Sans',Arial,sans-serif",textDecoration:"none",whiteSpace:"nowrap",marginLeft:"auto",marginRight:6}},"📊 Dashboard"),
+        acct.user&&acct.user.admin&&h("a",{href:"admin.html",title:"Admin dashboard",style:{flexShrink:0,background:"rgba(255,255,255,0.1)",color:"#ffffff",borderRadius:20,padding:"6px 12px",fontSize:"0.72rem",fontWeight:700,fontFamily:"Roboto,'Google Sans',Arial,sans-serif",textDecoration:"none",whiteSpace:"nowrap",marginLeft:"auto",marginRight:6}},window.innerWidth<420?"📊":"📊 Dashboard"),
         h("button",{onClick:handleShareApp,title:"Share My Sports Hub",style:{flexShrink:0,background:"#e8409a",color:"#ffffff",border:"none",borderRadius:20,padding:"6px 12px",fontSize:"0.72rem",fontWeight:700,fontFamily:"Roboto,'Google Sans',Arial,sans-serif",cursor:"pointer",whiteSpace:"nowrap"}},"📲 Share app")
       )
     ),
-    (welcome||teams.length===0)&&view==="home"&&acct.ok&&!acct.user&&h("div",{style:{maxWidth:520,margin:"0 auto",padding:"16px 16px 0"}},h(AccountCard,{acct,onLogin,onLogout})),
+    (welcome||teams.length===0)&&view==="home"&&acct.ok&&h("div",{style:{maxWidth:520,margin:"0 auto",padding:"16px 16px 0"}},h(AccountCard,{acct,onLogin,onLogout})),
     (welcome||teams.length===0)&&view==="home"&&h(Welcome,{teams,onAdd:()=>setShowModal(true),onPick:addQuick,onDone:()=>setWelcome(false)}),
     view==="home"&&h(RequestDone,{teams,onAdd:addQuick}),
     !(welcome||teams.length===0)&&view==="home"&&h("div",{style:{padding:"14px",maxWidth:640,margin:"0 auto"}},
