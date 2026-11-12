@@ -338,7 +338,7 @@ async function hbMatchStats(id,team){
     .sort((a,b)=>b.n-a.n).filter((x,i,arr)=>arr.filter(y=>y.me===x.me).indexOf(x)<10);
   const meHome=ts.indexOf(me)===0;
   // home–away order, like the score line in the app's match view
-  const info=[j.halftime_score?"Half-time "+String(j.halftime_score).replace("-","–"):"",j.arena&&j.arena.name,j.spectators?j.spectators.toLocaleString("en-GB")+" spectators":""].filter(Boolean).join(" \xB7 ");
+  const info=[j.halftime_score?"Pause "+String(j.halftime_score).replace("-","–"):"",j.arena&&j.arena.name,j.spectators?j.spectators.toLocaleString("da-DK")+" tilskuere":""].filter(Boolean).join(" \xB7 ");
   // sanity check against the official score
   const [sh,sa]=String(j.score||"").split("-").map(Number),want=meHome?[sh,sa]:[sa,sh];
   if(!_hbTypesLogged){_hbTypesLogged=true;console.log("    handball event types: "+Object.entries(types).map(([t,n])=>t+"="+n).join(", "));}
@@ -693,7 +693,7 @@ async function pcsCycling(team){
     return{source:"ProCyclingStats",
       standing:rank?{rank,points:null,note:rankName}:null,
       recentResults:rows.map(x=>{const n=parseInt(x.res,10);return{opponent:x.race,score:isNaN(n)?x.res:(n===1?"Win":"P"+n),label:isNaN(n)?x.res:null,result:n===1?"W":n<=10?"D":"L",date:x.d?fmt(x.d):"",ts:x.d?x.d.getTime():0};}),
-      nextGame:{opponent:"No upcoming race found",offTitle:"No race scheduled",date:"Check the race calendar",time:"–",tv:"–"}};
+      nextGame:{opponent:"Ingen kommende løb fundet",offTitle:"Intet løb planlagt",date:"Se løbskalenderen",time:"–",tv:"–"}};
   }catch(e){console.log("    PCS:",e.message);return null;}
 }
 
@@ -714,7 +714,7 @@ async function atgRound(t){
       horses:(r.starts||[]).map(s=>{const pl=s.pools&&s.pools[bt]||{},res=s.result||{};return{n:s.number,h:s.horse&&s.horse.name,d:atgName(s.driver),tr:atgName(s.horse&&s.horse.trainer),
         pct:pl.betDistribution!=null?Math.round(pl.betDistribution/100):null,wo:atgOdds(s.pools&&s.pools.vinnare),x:!!s.scratched,pl:res.place||null,km:atgKm(res.kmTime),odds:res.finalOdds||null};})}));
     const trot={};
-    let nextGame={opponent:"No round scheduled yet",offTitle:"Next round",date:"–",time:"–",tv:"ATG"};
+    let nextGame={opponent:"Ingen omgang planlagt endnu",offTitle:"Næste omgang",date:"–",time:"–",tv:"ATG"};
     if(up){
       const g=await (await fetch(ATG+"games/"+up.id)).json();
       const pool=g.pools&&g.pools[up.bt]||{},legs=legsOf(g,up.bt),track=(up.tracks||[]).map(x=>x.name).join(" & ");
