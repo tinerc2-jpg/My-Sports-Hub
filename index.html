@@ -1162,6 +1162,10 @@ function persist(teams,sel){
 }
 function AccountCard({acct,onLogin,onLogout,onWelcome}){
   const [mode,setMode]=useState(null),[name,setName]=useState(""),[pw,setPw]=useState(""),[err,setErr]=useState(""),[busy,setBusy]=useState(false);
+  // "Forstået" on the news card (logged out) brings you here: scroll to the card and make it glow (owner 12 Nov)
+  const ref=useRef(null),[glow,setGlow]=useState(false);
+  useEffect(()=>{const go=()=>{const el=ref.current;if(!el)return;el.scrollIntoView({behavior:"smooth",block:"center"});setGlow(true);setTimeout(()=>setGlow(false),3500);};
+    window.addEventListener("msh-login",go);return()=>window.removeEventListener("msh-login",go);},[]);
   const F="Roboto,'Google Sans',Arial,sans-serif";
   const btn={border:"none",borderRadius:10,padding:"8px 12px",fontWeight:700,fontSize:"0.75rem",cursor:"pointer",fontFamily:F};
   const inp={width:"100%",boxSizing:"border-box",fontSize:16,padding:"9px 10px",borderRadius:8,border:"1px solid rgba(255,255,255,0.15)",background:"rgba(255,255,255,0.06)",color:"#eef2f8",marginTop:8,fontFamily:F};
@@ -1173,7 +1177,7 @@ function AccountCard({acct,onLogin,onLogout,onWelcome}){
       h("div",{style:{fontSize:"0.7rem",color:"#d5deee",fontWeight:400,marginTop:2}},"✓ Dine hold er gemt på din konto – log ind på alle enheder"),
       onWelcome&&h("button",{onClick:onWelcome,style:{background:"none",border:"none",padding:0,marginTop:6,color:"#ff9fd0",fontSize:"0.72rem",fontWeight:600,cursor:"pointer",fontFamily:F}},"👋 Vis velkomstsiden")),
     h("button",{onClick:onLogout,style:{...btn,whiteSpace:"nowrap",flexShrink:0,background:"rgba(255,255,255,0.08)",color:"#eef2f8"}},"Log ud"));
-  return h("div",{style:box},
+  return h("div",{ref,style:{...box,transition:"box-shadow .3s,border-color .3s",...(glow?{border:"2px solid #e8409a",boxShadow:"0 0 0 4px rgba(232,64,154,0.3)"}:{})}},
     h("div",{style:{display:"flex",alignItems:"center",justifyContent:"space-between",gap:10}},
       h("div",{style:{fontSize:"0.85rem",fontWeight:600}},"👤 Din konto",
         h("div",{style:{fontSize:"0.7rem",color:"#d5deee",fontWeight:400,marginTop:2}},"Gem dine hold og se dem på alle enheder")),
@@ -1531,13 +1535,15 @@ function WhatsNew({hasTeams}){
   const [seen,setSeen]=useState(()=>{try{return localStorage.getItem("msh-news-seen")===WHATS_NEW.id;}catch(e){return false;}});
   if(seen||!hasTeams)return null;
   const close=()=>{setSeen(true);try{localStorage.setItem("msh-news-seen",WHATS_NEW.id);}catch(e){}};
+  const out=_acct&&_acct.ok&&!_acct.user; // logged out where login works: "Forstået" takes you to the account card
+  const ok=()=>{close();if(out)setTimeout(()=>window.dispatchEvent(new Event("msh-login")),150);};
   return h("div",{style:{position:"relative",marginBottom:14,borderRadius:18,padding:"14px 14px 10px",background:"#16264a",border:"1px solid rgba(232,64,154,0.5)",boxShadow:"0 1px 3px rgba(0,0,0,0.3)",fontFamily:"Roboto,'Google Sans',Arial,sans-serif"}},
     h("button",{onClick:close,"aria-label":"Luk",style:{position:"absolute",top:10,right:10,width:32,height:32,borderRadius:"50%",border:"none",background:"rgba(255,255,255,0.12)",color:"#fff",cursor:"pointer"}},"✕"),
     h("div",{style:{fontFamily:"'Google Sans',Roboto,Arial,sans-serif",fontWeight:800,fontSize:"1.3rem",marginBottom:8,color:"#fff"}},"✨ Nyheder"),
     WHATS_NEW.items.map(([ic,t,d],i)=>h("div",{key:i,style:{display:"flex",gap:10,alignItems:"flex-start",padding:"6px 0",borderTop:i?"1px solid rgba(255,255,255,0.08)":"none"}},
       h("span",{style:{fontSize:"1.2rem",lineHeight:1.2}},ic),
       h("div",null,h("div",{style:{fontWeight:700,fontSize:"0.85rem",color:"#fff"}},t),h("div",{style:{fontSize:"0.74rem",color:"#eef2f8",lineHeight:1.4}},d)))),
-    h("button",{onClick:close,style:{marginTop:8,width:"100%",border:"none",borderRadius:10,padding:"9px",fontWeight:700,fontSize:"0.82rem",background:"#e8409a",color:"#fff",cursor:"pointer"}},"Forstået 👍"));
+    h("button",{onClick:ok,style:{marginTop:8,width:"100%",border:"none",borderRadius:10,padding:"9px",fontWeight:700,fontSize:"0.82rem",background:"#e8409a",color:"#fff",cursor:"pointer"}},out?"Forstået – log ind 👤":"Forstået 👍"));
 }
 
 // Bottom sheet used by the match and table views.
