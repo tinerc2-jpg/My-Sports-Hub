@@ -32,6 +32,10 @@ const ins=Object.values((j&&j.teams)||{}).map(liveIn).filter(x=>x!==null);
 const next=ins.length?Math.min(...ins):null;
 if(process.argv[2]==="soon"){console.log(next!==null&&next<=30?"yes":"no");process.exit(0);}
 const fullTs=j&&(j.fullTs||j.generated)||0;
-if(!j||NOW-fullTs>24*36e5||fullTs<lastSlot())console.log("full");
+// a team added to DB (index.html) that the snapshot doesn't have yet → full run now, not at the next slot
+let missing=false;
+try{const names=[...readFileSync("index.html","utf8").matchAll(/^add\(\[[^\]]*\],\{name:"([^"]+)"/gm)].map(m=>m[1]);
+  const have=new Set(Object.keys((j&&j.teams)||{}));missing=names.some(n=>!have.has(n.replace(/\\x([0-9A-F]{2})/gi,(_,h)=>String.fromCharCode(parseInt(h,16)))));}catch(e){}
+if(!j||NOW-fullTs>24*36e5||fullTs<lastSlot()||missing)console.log("full");
 else if(next!==null&&next<=0)console.log("live");
 else console.log("sleep");
