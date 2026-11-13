@@ -464,7 +464,7 @@ async function resolveSource(team){
   else if(team.sport==="Golf")src={p:"golf",tours:GOLF_TOURS[team.league]||["pga"]};
   else if(team.sport==="Handball"||TSDB_LEAGUES.includes(team.league))src=await resolveTSDB(team,al);
   else if(ESPN_SPORT_LEAGUES[team.sport]){
-    const cands=ESPN_LEAGUES[team.league]?[ESPN_LEAGUES[team.league]]:ESPN_SPORT_LEAGUES[team.sport];
+    const cands=team.league==="Landshold"?NAT_COMPS.map(([lg])=>["soccer",lg]):ESPN_LEAGUES[team.league]?[ESPN_LEAGUES[team.league]]:ESPN_SPORT_LEAGUES[team.sport];
     let best=null,ok=false,lastErr=null;
     for(const [sp,lg] of cands){
       let list;try{list=await espnTeams(sp,lg);ok=true;}catch(e){lastErr=e;continue;}
@@ -534,6 +534,9 @@ function espnStanding(j,id,withPoints){
 // European cups: ESPN soccer team ids are the same in every competition, so a club's
 // Champions League / Europa League games come from the same id under these leagues.
 const ESPN_EURO_CUPS=[["uefa.champions","CL"],["uefa.europa","EL"],["uefa.europa.conf","ECL"]];
+// National teams (league "Landshold"): the same ESPN id in every international competition.
+// The first one that knows the team becomes src.lg (its table = the Nations League group).
+const NAT_COMPS=[["uefa.nations","NL"],["fifa.worldq.uefa","VM-kval"],["uefa.euroq","EM-kval"],["fifa.world","VM"],["uefa.euro","EM"],["fifa.friendly","Venskab"]];
 // Where football is shown in Denmark (2026/27, per league; from Danish TV guides, owner: Disney+, Viaplay, Prime).
 // ESPN's own "tv" field lists US channels, which don't help Danish viewers.
 const DK_TV={"eng.1":"Viaplay / TV3+ (nogle lørdage Prime Video)","esp.1":"Disney+","ger.1":"Viaplay / TV3+","ita.1":"TV 2 Play","den.1":"TV 2 eller Viaplay",
@@ -542,7 +545,8 @@ async function fetchEspn(src){
   const sched=lg=>ESPN+"/site/v2/sports/"+src.sp+"/"+lg+"/teams/"+src.id+"/schedule";
   const base=sched(src.lg);
   const soccer=src.sp==="soccer";
-  const cups=soccer?ESPN_EURO_CUPS.filter(([lg])=>lg!==src.lg):[];
+  const nat=NAT_COMPS.some(([lg])=>lg===src.lg);
+  const cups=soccer?(nat?NAT_COMPS:ESPN_EURO_CUPS).filter(([lg])=>lg!==src.lg):[];
   const [main,fix,table,...cupJs]=await Promise.all([
     getJSON(base),
     soccer?getJSON(base+"?fixture=true").catch(()=>null):Promise.resolve(null),
@@ -556,8 +560,8 @@ async function fetchEspn(src){
   const leagueIds=new Set([main,fix].flatMap(j=>((j&&j.events)||[]).map(ev=>ev.id)));
   const echo=j=>{const ids=((j&&j.events)||[]).map(ev=>ev.id);return ids.length>4&&ids.filter(id=>leagueIds.has(id)).length>ids.length*0.6;};
   cups.forEach(([lg,tag],i)=>[cupJs[2*i],cupJs[2*i+1]].forEach(j=>{if(echo(j))liveLog("espn cups "+lg+": looks like the league schedule, skipped");else addAll(j,tag,lg);}));
-  if(cups.length){const n=evs.length;if(n)liveLog("espn cups "+src.id+": "+n+" European games ("+evs.slice(0,3).map(e=>e.opponent).join("; ")+")");}
-  [main,fix].forEach(j=>addAll(j));
+  if(cups.length){const n=evs.length;if(n)liveLog("espn "+(nat?"national ":"cups ")+src.id+": "+n+" European games ("+evs.slice(0,3).map(e=>e.opponent).join("; ")+")");}
+  [main,fix].forEach(j=>addAll(j,nat&&(NAT_COMPS.find(([lg])=>lg===src.lg)||[])[1]));
   const now=Date.now();
   const done=evs.filter(e=>e.completed).sort((a,b)=>b.d-a.d);
   const live=evs.find(e=>e.state==="in");
@@ -1234,6 +1238,16 @@ add(["maple leafs","toronto maple leafs"],{name:"Toronto Maple Leafs",shortName:
 add(["rangers","new york rangers"],{name:"New York Rangers",shortName:"Rangers",sport:"Ice Hockey",league:"NHL",country:"🇺🇸",color:"#0038A8",accent:"#CE1126",emoji:"🏒",standing:{rank:2,wins:52,losses:24,points:109},recentResults:[{opponent:"Carolina G5 (R2)",score:"Result TBC",result:"D",date:"May 2026"},{opponent:"Carolina G4 (R2)",score:"4-2",result:"W",date:"May 20"},{opponent:"Carolina G3 (R2)",score:"3-4 OT",result:"L",date:"May 17"}],nextGame:{opponent:"NHL Playoffs - check live",date:"May/Jun 2026",time:"TBD",tv:"Viaplay"},news:[{title:"Rangers deep in NHL playoffs - check Flashscore for latest",time:"today",hot:true},{title:"Led Carolina 3-1 in R2 - one win from Conf Finals",time:"3d ago",hot:false},{title:"Panarin leading the charge",time:"1w ago",hot:false}]});
 add(["chiefs","kansas city chiefs"],{name:"Kansas City Chiefs",shortName:"Chiefs",sport:"Am. Football",league:"NFL",country:"🇺🇸",color:"#E31837",accent:"#FFB81C",emoji:"🏈",standing:{rank:1,wins:15,losses:2,note:"Super Bowl LX Champions"},recentResults:[{opponent:"Super Bowl LX vs Eagles",score:"28-22",result:"W",date:"Feb 8"},{opponent:"AFC Championship",score:"35-17",result:"W",date:"Jan 25"},{opponent:"AFC Divisional",score:"28-14",result:"W",date:"Jan 18"}],nextGame:{opponent:"2026-27 NFL season - Training camp",date:"Sæsonen er slut",time:"-",tv:"-"},news:[{title:"Chiefs win Super Bowl LX - 4 titles in 6 years!",time:"3mo ago",hot:true},{title:"Mahomes wins 4th Super Bowl MVP",time:"3mo ago",hot:true},{title:"Training camp opens Jul 2026",time:"today",hot:false}]});
 add(["eagles","philadelphia eagles"],{name:"Philadelphia Eagles",shortName:"Eagles",sport:"Am. Football",league:"NFL",country:"🇺🇸",color:"#004C54",accent:"#A5ACAF",emoji:"🏈",standing:{rank:2,wins:14,losses:3,note:"Super Bowl LX runners-up"},recentResults:[{opponent:"Super Bowl LX vs Chiefs",score:"22-28",result:"L",date:"Feb 8"},{opponent:"NFC Championship",score:"27-21",result:"W",date:"Jan 25"},{opponent:"NFC Divisional",score:"34-10",result:"W",date:"Jan 18"}],nextGame:{opponent:"2026-27 NFL season - Training camp",date:"Sæsonen er slut",time:"-",tv:"-"},news:[{title:"Eagles Super Bowl heartbreak - lost 22-28 to Chiefs",time:"3mo ago",hot:true},{title:"Hurts: We will be back stronger",time:"3mo ago",hot:false},{title:"Training camp opens Jul 2026",time:"today",hot:false}]});
+add(["danmark","denmark","danmark landshold"],{name:"Danmark",shortName:"Danmark",sport:"Football",league:"Landshold",country:"🇩🇰",color:"#C8102E",accent:"#FFFFFF",emoji:"⚽",standing:{},recentResults:[],nextGame:{opponent:"Henter…",date:"-",time:"-",tv:"-"},news:[]});
+add(["sverige","sweden","sverige landshold"],{name:"Sverige",shortName:"Sverige",sport:"Football",league:"Landshold",country:"🇸🇪",color:"#006AA7",accent:"#FECC00",emoji:"⚽",standing:{},recentResults:[],nextGame:{opponent:"Henter…",date:"-",time:"-",tv:"-"},news:[]});
+add(["norge","norway","norge landshold"],{name:"Norge",shortName:"Norge",sport:"Football",league:"Landshold",country:"🇳🇴",color:"#BA0C2F",accent:"#00205B",emoji:"⚽",standing:{},recentResults:[],nextGame:{opponent:"Henter…",date:"-",time:"-",tv:"-"},news:[]});
+add(["finland","finland","finland landshold"],{name:"Finland",shortName:"Finland",sport:"Football",league:"Landshold",country:"🇫🇮",color:"#002F6C",accent:"#FFFFFF",emoji:"⚽",standing:{},recentResults:[],nextGame:{opponent:"Henter…",date:"-",time:"-",tv:"-"},news:[]});
+add(["island","iceland","island landshold"],{name:"Island",shortName:"Island",sport:"Football",league:"Landshold",country:"🇮🇸",color:"#02529C",accent:"#DC1E35",emoji:"⚽",standing:{},recentResults:[],nextGame:{opponent:"Henter…",date:"-",time:"-",tv:"-"},news:[]});
+add(["spanien","spain","spanien landshold"],{name:"Spanien",shortName:"Spanien",sport:"Football",league:"Landshold",country:"🇪🇸",color:"#C60B1E",accent:"#FFC400",emoji:"⚽",standing:{},recentResults:[],nextGame:{opponent:"Henter…",date:"-",time:"-",tv:"-"},news:[]});
+add(["italien","italy","italien landshold"],{name:"Italien",shortName:"Italien",sport:"Football",league:"Landshold",country:"🇮🇹",color:"#0066B3",accent:"#FFFFFF",emoji:"⚽",standing:{},recentResults:[],nextGame:{opponent:"Henter…",date:"-",time:"-",tv:"-"},news:[]});
+add(["england","england","england landshold"],{name:"England",shortName:"England",sport:"Football",league:"Landshold",country:"🏴󠁧󠁢󠁥󠁮󠁧󠁿",color:"#CF081F",accent:"#1D2D5C",emoji:"⚽",standing:{},recentResults:[],nextGame:{opponent:"Henter…",date:"-",time:"-",tv:"-"},news:[]});
+add(["frankrig","france","frankrig landshold"],{name:"Frankrig",shortName:"Frankrig",sport:"Football",league:"Landshold",country:"🇫🇷",color:"#002395",accent:"#ED2939",emoji:"⚽",standing:{},recentResults:[],nextGame:{opponent:"Henter…",date:"-",time:"-",tv:"-"},news:[]});
+add(["portugal","portugal","portugal landshold"],{name:"Portugal",shortName:"Portugal",sport:"Football",league:"Landshold",country:"🇵🇹",color:"#DA291C",accent:"#046A38",emoji:"⚽",standing:{},recentResults:[],nextGame:{opponent:"Henter…",date:"-",time:"-",tv:"-"},news:[]});
 add(["v75","v85","v75 / v85","v86","trav","atg"],{name:"V75 / V85",shortName:"V75 / V85",sport:"Trav",league:"ATG · Sweden",country:"🇸🇪",color:"#00523d",accent:"#f5c400",emoji:"🐎",standing:{},recentResults:[],nextGame:{opponent:"Henter…",date:"-",time:"-",tv:"ATG"},news:[]});
 add(["cowboys","dallas cowboys","dallas"],{name:"Dallas Cowboys",shortName:"Cowboys",sport:"Am. Football",league:"NFL",country:"🇺🇸",color:"#003594",accent:"#869397",emoji:"🏈",standing:{rank:"-",note:"Loading live table…"},recentResults:[],nextGame:{opponent:"Henter…",date:"-",time:"-",tv:"-"},news:[]});
 add(["all blacks","new zealand"],{name:"New Zealand All Blacks",shortName:"All Blacks",sport:"Rugby",league:"Rugby Championship",country:"🇳🇿",color:"#000000",accent:"#FFFFFF",emoji:"🏉",standing:{rank:1,points:0,note:"World Rugby Ranking #1"},recentResults:[{opponent:"Ireland (Test)",score:"38-17",result:"W",date:"Nov 2025"},{opponent:"France (Test)",score:"29-24",result:"W",date:"Nov 2025"},{opponent:"Argentina (RC)",score:"42-21",result:"W",date:"Oct 2025"}],nextGame:{opponent:"British & Irish Lions - Test 1",date:"Sat Jun 27",time:"TBD",tv:"Sky Sport/Viaplay"},news:[{title:"All Blacks vs British & Irish Lions series begins Jun 27",time:"today",hot:true},{title:"Full squad named for Lions series",time:"1mo ago",hot:false},{title:"World Rugby No.1 ranking confirmed",time:"3mo ago",hot:false}]});
@@ -1263,7 +1277,7 @@ add(["alexander bjork","alexander björk","bjork","björk"],{name:"Alexander Bj�
 add(["sebastian soderberg","sebastian söderberg","soderberg","söderberg"],{name:"Sebastian Söderberg",shortName:"Söderberg",sport:"Golf",league:"DP World Tour",country:"🇸🇪",color:"#0D5C9E",accent:"#FFCD00",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
 add(["jesper svensson"],{name:"Jesper Svensson",shortName:"Svensson",sport:"Golf",league:"DP World Tour",country:"🇸🇪",color:"#08518F",accent:"#FFCD00",emoji:"⛳",standing:{rank:null,points:null},recentResults:[],nextGame:{opponent:"Check the tour schedule",date:"TBD",time:"–",tv:"–"},news:[]});
 const HINTS={
-  Football:["FCK","Brøndby IF","FC Midtjylland","AGF","Arsenal","Liverpool","Man City","Chelsea","Barcelona","Real Madrid","Atletico Madrid","Bayern Munich","PSG","Inter Milan"],
+  Football:["FCK","Brøndby IF","Danmark","England","FC Midtjylland","AGF","Arsenal","Liverpool","Man City","Chelsea","Barcelona","Real Madrid","Atletico Madrid","Bayern Munich","PSG","Inter Milan"],
   Handball:["GOG","Aalborg","THW Kiel"],
   Tennis:["Holger Rune","Djokovic","Alcaraz","Sinner"],
   Basketball:["Lakers","Celtics"],
@@ -1529,7 +1543,8 @@ function SportsWeek({teams,onOpen,onLive}){
 }
 
 // "What's new": shown on the home screen until the visitor closes it; bump WHATS_NEW.id for the next round of news.
-const WHATS_NEW={id:"2026-11-12",items:[
+const WHATS_NEW={id:"2026-11-13",items:[
+  ["⚽","Landshold","Følg Danmark, Sverige, Norge, Finland, Island, Spanien, Italien, England, Frankrig og Portugal – Nations League, VM/EM-kvalifikation og venskabskampe."],
   ["🇩🇰","Nu på dansk","Hele appen er nu på dansk – også datoer og sportsgrene."],
   ["📤","Del resultatet som billede","Åbn et resultat eller tryk \"📤 Del seneste resultat\" på holdets side. Du får et flot billede med stillingen, klar til en besked eller story."],
   ["👤","Log ind – så er dine hold sikre","Opret en konto i kortet nederst: dine hold gemmes og ses på alle telefoner og computere, hvor du logger ind."],
@@ -2167,7 +2182,7 @@ function RemoveConfirm({teamName,onCancel,onConfirm}){
 }
 
 // First visit: greeting, how it works, quick picks and "Add your first team".
-const QUICK_PICKS=["FCK","Brøndby IF","FC Midtjylland","AGF","GOG","Aalborg","Arsenal","Liverpool","Man City","Barcelona","Real Madrid","Inter Milan","Holger Rune","Jonas Vingegaard","Max Verstappen","Nicolai Højgaard"];
+const QUICK_PICKS=["FCK","Brøndby IF","FC Midtjylland","AGF","GOG","Aalborg","Arsenal","Liverpool","Man City","Barcelona","Real Madrid","Inter Milan","Danmark","Holger Rune","Jonas Vingegaard","Max Verstappen","Nicolai Højgaard"];
 function Welcome({teams,onAdd,onPick,onDone}){
   const chosen=new Set(teams.map(t=>norm(t.name)));
   const picks=QUICK_PICKS.map(n=>{const e=lookup(n,"");return e&&!e._unknown?e:null;}).filter(Boolean);
