@@ -19,7 +19,7 @@ globalThis.fetch=(url,opts={})=>rawFetch(url,{...opts,headers:{"User-Agent":UA,.
 const api=new Function(`const DB={};function add(keys,d){keys.forEach(k=>DB[k.toLowerCase()]=d);}
 ${adds}
 ${html.slice(start,end)}
-return {DB,notifyTopic,startTopic,fetchTeamLive,fetchEspnSummary,fetchEspnLineup,_liveLog,teamAliases,nameMatch,norm};`)();
+return {DB,notifyTopic,startTopic,fetchTeamLive,fetchEspnSummary,fetchEspnLineup,_liveLog,teamAliases,nameMatch,norm,LAND_DA};`)();
 
 // Previous snapshot: lets us reuse API-Sports standings so we stay within the free quota.
 // --live: quick re-run inside the same Actions job (see the workflow's live loop). It starts from this
@@ -44,7 +44,9 @@ const _tsdbSearch={};
 const kickoffDebug=[];
 // FotMob's match list per day (cached per run): home/away names + status.utcTime.
 const _fm={};
-const fmNorm=x=>api.norm(String(x||"").replace(/\((H|A)\)|·.*$/g,"").replace(/\b(fc|cf|afc|sc|ac|if|bk|fk|ssc|as|ss|cd|ud|rc|club|de|the)\b/gi," ")).replace(/\s+/g," ").trim();
+// FotMob spells countries in English; our national teams and their opponents are Danish.
+const LAND_EN=Object.fromEntries(Object.entries(api.LAND_DA||{}).map(([en,da])=>[da,en]).reverse());
+const fmNorm=x=>api.norm((y=>LAND_EN[y.replace(/\s*\((H|A)\).*$|\s·.*$/g,"").trim()]||y)(String(x||"")).replace(/\((H|A)\)|·.*$/g,"").replace(/\b(fc|cf|afc|sc|ac|if|bk|fk|ssc|as|ss|cd|ud|rc|club|de|the)\b/gi," ")).replace(/\s+/g," ").trim();
 const fmSame=(a,b)=>{a=fmNorm(a);b=fmNorm(b);return !!a&&!!b&&(a===b||a.length>3&&b.length>3&&(a.includes(b)||b.includes(a)));};
 async function fotmobKickoff(t,g){
   const days=[...new Set([-1,0,1].map(o=>new Date(g.ts+o*864e5).toISOString().slice(0,10).replace(/-/g,"")))];

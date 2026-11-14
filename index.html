@@ -541,6 +541,10 @@ const NAT_COMPS=[["uefa.nations","NL"],["fifa.worldq.uefa","VM-kval"],["uefa.eur
 // ESPN's own "tv" field lists US channels, which don't help Danish viewers.
 const DK_TV={"eng.1":"Viaplay / TV3+ (nogle lørdage Prime Video)","esp.1":"Disney+","ger.1":"Viaplay / TV3+","ita.1":"TV 2 Play","den.1":"TV 2 eller Viaplay",
   "uefa.champions":"Viaplay","uefa.europa":"Disney+","uefa.europa.conf":"Disney+","esp.copa_del_rey":"Disney+"};
+// National teams: ESPN's English country names shown in Danish (opponents and table rows).
+const LAND_DA={"Denmark":"Danmark","Sweden":"Sverige","Norway":"Norge","Iceland":"Island","Spain":"Spanien","Italy":"Italien","France":"Frankrig","Germany":"Tyskland","Netherlands":"Holland","Belgium":"Belgien","Switzerland":"Schweiz","Austria":"Østrig","Poland":"Polen","Croatia":"Kroatien","Serbia":"Serbien","Scotland":"Skotland","Ireland":"Irland","Republic of Ireland":"Irland","Northern Ireland":"Nordirland","Greece":"Grækenland","Türkiye":"Tyrkiet","Turkey":"Tyrkiet","Czechia":"Tjekkiet","Czech Republic":"Tjekkiet","Hungary":"Ungarn","Romania":"Rumænien","Bulgaria":"Bulgarien","Slovakia":"Slovakiet","Slovenia":"Slovenien","Bosnia-Herzegovina":"Bosnien-Hercegovina","Bosnia and Herzegovina":"Bosnien-Hercegovina","Albania":"Albanien","North Macedonia":"Nordmakedonien","Georgia":"Georgien","Armenia":"Armenien","Azerbaijan":"Aserbajdsjan","Kazakhstan":"Kasakhstan","Israel":"Israel","Cyprus":"Cypern","Faroe Islands":"Færøerne","Estonia":"Estland","Latvia":"Letland","Lithuania":"Litauen","Belarus":"Hviderusland","Moldova":"Moldova","Russia":"Rusland","Brazil":"Brasilien","Mexico":"Mexico","United States":"USA","Morocco":"Marokko","Japan":"Japan","South Korea":"Sydkorea","Australia":"Australien","Egypt":"Egypten","Tunisia":"Tunesien","Algeria":"Algeriet","Cameroon":"Cameroun","Ivory Coast":"Elfenbenskysten","South Africa":"Sydafrika","Saudi Arabia":"Saudi-Arabien","New Zealand":"New Zealand"};
+// "Norway (A) · NL" → "Norge (A) · NL"
+function landDa(s){const m=/^(.*?)(\s\((?:H|A)\).*|\s\xB7.*)?$/.exec(String(s||""));return m&&LAND_DA[m[1]]?LAND_DA[m[1]]+(m[2]||""):s;}
 async function fetchEspn(src){
   const sched=lg=>ESPN+"/site/v2/sports/"+src.sp+"/"+lg+"/teams/"+src.id+"/schedule";
   const base=sched(src.lg);
@@ -554,7 +558,7 @@ async function fetchEspn(src){
     ...cups.flatMap(([lg])=>[getJSON(sched(lg)).catch(()=>null),getJSON(sched(lg)+"?fixture=true").catch(()=>null)]),
   ]);
   const seen={},evs=[];
-  const addAll=(j,tag,lg)=>((j&&j.events)||[]).forEach(ev=>{const e=espnEvent(ev,src.id,lg||src.lg);if(e&&!seen[e.id]){seen[e.id]=1;if(tag)e.opponent+=" \xB7 "+tag;evs.push(e);}});
+  const addAll=(j,tag,lg)=>((j&&j.events)||[]).forEach(ev=>{const e=espnEvent(ev,src.id,lg||src.lg);if(e&&!seen[e.id]){seen[e.id]=1;if(nat)e.opponent=landDa(e.opponent);if(tag)e.opponent+=" \xB7 "+tag;evs.push(e);}});
   // Cups first, so a cup game listed in the league schedule too still gets its tag. If a cup
   // answer is mostly the league's own games (ESPN ignoring the league), it is skipped.
   const leagueIds=new Set([main,fix].flatMap(j=>((j&&j.events)||[]).map(ev=>ev.id)));
@@ -570,12 +574,12 @@ async function fetchEspn(src){
   return{source:"ESPN",
     // ev/lg/sp/tid let the app (and the robot) load the match statistics for a result.
     recentResults:done.slice(0,5).map(e=>({opponent:e.opponent,score:e.score,result:e.result,date:fmtShort(e.d),ev:e.id,lg:e.lg,sp:src.sp,tid:src.id})),
-    nextGame:next?{opponent:next.opponent,date:fmtDay(next.d),time:next.tba?"–":fmtTime(next.d),tba:next.tba||undefined,tv:(soccer&&DK_TV[next.lg])||next.tv||"–",ts:next.d.getTime(),ev:next.id,lg:next.lg,sp:src.sp,tid:src.id}:upcomingKnown?OFF_SEASON:null,
+    nextGame:next?{opponent:next.opponent,date:fmtDay(next.d),time:next.tba?"–":fmtTime(next.d),tba:next.tba||undefined,tv:(soccer&&DK_TV[next.lg])||(!nat&&next.tv)||"–",ts:next.d.getTime(),ev:next.id,lg:next.lg,sp:src.sp,tid:src.id}:upcomingKnown?OFF_SEASON:null,
     liveGame:live?{opponent:live.opponent,score:live.score||"0–0",detail:live.detail||"Live",ev:live.id,lg:live.lg,sp:src.sp,tid:src.id}:null,
     // the next few games, for the week calendar on the home screen
     upcoming:evs.filter(e=>e.state==="pre"&&e.d.getTime()>now-3*3600e3).sort((a,b)=>a.d-b.d).slice(0,6)
-      .map(e=>({opponent:e.opponent,ts:e.d.getTime(),tv:(soccer&&DK_TV[e.lg])||e.tv||"–",ev:e.id,tba:e.tba||undefined})),
-    standing:espnStanding(table,src.id,soccer||src.sp==="hockey")};
+      .map(e=>({opponent:e.opponent,ts:e.d.getTime(),tv:(soccer&&DK_TV[e.lg])||(!nat&&e.tv)||"–",ev:e.id,tba:e.tba||undefined})),
+    standing:(st=>{if(nat&&st&&st.table)st.table.forEach(r=>{r.n=landDa(r.n);});return st;})(espnStanding(table,src.id,soccer||src.sp==="hockey"))};
 }
 
 // Match statistics for one finished game: goals/scoring plays, team stats side by side, period scores.
