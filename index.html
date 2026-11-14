@@ -1224,8 +1224,8 @@ function persist(teams,sel){
     localStorage.setItem("msh-sel",sel);}catch(e){}
   if(!_syncQuiet){syncPush(teams);acctPush(teams);}
 }
-function AccountCard({acct,onLogin,onLogout,onWelcome}){
-  const [mode,setMode]=useState(null),[name,setName]=useState(""),[pw,setPw]=useState(""),[err,setErr]=useState(""),[busy,setBusy]=useState(false);
+function AccountCard({acct,onLogin,onLogout,onWelcome,start}){
+  const [mode,setMode]=useState(start||null),[name,setName]=useState(""),[pw,setPw]=useState(""),[err,setErr]=useState(""),[busy,setBusy]=useState(false);
   // "Forstået" on the news card (logged out) brings you here: scroll to the card and make it glow (owner 12 Nov)
   const ref=useRef(null),[glow,setGlow]=useState(false);
   useEffect(()=>{const go=()=>{const el=ref.current;if(!el)return;el.scrollIntoView({behavior:"smooth",block:"center"});setGlow(true);setTimeout(()=>setGlow(false),3500);};
@@ -2291,7 +2291,7 @@ function TeamTile({t,onClick}){
 function App(){
   const [teams,setTeams]=useState(()=>teamsFromLink(loadTeams()));
   const [selected,setSelected]=useState(loadSel);
-  const [acct,setAcct]=useState(_acct);
+  const [acct,setAcct]=useState(_acct),[acctChecked,setAcctChecked]=useState(false);
   const onLogin=user=>{_acct={ok:true,user};setAcct(_acct);try{localStorage.removeItem("msh-sync");}catch(e){}
     acctMerge(teamsRef.current).then(n=>{if(n.length){_syncQuiet=true;setTeams(n);persist(n,n[0].id);_syncQuiet=false;setWelcome(false);}}).catch(()=>{});};
   const onLogout=()=>{api("/api/auth",{method:"POST",body:JSON.stringify({action:"logout"})}).catch(()=>{});_acct={ok:true,user:null};setAcct(_acct);};
@@ -2304,7 +2304,7 @@ function App(){
       _syncQuiet=true;setTeams(n);persist(n,n[0].id);_syncQuiet=false;setWelcome(false);
       if(keep.length)persist(n,n[0].id);}; // …and the account / the other devices hear about it
     const check=()=>(_acct.user?acctPull(teamsRef.current):getSnapshot().then(()=>syncPull(teamsRef.current))).then(adopt).catch(()=>{});
-    acctInit().then(a=>{if(stop)return;setAcct(a);
+    acctInit().then(a=>{if(stop)return;setAcct(a);setAcctChecked(true);
       // Logged in on load: merge this device's teams into the account (a ?teams= link opened before login state was known).
       if(a.user)acctMerge(teamsRef.current).then(adopt).catch(()=>{});else check();});
     const vis=()=>{if(document.visibilityState==="visible"&&_acct.user)check();};document.addEventListener("visibilitychange",vis);
@@ -2504,6 +2504,18 @@ function App(){
       h("div",{className:"skeleton sk-result"})
     )
   );
+
+  // Login is required (owner, 14 Nov 2026): nobody uses the app without an account. Where there is no login API
+  // (acct.ok false: opened locally, GitHub Pages, API down) the app stays open, since nobody could log in there.
+  // Teams from a ?teams= link wait in this browser and are merged into the account at login (acctMerge).
+  if(!acctChecked||(acct.ok&&!acct.user))return h("div",{style:{minHeight:"100vh",background:"#0f1b33",color:"#f1f5f9",fontFamily:"Roboto,'Google Sans',Arial,sans-serif",padding:"calc(28px + env(safe-area-inset-top)) 16px 28px"}},
+    h("div",{style:{maxWidth:440,margin:"0 auto"}},
+      h("div",{style:{fontFamily:"'Google Sans',Roboto,Arial,sans-serif",fontSize:"1.3rem",fontWeight:500,color:"#fff",marginBottom:22}},"My Sports ",h("span",{style:{color:"#ff7ac0"}},"Hub")),
+      !acctChecked?h("div",{style:{color:"#d5deee",fontSize:"0.9rem"}},"Et øjeblik…"):h("div",null,
+        h("div",{style:{fontFamily:"'Google Sans',Roboto,Arial,sans-serif",fontSize:"1.6rem",fontWeight:800,color:"#fff",lineHeight:1.15,marginBottom:8}},teams.length?"Opret en konto for at følge "+teams[teams.length-1].shortName:"Log ind for at bruge My Sports Hub"),
+        h("div",{style:{fontSize:"0.92rem",color:"#d5deee",marginBottom:6}},"Det er gratis og tager et øjeblik. Så er dine hold gemt og følger med på telefon og computer."),
+        h(AccountCard,{acct,onLogin,onLogout,start:"signup"}),
+        h("div",{style:{fontSize:"0.78rem",color:"#d5deee",marginTop:14}},"Har du allerede en konto? Tryk Annuller og vælg Log ind."))));
 
   return h("div",{style:{minHeight:"100vh",background:"#0f1b33",color:"#f1f5f9",fontFamily:"Roboto,'Google Sans',Arial,sans-serif"}},
     // top padding clears the iPhone status bar in the home-screen app (black-translucent)

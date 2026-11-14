@@ -145,7 +145,7 @@ export function teamPage(m, { base, index, now = Date.now() }) {
 
   parts.push(`<nav class="crumbs" aria-label="Du er her"><a href="/">Forside</a> › <a href="/hold">Alle hold</a> › ${esc(m.name)}</nav>`);
   parts.push(`<section class="hero" style="border-top-color:${color(m.color)}">${m.emoji ? `<div class="badge" style="background:${color(m.color)}" aria-hidden="true">${esc(m.emoji)}</div>` : ""}<div><h1>${esc(m.name)}</h1>${sub ? `<p class="sub">${esc(sub)}</p>` : ""}</div></section>`);
-  parts.push(cta + `<p class="cta-sub">Gratis. Ingen reklamer. Du behøver ikke en konto.</p>`);
+  parts.push(cta + `<p class="cta-sub">Gratis og uden reklamer. Opret en konto på et øjeblik.</p>`);
 
   if (m.live) parts.push(`<section class="card live"><h2>Live${m.live.detail ? " · " + esc(m.live.detail) : ""}</h2><p class="big">${esc(m.live.title)}</p><p class="score">${esc(m.live.score)}</p><p class="muted" style="margin-top:8px">Åbn appen for at følge stillingen minut for minut.</p></section>`);
 
