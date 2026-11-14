@@ -75,6 +75,7 @@ export const dkTv = (tv) => (tv && tv !== "–" && tv !== "-" && DK_CHANNEL.test
 const SOLO = ["Formula 1", "Golf", "Cycling", "Trav"];     // the "opponent" is a race, a tournament or a round
 const PERSON = ["Tennis", "Golf", "Formula 1", "Cycling"];
 const HEX = /^#[0-9a-f]{3,8}$/i;
+export const hexColor = (c) => (HEX.test(c || "") ? c : "#e8409a"); // only a plain hex colour ever reaches a style attribute
 
 // Sport, league, short name and colours of a team: the robot's `meta` (DB teams) or its league list.
 export function metaFor(name, snap) {
@@ -84,7 +85,7 @@ export function metaFor(name, snap) {
     : x ? { short: x.shortName, sport: x.sport, league: x.league, country: x.country, color: x.color, emoji: x.emoji } : {};
   return {
     name, short: String(src.short || name), sport: String(src.sport || ""), league: String(src.league || ""), country: String(src.country || ""),
-    color: HEX.test(src.color || "") ? src.color : "#e8409a", emoji: String(src.emoji || ""),
+    color: hexColor(src.color), emoji: String(src.emoji || ""),
   };
 }
 
@@ -133,7 +134,7 @@ export function teamModel(t, snap, now = Date.now()) {
   if (g && g.opponent) {
     const low = (String(g.opponent) + " " + String(g.date || "")).toLowerCase();
     if (OFF_WORDS.some((k) => low.includes(k))) off = g.offTitle || "Sæsonen er slut";
-    else if (g.ts && g.ts < now - 3 * 3600e3) off = "";            // already played: the entry is waiting for the next fixture
+    else if (g.ts && g.ts <= now) off = "";                         // kick-off has passed: it is live (shown above) or played, not the next game
     else if (!g.ts && stale) off = "";                              // an old entry without a time stamp cannot be trusted
     else next = game(g);
   }
@@ -167,7 +168,7 @@ export function teamModel(t, snap, now = Date.now()) {
   }
 
   const upcoming = (Array.isArray(d.upcoming) ? d.upcoming : [])
-    .filter((u) => u && u.opponent && u.ts && u.ts > now - 3 * 3600e3 && !(next && next.ts === u.ts)).slice(0, 5).map(game);
+    .filter((u) => u && u.opponent && u.ts && u.ts > now && !(next && next.ts === u.ts)).slice(0, 5).map(game);
   // News: real headlines only. The feeds also return score, stats and schedule listings ("GOG vs Sporting scores & schedule").
   const LISTING = /\b(scores?|stats|standings|squad|schedule|highlights|odds|predictions?|live stream)\b/i;
   const news = (Array.isArray(d.news) ? d.news : []).filter((n) => n && n.title && /^https?:\/\//i.test(n.url || "") && !LISTING.test(n.title)
@@ -184,12 +185,14 @@ export function teamModel(t, snap, now = Date.now()) {
   };
 }
 
-// Reads the robot's snapshot, at most once every 5 minutes per server instance; an older copy is used if GitHub is down.
+// Reads the robot's snapshot, at most once every 5 minutes per server instance. GitHub slow or down: give up after
+// 6 seconds, keep using the copy in memory and wait a minute before the next try.
+const SNAP_TTL = 5 * 60e3;
 let _snap = null, _snapTs = 0;
 export async function loadSnapshot() {
-  if (_snap && Date.now() - _snapTs < 5 * 60e3) return _snap;
+  if (_snap && Date.now() - _snapTs < SNAP_TTL) return _snap;
   try {
-    const r = await fetch(process.env.SNAPSHOT_URL || SNAPSHOT_URL, { headers: { "User-Agent": "MySportsHub/1.0 (+https://github.com/tinerc2-jpg/My-Sports-Hub)" } });
+    const r = await fetch(process.env.SNAPSHOT_URL || SNAPSHOT_URL, { signal: AbortSignal.timeout(6000), headers: { "User-Agent": "MySportsHub/1.0 (+https://github.com/tinerc2-jpg/My-Sports-Hub)" } });
     if (!r.ok) throw new Error("snapshot " + r.status);
     const j = await r.json();
     if (!j || typeof j.teams !== "object") throw new Error("snapshot without teams");
@@ -197,6 +200,7 @@ export async function loadSnapshot() {
   } catch (e) {
     console.error("team pages:", e.message);
     if (!_snap) throw e;
+    _snapTs = Date.now() - SNAP_TTL + 60e3;
   }
   return _snap;
 }

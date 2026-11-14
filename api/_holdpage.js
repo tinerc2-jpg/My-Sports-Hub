@@ -1,7 +1,7 @@
 // HTML for the public team pages (/hold and /hold/<slug>). Plain server-rendered pages without JavaScript,
 // so search engines and link previews read the same thing as people. Colours follow the app (navy + pink).
 // Everything that comes from the data is escaped with esc(); links from the data must start with http(s).
-import { esc, slugify, norm, dayFull, clock, ymd } from "./_teamfmt.js";
+import { esc, slugify, norm, spDa, hexColor as color, dayFull, clock, ymd } from "./_teamfmt.js";
 
 const CSS = `*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html{-webkit-text-size-adjust:100%}
@@ -64,8 +64,6 @@ h3{font-size:1rem;margin:16px 0 8px}
 footer{max-width:720px;margin:0 auto;padding:0 16px calc(32px + env(safe-area-inset-bottom));color:#d5deee;font-size:.8rem}
 footer p{margin-top:6px}`;
 
-const HEX = /^#[0-9a-f]{3,8}$/i;
-const color = (c) => (HEX.test(c || "") ? c : "#e8409a");
 const jsonld = (o) => `<script type="application/ld+json">${JSON.stringify(o).replace(/</g, "\\u003c")}</script>`;
 const followUrl = (m) => `/?app&teams=${encodeURIComponent(m.name)}&utm_campaign=hold-${m.slug}`;
 const short160 = (s) => (s.length <= 158 ? s : s.slice(0, 155).replace(/\s+\S*$/, "") + "…");
@@ -134,7 +132,11 @@ function description(m) {
 }
 
 export function teamPage(m, { base, index, now = Date.now() }) {
-  const link = (n) => { const a = slugify(n), b = slugify(norm(n)); return index.bySlug.has(a) ? a : index.alias.get(a) || (index.bySlug.has(b) ? b : index.alias.get(b)) || null; };
+  // A table row links to that team's page – only within the same sport ("Spurs" in the NBA table is not Tottenham).
+  const link = (n) => {
+    const a = slugify(n), b = slugify(norm(n)), to = index.bySlug.has(a) ? a : index.alias.get(a) || (index.bySlug.has(b) ? b : index.alias.get(b)) || null;
+    return to && index.bySlug.get(to).meta.sport === m.sport ? to : null;
+  };
   const sub = [m.sportDa, m.league && m.league !== m.sportDa ? m.league : "", m.country].filter(Boolean).join(" · ");
   const what = m.person ? "næste kamp, resultater og rangliste" : "næste kamp, resultater og stilling";
   const title = `${m.label} – ${m.newsOnly ? "seneste nyt" : m.solo ? "program, resultater og placering" : what} | My Sports Hub`;
@@ -198,11 +200,10 @@ export function indexPage(index, { base }) {
     const m = bySport.get(sp); if (!m.has(lg)) m.set(lg, []); m.get(lg).push(t);
   }
   const order = ["Football", "Handball", "Tennis", "Golf", "Cycling", "Formula 1", "Basketball", "Ice Hockey", "Am. Football", "Baseball", "Rugby", "Volleyball", "Trav", "Andre"];
-  const da = { "Football": "Fodbold", "Handball": "Håndbold", "Cycling": "Cykling", "Formula 1": "Formel 1", "Ice Hockey": "Ishockey", "Am. Football": "Amerikansk fodbold" };
   const sports = [...bySport.keys()].sort((a, b) => (order.indexOf(a) + 1 || 99) - (order.indexOf(b) + 1 || 99));
   const body = sports.map((sp) => {
     const leagues = [...bySport.get(sp).entries()].sort((a, b) => b[1].length - a[1].length || a[0].localeCompare(b[0], "da"));
-    return `<section class="card"><h2>${esc(da[sp] || sp)}</h2>${leagues.map(([lg, ts]) =>
+    return `<section class="card"><h2>${esc(spDa(sp))}</h2>${leagues.map(([lg, ts]) =>
       `${lg && leagues.length > 1 ? `<h3>${esc(lg)}</h3>` : ""}<p class="links">${ts.sort((a, b) => a.meta.short.localeCompare(b.meta.short, "da")).map((t) => `<a href="/hold/${esc(t.slug)}">${esc(t.meta.short)}</a>`).join("")}</p>`).join("")}</section>`;
   }).join("\n");
   const ld = [{ "@context": "https://schema.org", "@type": "BreadcrumbList", itemListElement: [

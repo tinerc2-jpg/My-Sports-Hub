@@ -35,7 +35,7 @@ const NOW=Date.UTC(2026,10,14,7,0,0),H=3600e3,D=24*H;
 const snap={generated:NOW,
   meta:{"FC Barcelona":{s:"Barça",sp:"Football",lg:"La Liga",c:"🇪🇸",col:"#A50044",e:"⚽"},"Holger Rune":{s:"Rune",sp:"Tennis",lg:"ATP Tour",c:"🇩🇰",col:"#1B4332",e:"🎾"},
     "Max Verstappen":{s:"Verstappen",sp:"Formula 1",lg:"FIA Formula 1",c:"🇳🇱",col:"#1E41FF",e:"🏎️"},"Gammel Klub":{s:"Gammel",sp:"Football",lg:"1. division",c:"🇩🇰",col:"red; background:url(x)",e:"⚽"},
-    "Real Madrid CF":{s:"R. Madrid",sp:"Football",lg:"La Liga",c:"🇪🇸",col:"#FEBE10",e:"⚽"}},
+    "Real Madrid CF":{s:"R. Madrid",sp:"Football",lg:"La Liga",c:"🇪🇸",col:"#FEBE10",e:"⚽"},"LA Lakers":{s:"Lakers",sp:"Basketball",lg:"NBA",c:"🇺🇸",col:"#552583",e:"🏀"}},
   leagueTeams:[{name:"AGF",shortName:"AGF",sport:"Football",league:"Superliga",country:"🇩🇰",color:"#1e5fa8",emoji:"⚽"}],
   teams:{
     "FC Barcelona":{ts:NOW-10*60e3,data:{source:"ESPN",
@@ -45,7 +45,9 @@ const snap={generated:NOW,
       upcoming:[{opponent:"Real Betis (A)",ts:Date.UTC(2026,10,14,17,30),tv:"Disney+"},{opponent:"Paris Saint-Germain (A) · CL",ts:Date.UTC(2026,10,25,20,0),tv:"FS2"}],
       news:[{title:"<script>alert(1)</script> Barça vinder",url:"https://example.com/a?x=1&y=\"2\"",ts:NOW-H,src:"Kilde <b>"},{title:"Ond lænke",url:"javascript:alert(1)",ts:NOW},
         {title:"Barcelona vs Betis scores & schedule",url:"https://example.com/b",ts:NOW}]}},
-    "Real Madrid CF":{ts:NOW-10*60e3,data:{source:"ESPN",liveGame:{opponent:"Girona (A)",score:"2–1",detail:"Half-time"},recentResults:[]}},
+    "Real Madrid CF":{ts:NOW-10*60e3,data:{source:"ESPN",liveGame:{opponent:"Girona (A)",score:"2–1",detail:"Half-time"},recentResults:[],
+      nextGame:{opponent:"Girona (A)",date:"Sat 14 Nov",time:"07:15",tv:"Disney+",ts:NOW-45*60e3}}}, // the robot still has the running game as "next"
+    "LA Lakers":{ts:NOW-10*60e3,data:{source:"ESPN",standing:{rank:3,points:null,wins:8,losses:3,table:[{r:1,n:"Barça",w:9,l:2},{r:3,n:"Lakers",w:8,l:3,me:1}]}}},
     "Holger Rune":{ts:NOW-10*60e3,data:{source:"ESPN",nextGame:{opponent:"Ingen kommende kamp fundet",offTitle:"Ingen kamp planlagt",date:"Se turneringens program",time:"–",tv:"–"},
       recentResults:[{opponent:"Collignon (European Open, Round 1)",score:"6-4 6-3",result:"W",date:"10 Nov",ts:NOW-4*D}],standing:{rank:433,points:null,from:"Wikipedia"}}},
     "Max Verstappen":{ts:NOW-10*60e3,data:{source:"Jolpica F1",nextGame:{opponent:"Las Vegas Grand Prix",date:"Sun 22 Nov",time:"05:00",tv:"–",ts:Date.UTC(2026,10,22,4,0)},
@@ -72,6 +74,8 @@ ok(ev&&ev.homeTeam.name==="Real Betis"&&ev.awayTeam.name==="Barça"&&ev.startDat
 ok(lds(h).some(x=>x["@type"]==="SportsTeam"&&x.name==="FC Barcelona"),"SportsTeam data");
 
 h=page("Real Madrid CF");has(h,"Girona – R. Madrid","live: home team first");has(h,'<p class="score">1–2</p>',"live score in home–away order");has(h,"Live · Pause");
+not(h,'class="card next"',"the game that is live is not also the next game");ok(!lds(h).some(x=>x["@type"]==="SportsEvent"),"no scheduled event for a running game");
+h=page("LA Lakers");has(h,"<td>Barça</td>","a name from another sport is not a link");not(h,'href="/hold/fc-barcelona">Barça',"cross-sport table link");
 h=page("Holger Rune");has(h,"Rune mod Collignon (European Open, 1. runde)");has(h,"<title>Holger Rune – næste kamp, resultater og rangliste | My Sports Hub</title>");has(h,"Ingen kamp planlagt");has(h,"#433");
 ok(!lds(h).some(x=>x["@type"]==="SportsEvent"),"no event for a player without a match");ok(lds(h).some(x=>x["@type"]==="Person"),"Person data for a player");
 h=page("Max Verstappen");has(h,"Næste løb");has(h,"Las Vegas Grand Prix");not(h,"Verstappen mod","a race is not an opponent");has(h,"Brazilian Grand Prix · P2");has(h,"søndag 22. november");
@@ -90,7 +94,9 @@ let r=await call(hold,"/api/hold?slug=fc-barcelona");ok(r.statusCode===503&&r.he
 const live=JSON.parse(JSON.stringify(snap));for(const e of Object.values(live.teams))e.ts=Date.now()-(NOW-e.ts);live.teams["FC Barcelona"].data.nextGame.ts=Date.now()+5*H;live.teams["FC Barcelona"].data.upcoming=[];
 globalThis.fetch=async()=>({ok:true,json:async()=>live});
 r=await call(hold,"/api/hold");ok(r.statusCode===200&&r.body.includes("Alle hold og spillere")&&r.body.includes('href="/hold/fc-barcelona"'),"/hold lists the teams");
-r=await call(hold,"/api/hold?slug=fc-barcelona");ok(r.statusCode===200&&/s-maxage=600/.test(r.headers["cache-control"])&&r.body.includes("Real Betis – Barça"),"/hold/fc-barcelona");
+r=await call(hold,"/api/hold?slug=fc-barcelona");ok(r.statusCode===200&&/s-maxage=300/.test(r.headers["cache-control"])&&r.body.includes("Real Betis – Barça"),"/hold/fc-barcelona");
+r=await call(hold,"/api/hold?slug=real-madrid-cf");ok(r.statusCode===200&&/s-maxage=60,/.test(r.headers["cache-control"]),"a live page is cached for a minute only");
+for(const u of ["/hold/100%25","/api/hold?slug=100%25","/hold/%E0%A4%A"]){r=await call(hold,u);ok(r.statusCode===404,u+" → 404, not the list of all teams");}
 r=await call(hold,"/hold/fc-barcelona");ok(r.statusCode===200,"slug read from the path");
 r=await call(hold,"/api/hold?slug=barca");ok(r.statusCode===308&&r.headers.location==="/hold/fc-barcelona","short name → 308 to the team page");
 r=await call(hold,"/api/hold?slug=findes-ikke");ok(r.statusCode===404&&r.body.includes("noindex"),"unknown team → 404");

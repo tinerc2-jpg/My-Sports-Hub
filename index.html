@@ -1106,38 +1106,56 @@ function loadTeams(){
 // Personal link: ?teams=GOG,Arsenal,… adds those favourites once (remembered, so removing one later sticks
 // even if the home-screen icon keeps the link).
 let _linkMiss=[]; // names from the link that weren't known yet (league clubs arrive with the robot's snapshot)
+let _linkRaw=null; // the link is remembered as applied only when every name has had its chance
 let _linkOpen=null; // a link with one team opens that team's page (fan-group and team-page links), not the home grid
+let _linkAdded=[]; // ids the link added in this visit (they stay when an account or sync list arrives meanwhile)
+// A link names a team exactly (team pages: "AC Milan") or by a short name (personal links: "GOG"). Exact matches first,
+// DB before the league clubs; the fuzzy lookup() is the last resort and only once the league clubs are loaded
+// ("AC Milan" would otherwise become "inter milan"). null = not known (yet): wait for the snapshot rather than guess.
+function lookupLink(n){
+  const raw=String(n||"").trim().toLowerCase(),q=norm(n);if(!raw)return null;
+  const byName=Object.values(DB).find(d=>d.name.toLowerCase()===raw)||EXTRA.find(e=>String(e.name).toLowerCase()===raw);
+  if(byName)return{...byName};
+  const k=Object.keys(DB).find(k=>k===raw||norm(k)===q||norm(DB[k].name)===q);
+  if(k)return{...DB[k]};
+  const x=EXTRA.find(e=>norm(e.name)===q||norm(e.shortName)===q);
+  if(x)return{...x};
+  if(!EXTRA.length)return null;
+  const f=lookup(n,"");return f&&!f._unknown?f:null;
+}
+// Adds the names to the list. Returns the id to open: the one team a one-team link asked for (new or already a favourite).
+function linkAdd(names,out){
+  let open=null;
+  names.forEach((n,i)=>{
+    const e=lookupLink(n);if(!e){_linkMiss.push(n);return;}
+    const have=out.find(t=>t.name===e.name);if(have){open=have.id;return;}
+    const id=norm(e.name).replace(/\s+/g,"-")+"-"+Date.now()+i;
+    out.push({...e,id});_linkAdded.push(id);open=id;
+  });
+  return names.length===1?open:null;
+}
 function teamsFromLink(teams){
   try{
     const raw=new URLSearchParams(location.search).get("teams");
     if(!raw)return teams;
     if(new URLSearchParams(location.search).has("restore")){try{localStorage.removeItem("msh-sync");}catch(e){}}
     else if(localStorage.getItem("msh-link-applied")===raw)return teams;
-    localStorage.setItem("msh-link-applied",raw);
-    const out=[...teams],names=raw.split(",").map(x=>x.trim()).filter(Boolean);
-    names.forEach((n,i)=>{
-      const e=lookup(n,"");if(!e||e._unknown){_linkMiss.push(n);return;}
-      if(out.some(t=>norm(t.name)===norm(e.name)))return;
-      out.push({...e,id:norm(e.name).replace(/\s+/g,"-")+"-"+Date.now()+i});
-    });
-    if(out.length!==teams.length){
-      const one=names.length===1&&out.length===teams.length+1?out[out.length-1].id:null;
-      persist(out,one||out[0].id);_linkOpen=one;
-    }
+    const out=[...teams],open=linkAdd(raw.split(",").map(x=>x.trim()).filter(Boolean),out);
+    if(_linkMiss.length)_linkRaw=raw;else localStorage.setItem("msh-link-applied",raw);
+    if(out.length!==teams.length)persist(out,open||out[0].id);
+    else if(open){_cachedSel=open;try{localStorage.setItem("msh-sel",open);}catch(e){}} // already a favourite: just open its page
+    _linkOpen=open;
     return out;
   }catch(e){return teams;}
 }
-// Called once the snapshot (and with it the league clubs) has loaded: adds the link's teams that were unknown at first.
-// Returns {teams, open} (open = the id of the one team the link asked for), or null when nothing was added.
+// Called when the snapshot (and with it the league clubs) has loaded: adds the link's teams that were unknown at first.
+// Returns {teams, open} (teams = the new list or null, open = the id of the one team the link asked for), or null.
 function linkRetry(teams){
-  if(!_linkMiss.length)return null;
+  if(!_linkMiss.length||!EXTRA.length)return null;
   const names=_linkMiss,out=[...teams];_linkMiss=[];
-  names.forEach((n,i)=>{
-    const e=lookup(n,"");if(!e||e._unknown||out.some(t=>norm(t.name)===norm(e.name)))return;
-    out.push({...e,id:norm(e.name).replace(/\s+/g,"-")+"-"+Date.now()+i});
-  });
-  if(out.length===teams.length)return null;
-  const open=names.length===1&&out.length===teams.length+1?out[out.length-1].id:null;
+  const open=linkAdd(names,out);_linkMiss=[]; // still unknown now = not a team we have
+  if(_linkRaw){try{localStorage.setItem("msh-link-applied",_linkRaw);}catch(e){}_linkRaw=null;}
+  if(out.length===teams.length)return open?{teams:null,open}:null;
   persist(out,open||out[0].id);return{teams:out,open};
 }
 function loadSel(){
@@ -2279,7 +2297,12 @@ function App(){
   const onLogout=()=>{api("/api/auth",{method:"POST",body:JSON.stringify({action:"logout"})}).catch(()=>{});_acct={ok:true,user:null};setAcct(_acct);};
   useEffect(()=>{
     let stop=false;
-    const adopt=n=>{if(stop||!n||!n.length)return;_syncQuiet=true;setTeams(n);persist(n,n[0].id);_syncQuiet=false;setWelcome(false);};
+    const adopt=n=>{if(stop||!n||!n.length)return;
+      // a team that a link added in this visit stays, also when the account's or the sync list arrives without it
+      const keep=teamsRef.current.filter(t=>_linkAdded.includes(t.id)&&!n.some(x=>x.name===t.name));
+      if(keep.length)n=[...n,...keep];
+      _syncQuiet=true;setTeams(n);persist(n,n[0].id);_syncQuiet=false;setWelcome(false);
+      if(keep.length)persist(n,n[0].id);}; // …and the account / the other devices hear about it
     const check=()=>(_acct.user?acctPull(teamsRef.current):getSnapshot().then(()=>syncPull(teamsRef.current))).then(adopt).catch(()=>{});
     acctInit().then(a=>{if(stop)return;setAcct(a);
       // Logged in on load: merge this device's teams into the account (a ?teams= link opened before login state was known).
@@ -2389,8 +2412,12 @@ function App(){
     return()=>es.close();
   },[anyLive]);
   // the robot's whole-league club list (for quick picks / search) arrives with the snapshot
-  useEffect(()=>{getSnapshot().then(()=>{setClock(Date.now());const n=linkRetry(teamsRef.current);
-    if(n){setTeams(n.teams);setWelcome(false);if(n.open){setSelected(n.open);setView("team");window.scrollTo(0,0);history.pushState({msh:"team"},"");}}}).catch(()=>{});},[]);
+  useEffect(()=>{let stop=false,tries=0;
+    const go=()=>getSnapshot().then(()=>{if(stop)return;setClock(Date.now());const n=linkRetry(teamsRef.current);if(!n)return;
+      if(n.teams){setTeams(n.teams);setWelcome(false);}
+      if(n.open){setSelected(n.open);setView("team");window.scrollTo(0,0);history.pushState({msh:"team"},"");}
+    }).catch(()=>{if(!stop&&_linkMiss.length&&tries++<3)setTimeout(go,5000*tries);}); // a link is waiting for the club list: try again
+    go();return()=>{stop=true;};},[]);
 
   function handleSelect(id){setSelected(id);persist(teams,id);setView("team");window.scrollTo(0,0);history.pushState({msh:"team"},"");}
   function goHome(){if(history.state&&history.state.msh==="team")history.back();else{setView("home");window.scrollTo(0,0);}}
