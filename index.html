@@ -1106,6 +1106,7 @@ function loadTeams(){
 // Personal link: ?teams=GOG,Arsenal,… adds those favourites once (remembered, so removing one later sticks
 // even if the home-screen icon keeps the link).
 let _linkMiss=[]; // names from the link that weren't known yet (league clubs arrive with the robot's snapshot)
+let _linkOpen=null; // a link with one team opens that team's page (fan-group and team-page links), not the home grid
 function teamsFromLink(teams){
   try{
     const raw=new URLSearchParams(location.search).get("teams");
@@ -1113,18 +1114,21 @@ function teamsFromLink(teams){
     if(new URLSearchParams(location.search).has("restore")){try{localStorage.removeItem("msh-sync");}catch(e){}}
     else if(localStorage.getItem("msh-link-applied")===raw)return teams;
     localStorage.setItem("msh-link-applied",raw);
-    const out=[...teams];
-    raw.split(",").map(x=>x.trim()).filter(Boolean).forEach((n,i)=>{
+    const out=[...teams],names=raw.split(",").map(x=>x.trim()).filter(Boolean);
+    names.forEach((n,i)=>{
       const e=lookup(n,"");if(!e||e._unknown){_linkMiss.push(n);return;}
       if(out.some(t=>norm(t.name)===norm(e.name)))return;
       out.push({...e,id:norm(e.name).replace(/\s+/g,"-")+"-"+Date.now()+i});
     });
-    if(out.length!==teams.length){persist(out,out[0].id);}
+    if(out.length!==teams.length){
+      const one=names.length===1&&out.length===teams.length+1?out[out.length-1].id:null;
+      persist(out,one||out[0].id);_linkOpen=one;
+    }
     return out;
   }catch(e){return teams;}
 }
 // Called once the snapshot (and with it the league clubs) has loaded: adds the link's teams that were unknown at first.
-// Returns the new list, or null when nothing was added.
+// Returns {teams, open} (open = the id of the one team the link asked for), or null when nothing was added.
 function linkRetry(teams){
   if(!_linkMiss.length)return null;
   const names=_linkMiss,out=[...teams];_linkMiss=[];
@@ -1133,7 +1137,8 @@ function linkRetry(teams){
     out.push({...e,id:norm(e.name).replace(/\s+/g,"-")+"-"+Date.now()+i});
   });
   if(out.length===teams.length)return null;
-  persist(out,out[0].id);return out;
+  const open=names.length===1&&out.length===teams.length+1?out[out.length-1].id:null;
+  persist(out,open||out[0].id);return{teams:out,open};
 }
 function loadSel(){
   if(_cachedSel)return _cachedSel;
@@ -2290,7 +2295,9 @@ function App(){
     if(all)remindAllPrefs(teams.map(t=>t.name));if(m||all)setPush(MORNING_KEY,"morning",m,true).catch(()=>{});}catch(e){}},[favKey]);
   const [match,setMatch]=useState(null),[showTable,setShowTable]=useState(false),[showFeedback,setShowFeedback]=useState(false),[showLineup,setShowLineup]=useState(false);
   // "home" = grid of all favourites, "team" = one team's page
-  const [view,setView]=useState("home");
+  const [view,setView]=useState(()=>_linkOpen?"team":"home");
+  // opened on a team's page by a link: the phone's back button then leads to the home grid, as after a tap on a tile
+  useEffect(()=>{if(_linkOpen){_linkOpen=null;history.pushState({msh:"team"},"");}},[]);
   const [welcome,setWelcome]=useState(()=>teams.length===0); // first visit
   const viewRef=useRef(view),overlayRef=useRef(false);viewRef.current=view;
   overlayRef.current=showModal||!!match||showTable||!!removing||showFeedback||showLineup;
@@ -2382,7 +2389,8 @@ function App(){
     return()=>es.close();
   },[anyLive]);
   // the robot's whole-league club list (for quick picks / search) arrives with the snapshot
-  useEffect(()=>{getSnapshot().then(()=>{setClock(Date.now());const n=linkRetry(teamsRef.current);if(n){setTeams(n);setWelcome(false);}}).catch(()=>{});},[]);
+  useEffect(()=>{getSnapshot().then(()=>{setClock(Date.now());const n=linkRetry(teamsRef.current);
+    if(n){setTeams(n.teams);setWelcome(false);if(n.open){setSelected(n.open);setView("team");window.scrollTo(0,0);history.pushState({msh:"team"},"");}}}).catch(()=>{});},[]);
 
   function handleSelect(id){setSelected(id);persist(teams,id);setView("team");window.scrollTo(0,0);history.pushState({msh:"team"},"");}
   function goHome(){if(history.state&&history.state.msh==="team")history.back();else{setView("home");window.scrollTo(0,0);}}

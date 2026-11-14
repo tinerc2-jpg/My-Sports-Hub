@@ -3,7 +3,7 @@ name: GitHub Pages redirect (app moved to Vercel)
 on:
   push:
     branches: [main]
-    paths: [pages-redirect/**, index.html, sw.js, scripts/check-fixtures.mjs, manifest.webmanifest, "icon*", apple-touch-icon.png, .github/workflows/pages.yml]
+    paths: [pages-redirect/**, index.html, sw.js, "api/**", scripts/check-fixtures.mjs, scripts/check-hold.mjs, manifest.webmanifest, "icon*", apple-touch-icon.png, .github/workflows/pages.yml]
   workflow_dispatch:
 
 permissions:
@@ -27,6 +27,8 @@ jobs:
       - run: node scripts/check-html.mjs
       # home/away must read right (home team first) – never deploy if not
       - run: node scripts/check-fixtures.mjs
+      # the public team pages (/hold/<slug>) follow the same rules and escape their data
+      - run: node scripts/check-hold.mjs
       # The app lives on Vercel now (owner, 11 Nov 2026): Pages only forwards old links there
       - run: mkdir site && cp pages-redirect/index.html sw.js icon.svg icon-192.png icon-512.png apple-touch-icon.png site/
       - uses: actions/configure-pages@v5
