@@ -1208,7 +1208,10 @@ let morningSent=(LIVE&&existsSync("out/live.json")?(JSON.parse(readFileSync("out
 mkdirSync("out",{recursive:true});
 // fullTs: when the last full run was (scripts/robot-when.mjs plans the next one from it)
 const fullTs=LIVE&&existsSync("out/live.json")?JSON.parse(readFileSync("out/live.json","utf8")).fullTs||null:Date.now();
-writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),fullTs,teams,leagueTeams:extraTeams,requests,usage,sync,kickoffDebug:kickoffDebug.slice(0,40),push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length,morningSent}:null}));
+// meta: sport, league, short name and colour of every team in index.html's DB, for the public team pages (api/hold.js);
+// the league clubs carry the same facts in leagueTeams. The app itself doesn't read it.
+const meta={};for(const d of Object.values(api.DB))if(d&&d.name&&!meta[d.name])meta[d.name]={s:d.shortName||d.name,sp:d.sport,lg:d.league,c:d.country,col:d.color,e:d.emoji};
+writeFileSync("out/live.json",JSON.stringify({generated:Date.now(),fullTs,teams,meta,leagueTeams:extraTeams,requests,usage,sync,kickoffDebug:kickoffDebug.slice(0,40),push:VAPID?{vapid:VAPID.publicKey,subs:encSubs(pushSubs),count:pushSubs.length,morningSent}:null}));
 // Tell the workflow whether to keep re-running every minute (a game is on or starts within 15 min).
 const liveNow=Object.entries(teams).filter(([,e])=>needsLive(e)).map(([n,e])=>n+(e.data.liveGame?" "+e.data.liveGame.score:" (kick-off soon)"));
 if(liveNow.length){writeFileSync("out/live-needed",liveNow.join("\n"));console.log("live: "+liveNow.join(" · "));}

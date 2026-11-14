@@ -3,7 +3,15 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
-<title>My Sports Hub</title>
+<title>My Sports Hub – dine hold, kampe og resultater ét sted</title>
+<meta name="description" content="Følg dine hold og spillere ét sted: næste kamp, tv-kanal, live-score, resultater og stillinger i fodbold, håndbold, tennis, golf, Formel 1 og mere. Gratis og uden reklamer.">
+<meta property="og:type" content="website">
+<meta property="og:site_name" content="My Sports Hub">
+<meta property="og:locale" content="da_DK">
+<meta property="og:title" content="My Sports Hub – dine hold, kampe og resultater ét sted">
+<meta property="og:description" content="Næste kamp, tv-kanal, live-score, resultater og stillinger for alle dine hold. Gratis og uden reklamer.">
+<meta property="og:image" content="https://sportshubdk-sigma.vercel.app/og.png">
+<meta name="twitter:card" content="summary_large_image">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Roboto:wght@400;500;700&family=Google+Sans:wght@400;500;700&family=Barlow+Condensed:wght@400;600;700;800;900&display=swap" rel="stylesheet">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js" crossorigin="anonymous"></script>
@@ -77,6 +85,12 @@ h1 .a{color:var(--accent)}
 .s-grid{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--border);border:1px solid var(--border);border-radius:10px;overflow:hidden;margin-top:48px}
 .st{background:var(--bg2);padding:28px 16px;text-align:center}.st:hover{background:var(--bg3)}.st:hover .st-n{color:var(--accent)}
 .st-e{font-size:1.65rem;margin-bottom:9px;display:block}.st-n{font-size:0.64rem;font-weight:500;letter-spacing:1px;text-transform:uppercase;color:var(--dim)}
+.teams{padding:96px 48px;max-width:1180px;margin:0 auto}
+.t-links{display:flex;flex-wrap:wrap;gap:10px}
+.t-links a{display:inline-block;padding:10px 18px;border-radius:40px;background:var(--bg2);border:1px solid var(--border2);color:var(--white);text-decoration:none;font-size:0.9rem;font-weight:500}
+.t-links a:hover{border-color:var(--accent)}
+.t-all{display:inline-block;margin-top:28px;color:#ff9fd0;font-weight:600;text-decoration:none}
+@media(max-width:960px){.teams{padding:72px 22px}}
 .quote{padding:128px 48px;text-align:center;border-top:1px solid var(--border);border-bottom:1px solid var(--border)}
 .quote-inner{max-width:680px;margin:0 auto}
 blockquote{font-size:clamp(1.7rem,3.5vw,2.8rem);font-weight:700;letter-spacing:-1.5px;line-height:1.15;color:var(--white);margin-bottom:24px}
@@ -131,7 +145,7 @@ footer{padding:24px 48px;border-top:1px solid var(--border);display:flex;align-i
 <div id="landing">
 <nav>
   <div class="n-logo">My Sports<b>Hub</b></div>
-  <div class="n-links"><a href="#features">Funktioner</a><a href="#sports">Sportsgrene</a></div>
+  <div class="n-links"><a href="#features">Funktioner</a><a href="#sports">Sportsgrene</a><a href="/hold">Hold</a></div>
   <button class="n-cta" onclick="showApp()">Åbn appen</button>
 </nav>
 <div class="hero">
@@ -206,6 +220,12 @@ footer{padding:24px 48px;border-top:1px solid var(--border);display:flex;align-i
     <div class="st"><span class="st-e">&#9918;</span><div class="st-n">Baseball</div></div>
     <div class="st"><span class="st-e">&#127952;</span><div class="st-n">Volleyball</div></div>
   </div>
+</section>
+<section class="teams" id="hold">
+  <div class="sec-label">Find dit hold</div>
+  <div class="sec-h" style="margin-bottom:28px">Næste kamp, resultater<br><span>og stilling.</span></div>
+  <div class="t-links"><a href="/hold/fc-koebenhavn">FC København</a><a href="/hold/broendby-if">Brøndby IF</a><a href="/hold/fc-midtjylland">FC Midtjylland</a><a href="/hold/agf">AGF</a><a href="/hold/odense-boldklub">OB</a><a href="/hold/gog-haandbold">GOG</a><a href="/hold/aalborg-haandbold">Aalborg Håndbold</a><a href="/hold/danmark">Danmark</a><a href="/hold/arsenal-fc">Arsenal</a><a href="/hold/liverpool-fc">Liverpool</a><a href="/hold/manchester-united">Manchester United</a><a href="/hold/fc-barcelona">FC Barcelona</a><a href="/hold/real-madrid-cf">Real Madrid</a><a href="/hold/holger-rune">Holger Rune</a><a href="/hold/jonas-vingegaard">Jonas Vingegaard</a><a href="/hold/max-verstappen">Max Verstappen</a><a href="/hold/nicolai-hoejgaard">Nicolai Højgaard</a></div>
+  <a class="t-all" href="/hold">Se alle hold og spillere &rarr;</a>
 </section>
 <section class="quote">
   <div class="quote-inner">
@@ -419,9 +439,9 @@ function fmtTime(d){return d.toLocaleTimeString("en-GB",{hour:"2-digit",minute:"
 function daDetail(x){const t=String(x||"");return /^(half.?time|ht)$/i.test(t.trim())?"Pause":/^(full.?time|ft|final)$/i.test(t.trim())?"Slut":/^in progress$/i.test(t.trim())?"I gang":t;}
 function daInfo(x){return String(x||"").replace(/Half-?time/gi,"Pause").replace(/(\d{1,3}(?:,\d{3})+|\d+) spectators/i,(m,n)=>n.replace(/,/g,".")+" tilskuere");}
 function timeAgo(ts){const m=Math.round((Date.now()-ts)/60000);if(m<1)return "lige nu";if(m<60)return "for "+m+" min siden";const hr=Math.round(m/60);return hr<24?"for "+hr+" t siden":"for "+Math.round(hr/24)+" d siden";}
-// Dates in the data are English ("Sat 14 Nov", "May 24"); daD shows them in Danish ("lør 14. nov").
+// Dates in the data are English ("Sat 14 Nov", "May 24", "27 Sept"); daD shows them in Danish ("lør 14. nov").
 const DA_WD={Mon:"man",Tue:"tir",Wed:"ons",Thu:"tor",Fri:"fre",Sat:"lør",Sun:"søn"},DA_MO={Jan:"jan",Feb:"feb",Mar:"mar",Apr:"apr",May:"maj",Jun:"jun",Jul:"jul",Aug:"aug",Sep:"sep",Oct:"okt",Nov:"nov",Dec:"dec"};
-function daD(s){if(typeof s!=="string")return s;const MO="(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)";return s.replace(new RegExp("\\b(\\d{1,2}) "+MO+"\\b","g"),(m,d,mo)=>d+". "+DA_MO[mo]).replace(new RegExp("\\b"+MO+" (\\d{1,2})\\b","g"),(m,mo,d)=>d+". "+DA_MO[mo]).replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/g,m=>DA_WD[m]).replace(/\bToday\b/,"I dag").replace(/\bTomorrow\b/,"I morgen").replace(/\bSeason complete\b/,"Sæsonen er slut").replace(/^Off-season$/,"Uden for sæsonen").replace(/\bTBD\b/,"Ikke fastsat");}
+function daD(s){if(typeof s!=="string")return s;const MO="(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sept?|Oct|Nov|Dec)";return s.replace(new RegExp("\\b(\\d{1,2}) "+MO+"\\b","g"),(m,d,mo)=>d+". "+DA_MO[mo.slice(0,3)]).replace(new RegExp("\\b"+MO+" (\\d{1,2})\\b","g"),(m,mo,d)=>d+". "+DA_MO[mo.slice(0,3)]).replace(/\b(Mon|Tue|Wed|Thu|Fri|Sat|Sun)\b/g,m=>DA_WD[m]).replace(/\bToday\b/,"I dag").replace(/\bTomorrow\b/,"I morgen").replace(/\bSeason complete\b/,"Sæsonen er slut").replace(/^Off-season$/,"Uden for sæsonen").replace(/\bTBD\b/,"Ikke fastsat");}
 const SAVED=" \xB7 gemt maj 2026";
 const OFF_SEASON={opponent:"Ingen kommende kampe – uden for sæsonen",date:"Uden for sæsonen",time:"–",tv:"–"};
 
@@ -1085,6 +1105,7 @@ function loadTeams(){
 }
 // Personal link: ?teams=GOG,Arsenal,… adds those favourites once (remembered, so removing one later sticks
 // even if the home-screen icon keeps the link).
+let _linkMiss=[]; // names from the link that weren't known yet (league clubs arrive with the robot's snapshot)
 function teamsFromLink(teams){
   try{
     const raw=new URLSearchParams(location.search).get("teams");
@@ -1094,12 +1115,25 @@ function teamsFromLink(teams){
     localStorage.setItem("msh-link-applied",raw);
     const out=[...teams];
     raw.split(",").map(x=>x.trim()).filter(Boolean).forEach((n,i)=>{
-      const e=lookup(n,"");if(!e||e._unknown||out.some(t=>norm(t.name)===norm(e.name)))return;
+      const e=lookup(n,"");if(!e||e._unknown){_linkMiss.push(n);return;}
+      if(out.some(t=>norm(t.name)===norm(e.name)))return;
       out.push({...e,id:norm(e.name).replace(/\s+/g,"-")+"-"+Date.now()+i});
     });
     if(out.length!==teams.length){persist(out,out[0].id);}
     return out;
   }catch(e){return teams;}
+}
+// Called once the snapshot (and with it the league clubs) has loaded: adds the link's teams that were unknown at first.
+// Returns the new list, or null when nothing was added.
+function linkRetry(teams){
+  if(!_linkMiss.length)return null;
+  const names=_linkMiss,out=[...teams];_linkMiss=[];
+  names.forEach((n,i)=>{
+    const e=lookup(n,"");if(!e||e._unknown||out.some(t=>norm(t.name)===norm(e.name)))return;
+    out.push({...e,id:norm(e.name).replace(/\s+/g,"-")+"-"+Date.now()+i});
+  });
+  if(out.length===teams.length)return null;
+  persist(out,out[0].id);return out;
 }
 function loadSel(){
   if(_cachedSel)return _cachedSel;
@@ -2348,7 +2382,7 @@ function App(){
     return()=>es.close();
   },[anyLive]);
   // the robot's whole-league club list (for quick picks / search) arrives with the snapshot
-  useEffect(()=>{getSnapshot().then(()=>setClock(Date.now())).catch(()=>{});},[]);
+  useEffect(()=>{getSnapshot().then(()=>{setClock(Date.now());const n=linkRetry(teamsRef.current);if(n){setTeams(n);setWelcome(false);}}).catch(()=>{});},[]);
 
   function handleSelect(id){setSelected(id);persist(teams,id);setView("team");window.scrollTo(0,0);history.pushState({msh:"team"},"");}
   function goHome(){if(history.state&&history.state.msh==="team")history.back();else{setView("home");window.scrollTo(0,0);}}

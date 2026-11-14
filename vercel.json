@@ -5,6 +5,12 @@
       "claude/**": false
     }
   },
+  "rewrites": [
+    { "source": "/hold", "destination": "/api/hold" },
+    { "source": "/hold/:slug", "destination": "/api/hold?slug=:slug" },
+    { "source": "/sitemap.xml", "destination": "/api/sitemap" },
+    { "source": "/robots.txt", "destination": "/api/sitemap?robots=1" }
+  ],
   "headers": [
     { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
   ]
