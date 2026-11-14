@@ -8,6 +8,6 @@
 - Konto-login (api/, Upstash Redis delt med Kapitly). Admin: /admin.html.
 - main deployer automatisk til Vercel.
 
-**Gjort 14/11 (på branch claude/new-session-23d9ff, IKKE lagt ud – venter på Tines ok):** holdsider til Google (/hold og /hold/gog-haandbold), sitemap, robots, delebillede (og.png), "Find dit hold" på forsiden, et link med ét hold åbner holdets side (også ligaklubber).
+**Gjort 14/11 (på branch claude/new-session-23d9ff, IKKE lagt ud – venter på Tines ok):** holdsider til Google (/hold og /hold/gog-haandbold), sitemap, robots, delebillede (og.png), "Find dit hold" på forsiden, et link med ét hold åbner holdets side (også ligaklubber). Login er nu et krav for at bruge appen (Tines valg); forside og holdsider er åbne.
 
-**Næste:** Tine siger "læg ud" → PR, merge, tjek live, kør robotten (meta). Derefter: Google Search Console, eget domæne (sæt SITE_URL), opslag i GOG-fangruppe. FC Fredericia mangler datakilde (vent med den gruppe).
+**Næste:** Tine siger "læg ud" → PR, merge, tjek live, kør robotten (meta). Derefter: Google Search Console, eget domæne (sæt SITE_URL), opslag i GOG-fangruppe (ret tekst og billede: der skal nu oprettes konto). FC Fredericia mangler datakilde (vent med den gruppe).
